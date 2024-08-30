@@ -1,6 +1,6 @@
 [project]
 name = "rockerc"
-version = "0.0.2"
+version = "0.0.4"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool parse rocker-compose.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
@@ -54,6 +54,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include= ["rockerc"]
+
+[project.scripts]
+rockerc = "rockerc.rockerc:entrypoint"
 
 # Environments
 [tool.pixi.environments]

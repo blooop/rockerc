@@ -1,8 +1,6 @@
 import subprocess
-import yaml
-
-
 import pathlib
+import yaml
 
 
 def yaml_dict_to_args(d: dict) -> str:
@@ -35,8 +33,7 @@ def yaml_dict_to_args(d: dict) -> str:
     return cmd_str
 
 
-if __name__ == "__main__":
-
+def entrypoint():
     path = pathlib.Path(".")
     merged_dict = {}
     for p in path.rglob("rocker-compose.yaml"):
@@ -45,7 +42,7 @@ if __name__ == "__main__":
         with open(p.as_posix(), "r", encoding="utf-8") as f:
             merged_dict |= yaml.safe_load(f)
 
-    print(merged_dict)
+    # print(merged_dict)
 
     cmd_args = yaml_dict_to_args(merged_dict)
 
@@ -58,3 +55,7 @@ if __name__ == "__main__":
             "no arguments found in rocker-compose.yaml. Please add rocker arguments as described in rocker -h:"
         )
         subprocess.call("rocker -h", shell=True)
+
+
+if __name__ == "__main__":
+    entrypoint()
