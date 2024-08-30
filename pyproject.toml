@@ -1,11 +1,17 @@
 [project]
 name = "rockerc"
-version = "0.2.0"
+version = "0.0.2"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
-description = "A python package template"
+description = "A tool parse rocker-compose.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
 
-dependencies = []
+dependencies = [
+  "rocker>=0.2.17",
+  "deps-rocker>=0.2.5.2",
+  "off-your-rocker",
+  "pyyaml>=5",
+  "toml"
+]
 
 [project.urls]
 Source = "https://github.com/blooop/rockerc"
@@ -30,9 +36,6 @@ python = "3.12.*"
 dependencies = { python = "3.10" }
 pypi-dependencies = { deps-rocker = ">=0.2" }
 tasks = { code = "scripts/launch_vscode.sh",code-nocache = "scripts/launch_vscode.sh --nocache" }
-
-[tool.pixi.pypi-dependencies]
-rockerc = { path = ".", editable = true }
 
 [project.optional-dependencies]
 test = [
