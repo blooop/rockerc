@@ -8,7 +8,7 @@
 [![GitHub pull-requests merged](https://badgen.net/github/merged-prs/blooop/rockerc)](https://github.com/blooop/rockerc/pulls?q=is%3Amerged)
 [![GitHub release](https://img.shields.io/github/release/blooop/rockerc.svg)](https://GitHub.com/blooop/rockerc/releases/)
 [![License](https://img.shields.io/pypi/l/bencher)](https://opensource.org/license/mit/)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 
 
