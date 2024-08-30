@@ -1,5 +1,5 @@
 from unittest import TestCase
-from rockerc.rockerc import yaml_dict_to_args
+from rockerc.rockerc import yaml_dict_to_args, collect_arguments, entrypoint
 
 
 class TestBasicClass(TestCase):
@@ -37,3 +37,20 @@ class TestBasicClass(TestCase):
 
         result = yaml_dict_to_args(d)
         assert result == expected
+
+    def test_realisic_yaml(self):
+        result = collect_arguments(".")
+
+        expected = {
+            "args": ["nvidia", "x11", "user", "pull", "deps", "git"],
+            "image": "ubuntu:22.04",
+            "image-name": '"$CONTAINER_NAME"',
+            "name": '"$CONTAINER_NAME"',
+            "volume": '"${PWD}":/workspaces/"${CONTAINER_NAME}":Z',
+            "oyr-run-arg": '" --detach"',
+        }
+
+        assert result == expected
+
+    def test_entrypoint(self):
+        entrypoint()

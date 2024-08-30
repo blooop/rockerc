@@ -33,17 +33,27 @@ def yaml_dict_to_args(d: dict) -> str:
     return cmd_str
 
 
-def entrypoint():
-    path = pathlib.Path(".")
+def collect_arguments(path: str = ".") -> dict:
+    """Search for rocker-compose.yaml files and return a merged dictionary
+
+    Args:
+        path (str, optional): path to reach for files. Defaults to ".".
+
+    Returns:
+        dict: A dictionary of merged rocker-compose arguments
+    """
+    search_path = pathlib.Path(path)
     merged_dict = {}
-    for p in path.rglob("rocker-compose.yaml"):
+    for p in search_path.rglob("rocker-compose.yaml"):
         print(f"loading {p}")
 
         with open(p.as_posix(), "r", encoding="utf-8") as f:
             merged_dict |= yaml.safe_load(f)
+    return merged_dict
 
-    # print(merged_dict)
 
+def run_rockerc(path: str = "."):
+    merged_dict = collect_arguments(path)
     cmd_args = yaml_dict_to_args(merged_dict)
 
     if len(cmd_args) > 0:
@@ -55,6 +65,10 @@ def entrypoint():
             "no arguments found in rocker-compose.yaml. Please add rocker arguments as described in rocker -h:"
         )
         subprocess.call("rocker -h", shell=True)
+
+
+def entrypoint():
+    run_rockerc()
 
 
 if __name__ == "__main__":
