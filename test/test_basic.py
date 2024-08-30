@@ -12,7 +12,7 @@ class TestBasicClass(TestCase):
             "option1": "value1",
             "option2": "value2",
         }
-        expected = "--x11 --nvidia --option1 value1--option2 value2ubuntu:latest"
+        expected = "--x11 --nvidia --option1 value1 --option2 value2 ubuntu:latest"
         result = yaml_dict_to_args(d)
         assert result == expected
 
