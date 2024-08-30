@@ -9,6 +9,6 @@ ENV FLIT_ROOT_INSTALL=1
 
 COPY pyproject.toml .
 RUN touch README.md \
-    && mkdir -p src/python_template \
+    && mkdir -p src/rockerc \
     && python -m flit install --only-deps --deps develop \
     && rm -r pyproject.toml README.md src

@@ -1,4 +1,4 @@
-from python_template.basic_class import BasicClass
+from rockerc.basic_class import BasicClass
 
 bc = BasicClass()
 print(bc.int_var)
