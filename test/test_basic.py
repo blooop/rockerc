@@ -1,5 +1,5 @@
 from unittest import TestCase
-from python_template.basic_class import BasicClass
+from rockerc.basic_class import BasicClass
 
 
 class TestBasicClass(TestCase):

@@ -1,5 +1,5 @@
 [project]
-name = "python_template"
+name = "rockerc"
 version = "0.2.0"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A python package template"
@@ -8,8 +8,8 @@ readme = "README.md"
 dependencies = []
 
 [project.urls]
-Source = "https://github.com/blooop/python_template"
-Home = "https://github.com/blooop/python_template"
+Source = "https://github.com/blooop/rockerc"
+Home = "https://github.com/blooop/rockerc"
 
 [tool.pixi.project]
 channels = ["conda-forge"]
@@ -32,7 +32,7 @@ pypi-dependencies = { deps-rocker = ">=0.2" }
 tasks = { code = "scripts/launch_vscode.sh",code-nocache = "scripts/launch_vscode.sh --nocache" }
 
 [tool.pixi.pypi-dependencies]
-python_template = { path = ".", editable = true }
+rockerc = { path = ".", editable = true }
 
 [project.optional-dependencies]
 test = [
@@ -50,7 +50,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-include= ["python_template"]
+include= ["rockerc"]
 
 # Environments
 [tool.pixi.environments]

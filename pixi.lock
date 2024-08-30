@@ -977,20 +977,6 @@ packages:
   purls: []
   size: 31663253
   timestamp: 1723143721353
-- kind: pypi
-  name: python-template
-  version: 0.2.0
-  path: .
-  sha256: 7100f3934a63c7236cc44a12979aa265fd0781294a4012b0eaddf7d2d71d096e
-  requires_dist:
-  - black>=23,<=24.8.0 ; extra == 'test'
-  - pylint>=3.2.5,<=3.2.6 ; extra == 'test'
-  - pytest-cov>=4.1,<=5.0.0 ; extra == 'test'
-  - pytest>=7.4,<=8.3.2 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.111.2 ; extra == 'test'
-  - ruff>=0.5.0,<=0.6.3 ; extra == 'test'
-  - coverage>=7.5.4,<=7.6.1 ; extra == 'test'
-  editable: true
 - kind: conda
   name: readline
   version: '8.2'
@@ -1008,6 +994,20 @@ packages:
   purls: []
   size: 281456
   timestamp: 1679532220005
+- kind: pypi
+  name: rockerc
+  version: 0.2.0
+  path: .
+  sha256: f3ab79e314ecf85311446042d51956f63eaee076899f7969de4cb9b67c16d4d7
+  requires_dist:
+  - black>=23,<=24.8.0 ; extra == 'test'
+  - pylint>=3.2.5,<=3.2.6 ; extra == 'test'
+  - pytest-cov>=4.1,<=5.0.0 ; extra == 'test'
+  - pytest>=7.4,<=8.3.2 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.111.2 ; extra == 'test'
+  - ruff>=0.5.0,<=0.6.3 ; extra == 'test'
+  - coverage>=7.5.4,<=7.6.1 ; extra == 'test'
+  editable: true
 - kind: pypi
   name: ruff
   version: 0.6.3
