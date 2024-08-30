@@ -50,10 +50,12 @@ if __name__ == "__main__":
 
     cmd_args = yaml_dict_to_args(merged_dict)
 
-    if len(cmd_args)>0:
+    if len(cmd_args) > 0:
         cmd = f"rocker {cmd_args}"
         print(f"running cmd {cmd}")
         subprocess.call(f"{cmd}", shell=True)
     else:
-        print("no arguments found in rocker-compose.yaml. Please add rocker arguments as described in rocker -h:")
-        subprocess.call("rocker -h",shell=True)
+        print(
+            "no arguments found in rocker-compose.yaml. Please add rocker arguments as described in rocker -h:"
+        )
+        subprocess.call("rocker -h", shell=True)

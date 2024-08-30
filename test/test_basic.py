@@ -34,10 +34,6 @@ class TestBasicClass(TestCase):
         }
 
         expected = r'--nvidia --x11 --user --pull --git --image-name "$CONTAINER_NAME" --name "$CONTAINER_NAME" --volume "${PWD}":/workspaces/"${CONTAINER_NAME}":Z --deps --oyr-run-arg " --detach" ubuntu:22.04'
-
-        --nvidia --x11 --user --pull --git --image-name "$CONTAINER_NAME" --name "$CONTAINER_NAME" --volume "${PWD}":/workspaces/"${CONTAINER_NAME}":Z --deps --oyr-run-arg " --detach" ubuntu:22.04'
-
-        --nvidia --x11 --user --pull --deps --git --image-name $CONTAINER_NAME--name $CONTAINER_NAME--volume "${PWD}":/workspaces/"${CONTAINER_NAME}":Z--oyr-run-arg  --detachubuntu:22.04
-
+       
         result = yaml_dict_to_args(d)
         assert result == expected
