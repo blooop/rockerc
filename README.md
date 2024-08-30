@@ -1,17 +1,4 @@
 # rockerc
-A template repo for python projects that is set up using [pixi](https://pixi.sh). 
-
-This has basic setup for
-
-* pylint
-* ruff
-* black
-* pytest
-* codecov
-* git-lfs
-* basic github actions ci
-* pulling updates from this template
-
 
 ## Continuous Integration Status
 
@@ -25,43 +12,26 @@ This has basic setup for
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 
 
-# Install
+## Installation
 
-There are two methods of using this project.  
+```
+pip install rockerc
+```
 
-1. Use github to use this project as a template
-2. Clone the project and run, `scripts/update_from_template.sh` and then run the "rename project" task to rename the project.
+## Usage
 
-If you want to use docker you may want to run the `scripts/setup_host.sh` script.  It will set up docker and nvidia-docker (assuming you are on ubuntu22.04).
+```
+rockerc #searches for rocker-compose.yaml and passes those arguments to rocker
+```
 
-If you are using pixi, you can either follow the instructions on the pixi [website](https://prefix.dev/) or run `scripts/install_pixi.sh`
+## Motivation
 
+[Rocker](https://github.com/osrf/rocker) is an alterative to docker-compose that makes it easier to run containers with access to features of the local environment and add extra capabilities to existing docker images.  However rocker has many configurable options and it can get hard to read or reuse those arguments.  This is a naive wrapper that read a rocker-compose.yaml file and passes them to rocker.  There are currently [no plans](https://github.com/osrf/rocker/issues/148) to integrate docker-compose like functionalty directly into rocker so I made this as a proof of concept to see what the ergonomics of it would be like. 
 
-# Usage
+## Caveats
 
-There are currently two ways of running code.  The legacy docker way and the work in progress pixi way. 
+I'm not sure this is the best way of implementing rocker-compose like functionality.  It might be better to implmented it as a rocker extension, or in rocker itself.  This was just the simplest way to get started. I may explore those other options in more detail in the future. 
 
-## Legacy
+## TODO
 
-run the `scripts/launch_vscode.sh` script to build and connect to a docker container.  The docker container is dynamically generated using [rocker](https://github.com/osrf/rocker) and [deps rocker](https://github.com/blooop/deps_rocker).  [deps rocker](https://github.com/blooop/deps_rocker) looks at the rockerc.deps.yaml file to install any required apt, pip or shell scripts and launches a container that vscode attaches to. 
-
-## Pixi
-
-If you have pixi installed on your host machine you can run any of the tasks defined in pyproject.toml.  The legacy method also installs pixi in the container so you have access to pixi there. 
-
-The main pixi tasks are related to ci.  Github actions runs the pixi task "ci".  The ci is mostly likey to fail from a lockfile mismatch.  Use the "fix" task to fix any lockfile related problems. 
-
-## vscode tasks
-
-There are two core tasks.  
-
-1. set \<cfg\> from active file
-
-    This sets \<cfg\> to the currently opened file in the editor
-
-2. run \<cfg\>
-
-    This runs python with the file set in \<cfg\>
-
-
-
+Add support for agument overriding/passthrough. 
