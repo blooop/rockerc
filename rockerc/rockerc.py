@@ -56,7 +56,6 @@ def entrypoint():
         )
         subprocess.call("rocker -h", shell=True)
 
+
 if __name__ == "__main__":
     entrypoint()
-
-   
