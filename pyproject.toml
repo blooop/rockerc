@@ -22,8 +22,12 @@ channels = ["conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
-python = ">=3.10"
+python = ">=3.8"
 
+[tool.pixi.feature.py308.dependencies]
+python = "3.8.*"
+[tool.pixi.feature.py309.dependencies]
+python = "3.9.*"
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
 [tool.pixi.feature.py311.dependencies]
@@ -61,9 +65,13 @@ rockerc = "rockerc.rockerc:entrypoint"
 # Environments
 [tool.pixi.environments]
 default = {features = ["test"], solve-group = "default" }
+py308 = ["py308","test"]
+py309 = ["py309","test"]
 py310 = ["py310","test"]
 py311 = ["py311","test"]
 py312 = ["py312","test"]
+
+
 
 devenv = { features = [
   "devenv",
