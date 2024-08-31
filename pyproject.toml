@@ -1,8 +1,8 @@
 [project]
 name = "rockerc"
-version = "0.0.5"
+version = "0.1.0"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
-description = "A tool parse rocker-compose.yaml files and pass on the arguments onto rocker"
+description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
 
 dependencies = [

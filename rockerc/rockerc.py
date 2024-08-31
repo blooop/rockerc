@@ -34,17 +34,17 @@ def yaml_dict_to_args(d: dict) -> str:
 
 
 def collect_arguments(path: str = ".") -> dict:
-    """Search for rocker-compose.yaml files and return a merged dictionary
+    """Search for rockerc.yaml files and return a merged dictionary
 
     Args:
         path (str, optional): path to reach for files. Defaults to ".".
 
     Returns:
-        dict: A dictionary of merged rocker-compose arguments
+        dict: A dictionary of merged rockerc arguments
     """
     search_path = pathlib.Path(path)
     merged_dict = {}
-    for p in search_path.rglob("rocker-compose.yaml"):
+    for p in search_path.rglob("rockerc.yaml"):
         print(f"loading {p}")
 
         with open(p.as_posix(), "r", encoding="utf-8") as f:
@@ -62,7 +62,7 @@ def run_rockerc(path: str = "."):
         subprocess.call(f"{cmd}", shell=True)
     else:
         print(
-            "no arguments found in rocker-compose.yaml. Please add rocker arguments as described in rocker -h:"
+            "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
         )
         subprocess.call("rocker -h", shell=True)
 
