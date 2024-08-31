@@ -27,7 +27,7 @@ rockerc #searches for rockerc.yaml and passes those arguments to rocker
 
 ## Motivation
 
-[Rocker](https://github.com/osrf/rocker) is an alterative to docker-compose that makes it easier to run containers with access to features of the local environment and add extra capabilities to existing docker images.  However rocker has many configurable options and it can get hard to read or reuse those arguments.  This is a naive wrapper that read a rockerc.yaml file and passes them to rocker.  There are currently [no plans](https://github.com/osrf/rocker/issues/148) to integrate docker-compose like functionalty directly into rocker so I made this as a proof of concept to see what the ergonomics of it would be like. 
+[Rocker](https://github.com/osrf/rocker) is an alternative to docker-compose that makes it easier to run containers with access to features of the local environment and add extra capabilities to existing docker images.  However rocker has many configurable options and it can get hard to read or reuse those arguments.  This is a naive wrapper that read a rockerc.yaml file and passes them to rocker.  There are currently [no plans](https://github.com/osrf/rocker/issues/148) to integrate docker-compose like functionalty directly into rocker so I made this as a proof of concept to see what the ergonomics of it would be like. 
 
 ## Caveats
 
