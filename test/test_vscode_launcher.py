@@ -15,6 +15,10 @@ class TestFolderToVscodeContainer:
 
         expected_hex = "746573745f636f6e7461696e6572"
         assert container_hex == expected_hex
+        assert (
+            rocker_args
+            == '--image-name test_container --name test_container --volume /some/path:/workspaces/test_container:Z --oyr-run-arg " --detach"'
+        )
 
     # Handles empty container name string
     def test_handles_empty_container_name_string(self):
