@@ -53,6 +53,13 @@ def collect_arguments(path: str = ".") -> dict:
 
 
 def run_rockerc(path: str = "."):
+    """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
+
+    Args:
+        path (str, optional): Search path for rockerc.yaml files. Defaults to ".".
+    """
+
+
     merged_dict = collect_arguments(path)
     cmd_args = yaml_dict_to_args(merged_dict)
 
