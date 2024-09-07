@@ -1,6 +1,6 @@
 [project]
 name = "rockerc"
-version = "0.1.0"
+version = "0.2.0"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
@@ -11,7 +11,6 @@ dependencies = [
   "deps-rocker>=0.2.5.3",
   "off-your-rocker>=0.1.0",
   "pyyaml>=5",
-  "toml"
 ]
 
 [project.urls]
@@ -61,7 +60,7 @@ build-backend = "hatchling.build"
 include= ["rockerc"]
 
 [project.scripts]
-rockerc = "rockerc.rockerc:entrypoint"
+rockerc = "rockerc.rockerc:run_rockerc"
 
 # Environments
 [tool.pixi.environments]

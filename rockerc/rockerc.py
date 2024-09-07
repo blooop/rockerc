@@ -1,6 +1,7 @@
 import subprocess
 import pathlib
 import yaml
+from rockerc.vscode_launcher import launch_vscode, folder_to_vscode_container
 
 
 def yaml_dict_to_args(d: dict) -> str:
@@ -44,7 +45,7 @@ def collect_arguments(path: str = ".") -> dict:
     """
     search_path = pathlib.Path(path)
     merged_dict = {}
-    for p in search_path.rglob("rockerc.yaml"):
+    for p in search_path.glob("rockerc.yaml"):
         print(f"loading {p}")
 
         with open(p.as_posix(), "r", encoding="utf-8") as f:
@@ -53,23 +54,40 @@ def collect_arguments(path: str = ".") -> dict:
 
 
 def run_rockerc(path: str = "."):
+    """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
+
+    Args:
+        path (str, optional): Search path for rockerc.yaml files. Defaults to ".".
+    """
+
+    cwd = pathlib.Path().absolute()
+    container_name = cwd.name
+
     merged_dict = collect_arguments(path)
     cmd_args = yaml_dict_to_args(merged_dict)
 
     if len(cmd_args) > 0:
+        launch_code = True
+
+        subprocess.call(
+            f'docker rename {container_name} "{container_name}_$(date +%Y-%m-%d_%H-%M-%S)" || true ',
+            shell=True,
+        )
+
         cmd = f"rocker {cmd_args}"
+
+        if launch_code:
+            container_hex, rocker_args = folder_to_vscode_container(container_name, path)
+            cmd += f" {rocker_args}"
+
         print(f"running cmd {cmd}")
-        subprocess.call(f"{cmd}", shell=True)
+        subprocess.call(cmd, shell=True)
+
+        if launch_code:
+            launch_vscode(container_name, container_hex)
+
     else:
         print(
             "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
         )
         subprocess.call("rocker -h", shell=True)
-
-
-def entrypoint():
-    run_rockerc()
-
-
-if __name__ == "__main__":
-    entrypoint()

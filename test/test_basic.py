@@ -1,5 +1,5 @@
 from unittest import TestCase
-from rockerc.rockerc import yaml_dict_to_args, collect_arguments, entrypoint
+from rockerc.rockerc import yaml_dict_to_args, collect_arguments
 
 
 class TestBasicClass(TestCase):
@@ -27,13 +27,9 @@ class TestBasicClass(TestCase):
         d = {
             "args": ["nvidia", "x11", "user", "pull", "deps", "git"],
             "image": "ubuntu:22.04",
-            "image-name": '"$CONTAINER_NAME"',
-            "name": '"$CONTAINER_NAME"',
-            "volume": '"${PWD}":/workspaces/"${CONTAINER_NAME}":Z',
-            "oyr-run-arg": '" --detach"',
         }
 
-        expected = r'--nvidia --x11 --user --pull --deps --git --image-name "$CONTAINER_NAME" --name "$CONTAINER_NAME" --volume "${PWD}":/workspaces/"${CONTAINER_NAME}":Z --oyr-run-arg " --detach" ubuntu:22.04'
+        expected = "--nvidia --x11 --user --pull --deps --git ubuntu:22.04"
 
         result = yaml_dict_to_args(d)
         assert result == expected
@@ -42,15 +38,8 @@ class TestBasicClass(TestCase):
         result = collect_arguments(".")
 
         expected = {
-            "args": ["nvidia", "x11", "user", "pull", "deps", "git"],
+            "args": ["nvidia", "x11", "user", "pull", "deps", "git", "pixi"],
             "image": "ubuntu:22.04",
-            "image-name": '"$CONTAINER_NAME"',
-            "name": '"$CONTAINER_NAME"',
-            "volume": '"${PWD}":/workspaces/"${CONTAINER_NAME}":Z',
-            "oyr-run-arg": '" --detach"',
         }
 
         assert result == expected
-
-    def test_entrypoint(self):
-        entrypoint()
