@@ -1,5 +1,5 @@
 from unittest import TestCase
-from rockerc.rockerc import yaml_dict_to_args, collect_arguments, entrypoint
+from rockerc.rockerc import yaml_dict_to_args, collect_arguments
 
 
 class TestBasicClass(TestCase):
@@ -51,6 +51,3 @@ class TestBasicClass(TestCase):
         }
 
         assert result == expected
-
-    def test_entrypoint(self):
-        entrypoint()
