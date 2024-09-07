@@ -12,6 +12,3 @@ pip_language-toolchain:
   - uv #use uv instead of pip
   - hatch
   - twine
-
-script_pixi-user:
-  - scripts/install_pixi.sh
