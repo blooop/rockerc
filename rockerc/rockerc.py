@@ -52,6 +52,24 @@ def collect_arguments(path: str = ".") -> dict:
     return merged_dict
 
 
+import binascii
+
+
+def container_to_hex(container_name):
+    # Get absolute path of the container
+    abs_path = os.path.abspath(container_name)
+
+    # Convert the absolute path to a hex value
+    hex_value = binascii.hexlify(abs_path.encode()).decode()
+
+    # Get the basename of the container
+    base_name = os.path.basename(abs_path)
+
+    # Return the formatted vscode-remote URI
+    vscode_uri = f"vscode-remote://dev-container%2B{hex_value}/workspaces/{base_name}"
+    return vscode_uri
+
+
 def run_rockerc(path: str = "."):
     """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
 
@@ -59,6 +77,18 @@ def run_rockerc(path: str = "."):
         path (str, optional): Search path for rockerc.yaml files. Defaults to ".".
     """
 
+    import os
+    import pathlib
+
+    # print("cwd", os.getcwd())
+    cwd = pathlib.Path()
+
+    folder_name = cwd.absolute().name
+    print(folder_name)
+
+    hex_value = binascii.hexlify(folder_name).decode()
+
+    print("hex", hex_value)
 
     merged_dict = collect_arguments(path)
     cmd_args = yaml_dict_to_args(merged_dict)
