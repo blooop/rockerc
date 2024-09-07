@@ -1,6 +1,8 @@
 import subprocess
 import pathlib
+import time
 import yaml
+from rockerc.vscode_launcher import launch_vscode, folder_to_vscode_container
 
 
 def yaml_dict_to_args(d: dict) -> str:
@@ -44,7 +46,7 @@ def collect_arguments(path: str = ".") -> dict:
     """
     search_path = pathlib.Path(path)
     merged_dict = {}
-    for p in search_path.rglob("rockerc.yaml"):
+    for p in search_path.glob("rockerc.yaml"):
         print(f"loading {p}")
 
         with open(p.as_posix(), "r", encoding="utf-8") as f:
@@ -52,22 +54,6 @@ def collect_arguments(path: str = ".") -> dict:
     return merged_dict
 
 
-import binascii
-
-
-def container_to_hex(container_name):
-    # Get absolute path of the container
-    abs_path = os.path.abspath(container_name)
-
-    # Convert the absolute path to a hex value
-    hex_value = binascii.hexlify(abs_path.encode()).decode()
-
-    # Get the basename of the container
-    base_name = os.path.basename(abs_path)
-
-    # Return the formatted vscode-remote URI
-    vscode_uri = f"vscode-remote://dev-container%2B{hex_value}/workspaces/{base_name}"
-    return vscode_uri
 
 
 def run_rockerc(path: str = "."):
@@ -77,26 +63,33 @@ def run_rockerc(path: str = "."):
         path (str, optional): Search path for rockerc.yaml files. Defaults to ".".
     """
 
-    import os
-    import pathlib
-
-    # print("cwd", os.getcwd())
-    cwd = pathlib.Path()
-
-    folder_name = cwd.absolute().name
-    print(folder_name)
-
-    hex_value = binascii.hexlify(folder_name).decode()
-
-    print("hex", hex_value)
+    cwd = pathlib.Path().absolute()
+    container_name = cwd.name
 
     merged_dict = collect_arguments(path)
     cmd_args = yaml_dict_to_args(merged_dict)
 
     if len(cmd_args) > 0:
+        launch_code = True
+
+        subprocess.call(
+            f'docker rename {container_name} "{container_name}_$(date +%Y-%m-%d_%H-%M-%S)" || true ',
+            shell=True,
+        )
+
         cmd = f"rocker {cmd_args}"
+
+        if launch_code:
+            container_hex, rocker_args = folder_to_vscode_container(container_name, path)
+            cmd += f" {rocker_args}"
+
         print(f"running cmd {cmd}")
-        subprocess.call(f"{cmd}", shell=True)
+        subprocess.call(cmd, shell=True)
+
+        if launch_code:
+            time.sleep(0.5)
+            launch_vscode(container_name, container_hex)
+
     else:
         print(
             "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
