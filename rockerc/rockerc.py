@@ -54,8 +54,6 @@ def collect_arguments(path: str = ".") -> dict:
     return merged_dict
 
 
-
-
 def run_rockerc(path: str = "."):
     """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
 
