@@ -60,7 +60,7 @@ build-backend = "hatchling.build"
 include= ["rockerc"]
 
 [project.scripts]
-rockerc = "rockerc.rockerc:entrypoint"
+rockerc = "rockerc.rockerc:run_rockerc"
 
 # Environments
 [tool.pixi.environments]
