@@ -85,7 +85,6 @@ def run_rockerc(path: str = "."):
         subprocess.call(cmd, shell=True)
 
         if launch_code:
-            time.sleep(0.5)
             launch_vscode(container_name, container_hex)
 
     else:
