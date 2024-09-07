@@ -1,6 +1,5 @@
 import subprocess
 import pathlib
-import time
 import yaml
 from rockerc.vscode_launcher import launch_vscode, folder_to_vscode_container
 

@@ -38,7 +38,7 @@ class TestBasicClass(TestCase):
         result = collect_arguments(".")
 
         expected = {
-            "args": ["nvidia", "x11", "user", "pull", "deps", "git","pixi"],
+            "args": ["nvidia", "x11", "user", "pull", "deps", "git", "pixi"],
             "image": "ubuntu:22.04",
         }
 
