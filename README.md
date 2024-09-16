@@ -31,7 +31,3 @@ rockerc #searches for rockerc.yaml and passes those arguments to rocker
 ## Caveats
 
 I'm not sure this is the best way of implementing rockerc like functionality.  It might be better to implmented it as a rocker extension, or in rocker itself.  This was just the simplest way to get started. I may explore those other options in more detail in the future. 
-
-## TODO
-
-Add support for agument overriding/passthrough. 
