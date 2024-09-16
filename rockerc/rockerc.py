@@ -65,7 +65,6 @@ def run_rockerc(path: str = "."):
 
     if len(cmd_args) > 0:
         if len(sys.argv)>1:
-            print(sys.argv)
             cmd_args += " " + " ".join(sys.argv[1:])
 
         cmd = f"rocker {cmd_args}"
