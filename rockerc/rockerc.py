@@ -2,7 +2,6 @@ import sys
 import subprocess
 import pathlib
 import yaml
-from rockerc.vscode_launcher import launch_vscode, folder_to_vscode_container
 
 
 def yaml_dict_to_args(d: dict) -> str:
@@ -64,7 +63,7 @@ def run_rockerc(path: str = "."):
     cmd_args = yaml_dict_to_args(merged_dict)
 
     if len(cmd_args) > 0:
-        if len(sys.argv)>1:
+        if len(sys.argv) > 1:
             cmd_args += " " + " ".join(sys.argv[1:])
 
         cmd = f"rocker {cmd_args}"
