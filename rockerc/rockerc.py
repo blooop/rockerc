@@ -59,33 +59,13 @@ def run_rockerc(path: str = "."):
     Args:
         path (str, optional): Search path for rockerc.yaml files. Defaults to ".".
     """
-
-    cwd = pathlib.Path().absolute()
-    container_name = cwd.name
-
     merged_dict = collect_arguments(path)
     cmd_args = yaml_dict_to_args(merged_dict)
 
     if len(cmd_args) > 0:
-        launch_code = True
-
-        subprocess.call(
-            f'docker rename {container_name} "{container_name}_$(date +%Y-%m-%d_%H-%M-%S)" || true ',
-            shell=True,
-        )
-
         cmd = f"rocker {cmd_args}"
-
-        if launch_code:
-            container_hex, rocker_args = folder_to_vscode_container(container_name, path)
-            cmd += f" {rocker_args}"
-
         print(f"running cmd {cmd}")
         subprocess.call(cmd, shell=True)
-
-        if launch_code:
-            launch_vscode(container_name, container_hex)
-
     else:
         print(
             "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
