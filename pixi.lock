@@ -64,6 +64,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/44/6f/7120676b6d73228c96e17f1f794d8ab046fc910d781c8d151120c3f1569e/toml-0.10.2-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/b6/a447b5e4ec71e13871be01ba81f5dfc9d0af7e473da256ff46bc0e24026f/tomlkit-0.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl
+      - pypi: .
   py309:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -130,6 +131,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f9/b6/a447b5e4ec71e13871be01ba81f5dfc9d0af7e473da256ff46bc0e24026f/tomlkit-0.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/26/9f/ad63fc0248c5379346306f8668cda6e2e2e9c95e01216d2b8ffd9ff037d0/typing_extensions-4.12.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl
+      - pypi: .
   py310:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -196,6 +198,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f9/b6/a447b5e4ec71e13871be01ba81f5dfc9d0af7e473da256ff46bc0e24026f/tomlkit-0.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/26/9f/ad63fc0248c5379346306f8668cda6e2e2e9c95e01216d2b8ffd9ff037d0/typing_extensions-4.12.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl
+      - pypi: .
   py311:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -260,6 +263,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/44/6f/7120676b6d73228c96e17f1f794d8ab046fc910d781c8d151120c3f1569e/toml-0.10.2-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/b6/a447b5e4ec71e13871be01ba81f5dfc9d0af7e473da256ff46bc0e24026f/tomlkit-0.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl
+      - pypi: .
   py312:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -324,6 +328,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/44/6f/7120676b6d73228c96e17f1f794d8ab046fc910d781c8d151120c3f1569e/toml-0.10.2-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/b6/a447b5e4ec71e13871be01ba81f5dfc9d0af7e473da256ff46bc0e24026f/tomlkit-0.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl
+      - pypi: .
   py313:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -388,6 +393,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/44/6f/7120676b6d73228c96e17f1f794d8ab046fc910d781c8d151120c3f1569e/toml-0.10.2-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/b6/a447b5e4ec71e13871be01ba81f5dfc9d0af7e473da256ff46bc0e24026f/tomlkit-0.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl
+      - pypi: .
 packages:
 - kind: conda
   name: _libgcc_mutex
@@ -1428,6 +1434,24 @@ packages:
   - importlib-metadata ; python_full_version < '3.8'
   - pytest ; extra == 'test'
   requires_python: '>=3.0'
+- kind: pypi
+  name: rockerc
+  version: 0.3.0
+  path: .
+  sha256: f44d0731886a6ad22c386c0fbc4972d40e8d49021b4582e35e8ecd343a35282d
+  requires_dist:
+  - rocker>=0.2.17
+  - deps-rocker>=0.2.5.3
+  - off-your-rocker>=0.1.0
+  - pyyaml>=5
+  - black>=23,<=24.8.0 ; extra == 'test'
+  - pylint>=3.2.5,<=3.3.1 ; extra == 'test'
+  - pytest-cov>=4.1,<=5.0.0 ; extra == 'test'
+  - pytest>=7.4,<=8.3.3 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.112.2 ; extra == 'test'
+  - ruff>=0.5.0,<=0.6.8 ; extra == 'test'
+  - coverage>=7.5.4,<=7.6.1 ; extra == 'test'
+  editable: true
 - kind: pypi
   name: ruff
   version: 0.6.8
