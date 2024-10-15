@@ -21,7 +21,8 @@ pip install rockerc
 ## Usage
 
 ```
-rockerc #searches for rockerc.yaml and passes those arguments to rocker
+#searches for rockerc.yaml and passes those arguments to rocker
+rockerc 
 ```
 
 ## Motivation

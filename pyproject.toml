@@ -22,10 +22,8 @@ channels = ["conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
-python = ">=3.8"
+python = ">=3.9"
 
-[tool.pixi.feature.py308.dependencies]
-python = "3.8.*"
 [tool.pixi.feature.py309.dependencies]
 python = "3.9.*"
 [tool.pixi.feature.py310.dependencies]
@@ -34,12 +32,9 @@ python = "3.10.*"
 python = "3.11.*"
 [tool.pixi.feature.py312.dependencies]
 python = "3.12.*"
+[tool.pixi.feature.py313.dependencies]
+python = "3.13.*"
 
-#an environment for launching vscode with rocker and deps_rocker
-[tool.pixi.feature.devenv]
-dependencies = { python = "3.10" }
-pypi-dependencies = { deps-rocker = ">=0.2" }
-tasks = { code = "scripts/launch_vscode.sh", code-nocache = "scripts/launch_vscode.sh --nocache" }
 
 [project.optional-dependencies]
 test = [
@@ -65,17 +60,12 @@ rockerc = "rockerc.rockerc:run_rockerc"
 # Environments
 [tool.pixi.environments]
 default = {features = ["test"], solve-group = "default" }
-py308 = ["py308","test"]
 py309 = ["py309","test"]
 py310 = ["py310","test"]
 py311 = ["py311","test"]
 py312 = ["py312","test"]
+py313 = ["py313","test"]
 
-
-
-devenv = { features = [
-  "devenv",
-], solve-group = "devenv", no-default-feature = true }
 
 [tool.pixi.tasks]
 format = "black ."
