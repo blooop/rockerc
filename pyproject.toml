@@ -13,6 +13,9 @@ dependencies = [
   "pyyaml>=5",
 ]
 
+[tool.pixi.pypi-dependencies]
+rockerc = { path = ".", editable = true }
+
 [project.urls]
 Source = "https://github.com/blooop/rockerc"
 Home = "https://github.com/blooop/rockerc"
