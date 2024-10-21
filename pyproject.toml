@@ -1,6 +1,6 @@
 [project]
 name = "rockerc"
-version = "0.4.0"
+version = "0.4.1"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
@@ -8,7 +8,7 @@ license = "MIT"
 
 dependencies = [
   "rocker>=0.2.17",
-  "deps-rocker>=0.2.5.3",
+  "deps-rocker>=0.2.5.4",
   "off-your-rocker>=0.1.0",
   "pyyaml>=5",
 ]
@@ -49,7 +49,7 @@ test = [
   "ruff>=0.5.0,<=0.6.8",
   "coverage>=7.5.4,<=7.6.1",
 ]
-extensions= ["deps-rocker>=0.2.5.4","pixi-rocker>=0.0.9","palanteer-rocker>=0.0.1","lazygit-rocker>=0.0.1"]
+extensions= ["pixi-rocker>=0.0.9","palanteer-rocker>=0.0.1","lazygit-rocker>=0.0.1"]
 
 
 [build-system]
