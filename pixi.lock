@@ -1438,7 +1438,7 @@ packages:
   name: rockerc
   version: 0.4.2
   path: .
-  sha256: be72f034a732ba3a33f9eee044b753e2a4b99defa8de87911ba36c17cee22d76
+  sha256: b73fdc3a890498d9226b28474682233c227792777eda9cee91a9c11bb62e3e4f
   requires_dist:
   - rocker>=0.2.17
   - deps-rocker>=0.2.5.4
@@ -1455,6 +1455,7 @@ packages:
   - palanteer-rocker>=0.0.1 ; extra == 'extensions'
   - lazygit-rocker>=0.0.1 ; extra == 'extensions'
   - ghrocker==0.0.9 ; extra == 'extensions'
+  - groot-rocker==0.4.1 ; extra == 'extensions'
   editable: true
 - kind: pypi
   name: ruff
