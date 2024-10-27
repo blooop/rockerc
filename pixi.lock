@@ -11,7 +11,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-h4bc722e_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.8.30-hbcca054_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libexpat-2.6.3-h5888daf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libffi-3.4.2-h7f98852_5.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-14.2.0-h77fa898_1.conda
@@ -36,7 +36,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2b/c9/1c8fe3ce05d30c87eff498592c89015b19fade13df42850aafae09e94f35/charset_normalizer-3.4.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f7/95/d2fd31f1d638df806cae59d7daea5abf2b15b5234016a5ebb502c2f3f7ee/coverage-7.6.1-cp313-cp313-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/8d/24/72bc0e5d26f7668811abb3be5c970f20238b25779146c41e66223f21997c/deps_rocker-0.2.5.4-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f0/b2/597efeda5c28b0c37a6e2b78594c9e0af928b8a181abf0b3b44382ca355b/deps_rocker-0.2.6.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -76,7 +76,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-h4bc722e_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.8.30-hbcca054_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libffi-3.4.2-h7f98852_5.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-14.2.0-h77fa898_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-ng-14.2.0-h69a702a_1.conda
@@ -100,7 +100,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/28/89/60f51ad71f63aaaa7e51a2a2ad37919985a341a1d267070f212cdf6c2d22/charset_normalizer-3.4.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9a/6f/eef79b779a540326fee9520e5542a8b428cc3bfa8b7c8f1022c1ee4fc66c/coverage-7.6.1-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/8d/24/72bc0e5d26f7668811abb3be5c970f20238b25779146c41e66223f21997c/deps_rocker-0.2.5.4-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f0/b2/597efeda5c28b0c37a6e2b78594c9e0af928b8a181abf0b3b44382ca355b/deps_rocker-0.2.6.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -143,7 +143,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-h4bc722e_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.8.30-hbcca054_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libffi-3.4.2-h7f98852_5.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-14.2.0-h77fa898_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-ng-14.2.0-h69a702a_1.conda
@@ -167,7 +167,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f8/01/344ec40cf5d85c1da3c1f57566c59e0c9b56bcc5566c08804a95a6cc8257/charset_normalizer-3.4.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/53/23/9e2c114d0178abc42b6d8d5281f651a8e6519abfa0ef460a00a91f80879d/coverage-7.6.1-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/8d/24/72bc0e5d26f7668811abb3be5c970f20238b25779146c41e66223f21997c/deps_rocker-0.2.5.4-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f0/b2/597efeda5c28b0c37a6e2b78594c9e0af928b8a181abf0b3b44382ca355b/deps_rocker-0.2.6.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -210,7 +210,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-h4bc722e_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.8.30-hbcca054_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libexpat-2.6.3-h5888daf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libffi-3.4.2-h7f98852_5.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-14.2.0-h77fa898_1.conda
@@ -235,7 +235,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/eb/5b/6f10bad0f6461fa272bfbbdf5d0023b5fb9bc6217c92bf068fa5a99820f5/charset_normalizer-3.4.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/14/6f/8351b465febb4dbc1ca9929505202db909c5a635c6fdf33e089bbc3d7d85/coverage-7.6.1-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/8d/24/72bc0e5d26f7668811abb3be5c970f20238b25779146c41e66223f21997c/deps_rocker-0.2.5.4-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f0/b2/597efeda5c28b0c37a6e2b78594c9e0af928b8a181abf0b3b44382ca355b/deps_rocker-0.2.6.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -275,7 +275,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-h4bc722e_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.8.30-hbcca054_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libexpat-2.6.3-h5888daf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libffi-3.4.2-h7f98852_5.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-14.2.0-h77fa898_1.conda
@@ -300,7 +300,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/16/92/92a76dc2ff3a12e69ba94e7e05168d37d0345fa08c87e1fe24d0c2a42223/charset_normalizer-3.4.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/0f/c890339dd605f3ebc269543247bdd43b703cce6825b5ed42ff5f2d6122c7/coverage-7.6.1-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/8d/24/72bc0e5d26f7668811abb3be5c970f20238b25779146c41e66223f21997c/deps_rocker-0.2.5.4-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f0/b2/597efeda5c28b0c37a6e2b78594c9e0af928b8a181abf0b3b44382ca355b/deps_rocker-0.2.6.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -340,7 +340,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-h4bc722e_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.8.30-hbcca054_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libexpat-2.6.3-h5888daf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libffi-3.4.2-h7f98852_5.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-14.2.0-h77fa898_1.conda
@@ -365,7 +365,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2b/c9/1c8fe3ce05d30c87eff498592c89015b19fade13df42850aafae09e94f35/charset_normalizer-3.4.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f7/95/d2fd31f1d638df806cae59d7daea5abf2b15b5234016a5ebb502c2f3f7ee/coverage-7.6.1-cp313-cp313-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/8d/24/72bc0e5d26f7668811abb3be5c970f20238b25779146c41e66223f21997c/deps_rocker-0.2.5.4-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f0/b2/597efeda5c28b0c37a6e2b78594c9e0af928b8a181abf0b3b44382ca355b/deps_rocker-0.2.6.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -698,9 +698,9 @@ packages:
   requires_python: '>=3.8'
 - kind: pypi
   name: deps-rocker
-  version: 0.2.5.4
-  url: https://files.pythonhosted.org/packages/8d/24/72bc0e5d26f7668811abb3be5c970f20238b25779146c41e66223f21997c/deps_rocker-0.2.5.4-py2.py3-none-any.whl
-  sha256: bd242e1a4c3c369e63104744e21f456637f8ff8738c849cb18e055cdc234c0d0
+  version: 0.2.6.0
+  url: https://files.pythonhosted.org/packages/f0/b2/597efeda5c28b0c37a6e2b78594c9e0af928b8a181abf0b3b44382ca355b/deps_rocker-0.2.6.0-py2.py3-none-any.whl
+  sha256: b0f3cefdf56b921a65d8cc40b028cf7f9123d1ef6c72b8a16d857bf35c6b0dd0
   requires_dist:
   - off-your-rocker>=0.1.0
   - pyyaml>=5.0
@@ -828,12 +828,12 @@ packages:
 - kind: conda
   name: ld_impl_linux-64
   version: '2.43'
-  build: h712a8e2_1
-  build_number: 1
+  build: h712a8e2_2
+  build_number: 2
   subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_1.conda
-  sha256: 0c21387f9a411e3d1f7f2969026bacfece133c8f1e72faea9cde29c0c19e1f3a
-  md5: 83e1364586ceb8d0739fbc85b5c95837
+  url: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
+  sha256: 7c91cea91b13f4314d125d1bedb9d03a29ebbd5080ccdea70260363424646dbe
+  md5: 048b02e3962f066da18efe3a21b77672
   depends:
   - __glibc >=2.17,<3.0.a0
   constrains:
@@ -841,8 +841,8 @@ packages:
   license: GPL-3.0-only
   license_family: GPL
   purls: []
-  size: 669616
-  timestamp: 1727304687962
+  size: 669211
+  timestamp: 1729655358674
 - kind: conda
   name: libexpat
   version: 2.6.3
@@ -1438,7 +1438,7 @@ packages:
   name: rockerc
   version: 0.4.2
   path: .
-  sha256: a2f34c4076e3e6a6e6b3a3799c95b7b17ff79e739aadbd94c91c55a26bb07fc8
+  sha256: 6b0140e1937dea47f8eb7c6061c23e624a0280c460fea945fb324c357f0f853b
   requires_dist:
   - rocker>=0.2.17
   - deps-rocker>=0.2.5.4
@@ -1456,6 +1456,7 @@ packages:
   - lazygit-rocker>=0.0.1 ; extra == 'extensions'
   - ghrocker==0.0.9 ; extra == 'extensions'
   - groot-rocker==0.4.1 ; extra == 'extensions'
+  - cargo-rocker==0.0.2 ; extra == 'extensions'
   editable: true
 - kind: pypi
   name: ruff
