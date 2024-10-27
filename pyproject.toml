@@ -1,6 +1,6 @@
 [project]
 name = "rockerc"
-version = "0.4.1"
+version = "0.4.2"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
@@ -49,7 +49,8 @@ test = [
   "ruff>=0.5.0,<=0.6.8",
   "coverage>=7.5.4,<=7.6.1",
 ]
-extensions= ["pixi-rocker>=0.0.9","palanteer-rocker>=0.0.1","lazygit-rocker>=0.0.1"]
+#These are a list of externally maintained rocker extensions. use pip install rockerc[extensions] to install all of them
+extensions= ["pixi-rocker>=0.0.9","palanteer-rocker>=0.0.1","lazygit-rocker>=0.0.1","ghrocker==0.0.9","groot-rocker==0.4.1"]
 
 
 [build-system]
