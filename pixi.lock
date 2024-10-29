@@ -1430,9 +1430,9 @@ packages:
   requires_python: '>=3.0'
 - kind: pypi
   name: rockerc
-  version: 0.4.2
+  version: 0.4.3
   path: .
-  sha256: eec6d0ec7abd3dae4949fb56afed25e020224a0b2b7b011a859db91d2fdef1be
+  sha256: 226aaec6965ef04cc39aedd1303e83c0a8517f033b0865731fa6e867dce03e54
   requires_dist:
   - rocker>=0.2.17
   - deps-rocker>=0.2.5.4
