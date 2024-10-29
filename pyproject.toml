@@ -50,7 +50,7 @@ test = [
   "coverage>=7.5.4,<=7.6.1",
 ]
 #These are a list of externally maintained rocker extensions. use pip install rockerc[extensions] to install all of them
-extensions= ["pixi-rocker>=0.0.9","palanteer-rocker>=0.0.1","lazygit-rocker>=0.0.1","ghrocker==0.0.9","groot-rocker==0.4.1","cargo-rocker==0.0.2"]
+extensions= ["pixi-rocker>=0.0.9","palanteer-rocker>=0.0.1","lazygit-rocker>=0.0.1","ghrocker==0.0.9","groot-rocker==0.4.1","cargo-rocker==0.0.3"]
 
 
 [build-system]
