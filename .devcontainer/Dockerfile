@@ -11,3 +11,5 @@ USER vscode
 WORKDIR /home/vscode
 
 RUN echo 'eval "$(pixi completion -s bash)"' >> /home/vscode/.bashrc
+
+ENV ROCKERC_TESTVAR=1
