@@ -5,7 +5,9 @@
 # - image: Specifies the base image to pass to rocker
 # - args: Lists additional features or tools to be added to the docker image
 
-image: Dockerfile 
+# image: ubuntu:22.04
+dockerfile: .devcontainer/Dockerfile
+# dockerfile: Dockerfile
 args:
   - nvidia
   - x11 
@@ -13,5 +15,4 @@ args:
   - pull 
   - deps
   - git 
-  - lazygit
   - pixi
