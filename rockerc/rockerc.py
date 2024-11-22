@@ -43,7 +43,7 @@ def find_docker():
         print(f"loading {p}")
 
         with open(p.as_posix(), "r", encoding="utf-8") as f:
-            merged_dict.update(yaml.safe_load(f))
+            merged_dict |= yaml.safe_load(f)
     return merged_dict
 
 
