@@ -35,18 +35,6 @@ def yaml_dict_to_args(d: dict) -> str:
     return cmd_str
 
 
-def find_docker():
-    search_path = pathlib.Path().cwd()
-    print(search_path, "asldkfjasdklf")
-    merged_dict = {}
-    for p in search_path.glob("Dockerfile"):
-        print(f"loading {p}")
-
-        with open(p.as_posix(), "r", encoding="utf-8") as f:
-            merged_dict |= yaml.safe_load(f)
-    return merged_dict
-
-
 def collect_arguments(path: str = ".") -> dict:
     """Search for rockerc.yaml files and return a merged dictionary
 
