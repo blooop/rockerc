@@ -2,7 +2,6 @@ import sys
 import subprocess
 import pathlib
 import yaml
-import logging
 
 
 def yaml_dict_to_args(d: dict) -> str:
@@ -83,7 +82,7 @@ def run_rockerc(path: str = "."):
         print("Building dockerfile...")
         merged_dict["image"] = build_docker(merged_dict["dockerfile"])
         print("disabling 'pull' extension as a Dockerfile is used instead")
-        if "pull" in merged_dict["args"]: 
+        if "pull" in merged_dict["args"]:
             merged_dict["args"].remove("pull")  # can't pull as we just build image
         # remove the dockerfile command as it does not need to be passed onto rocker
         merged_dict.pop("dockerfile")
