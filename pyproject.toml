@@ -45,9 +45,9 @@ test = [
   "pylint>=3.2.5,<=3.3.1",
   "pytest-cov>=4.1,<=6.0.0",
   "pytest>=7.4,<=8.3.3",
-  "hypothesis>=6.104.2,<=6.119.3",
-  "ruff>=0.5.0,<=0.7.4",
-  "coverage>=7.5.4,<=7.6.7",
+  "hypothesis>=6.104.2,<=6.119.4",
+  "ruff>=0.5.0,<=0.8.0",
+  "coverage>=7.5.4,<=7.6.8",
 ]
 #These are a list of externally maintained rocker extensions. use pip install rockerc[extensions] to install all of them
 extensions= ["pixi-rocker>=0.0.9","palanteer-rocker>=0.0.1","lazygit-rocker>=0.0.1","ghrocker==0.0.9","groot-rocker==0.4.1","cargo-rocker==0.0.3"]
