@@ -19,7 +19,6 @@ pip install rockerc
 ```
 
 ## Usage
-
 ```
 #searches for rockerc.yaml and passes those arguments to rocker
 rockerc 
@@ -32,3 +31,21 @@ rockerc
 ## Caveats
 
 I'm not sure this is the best way of implementing rockerc like functionality.  It might be better to implmented it as a rocker extension, or in rocker itself.  This was just the simplest way to get started. I may explore those other options in more detail in the future. 
+
+
+# rocker.yaml configuration
+
+You need to pass either a docker image, or a relative path to a dockerfile
+
+rockerc.yaml
+```yaml
+image: ubuntu:22.04
+```
+
+or
+
+```yaml
+dockerfile: Dockerfile
+```
+
+will look for the dockerfile relative to the rockerc.yaml file
