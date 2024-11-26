@@ -19,7 +19,6 @@ pip install rockerc
 ```
 
 ## Usage
-t
 ```
 #searches for rockerc.yaml and passes those arguments to rocker
 rockerc 
