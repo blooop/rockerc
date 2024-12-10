@@ -144,8 +144,9 @@ def run_rockerc(path: str = "."):
         cmd = f"rocker {cmd_args}"
         print(f"running cmd: {cmd}")
         split_cmd = shlex.split(cmd)
-        save_rocker_cmd(split_cmd)
-        subprocess.run(split_cmd, check=True)
+        # save_rocker_cmd(split_cmd)
+        subprocess.call(cmd, shell=True)
+        # subprocess.run(split_cmd, check=False)
     else:
         print(
             "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
