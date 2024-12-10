@@ -2,10 +2,6 @@
 	"python.testing.pytestArgs": [],
 	"python.testing.unittestEnabled": false,
 	"python.testing.pytestEnabled": true,
-	"[python]": {
-		"editor.defaultFormatter": "charliermarsh.ruff",
-		"editor.formatOnSave": true,
-	},
 	"files.exclude": {
 		"**/__pycache__/**": true,
 		"/home/vscode/.local/lib/python3.10/site-packages/rockerc/**": true
