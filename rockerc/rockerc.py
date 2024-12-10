@@ -73,7 +73,7 @@ def build_docker(dockerfile_path: str = ".") -> str:
 
 def save_rocker_cmd(split_cmd: str):
     dry_run = split_cmd + ["--mode", "dry-run"]
-    s = subprocess.run(dry_run, capture_output=True, text=True)
+    s = subprocess.run(dry_run, capture_output=True, text=True, check=True)
     output = s.stdout
     try:
         # Split by "vvvvvv" to discard the top section
@@ -107,7 +107,7 @@ def save_rocker_cmd(split_cmd: str):
         formatted_script_content = "\n".join(formatted_script_lines)
 
         bash_script_path = "run_dockerfile.sh"
-        with open(bash_script_path, "w") as bash_script:
+        with open(bash_script_path, "w", encoding="utf-8") as bash_script:
             bash_script.write(formatted_script_content)
 
         # Make the bash script executable
