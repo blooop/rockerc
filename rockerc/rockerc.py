@@ -138,13 +138,20 @@ def run_rockerc(path: str = "."):
 
     cmd_args = yaml_dict_to_args(merged_dict)
     if len(cmd_args) > 0:
+        create_dockerfile =False
         if len(sys.argv) > 1:
+            #this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
+            dockerfile_arg = "--create-dockerfile"
+            if dockerfile_arg in sys.argv:
+                sys.argv.remove(dockerfile_arg)
+                create_dockerfile =True
             cmd_args += " " + " ".join(sys.argv[1:])
 
         cmd = f"rocker {cmd_args}"
         print(f"running cmd: {cmd}")
         split_cmd = shlex.split(cmd)
-        save_rocker_cmd(split_cmd)
+        if create_dockerfile:
+            save_rocker_cmd(split_cmd)
         subprocess.run(split_cmd, check=True)
     else:
         print(
