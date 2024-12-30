@@ -65,7 +65,7 @@ def build_docker(dockerfile_path: str = ".") -> str:
         str: The tag of the built Docker image.
     """
 
-    tag = f"{pathlib.Path().absolute().name}:latest"
+    tag = f"{pathlib.Path().absolute().name.lower()}:latest"
     dockerfile_dir = pathlib.Path(dockerfile_path).absolute().parent
     subprocess.call(["docker", "build", "-t", tag, str(dockerfile_dir)])
     return tag
