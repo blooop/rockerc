@@ -1,6 +1,6 @@
 [project]
 name = "rockerc"
-version = "0.4.3"
+version = "0.5.0"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
@@ -50,7 +50,14 @@ test = [
   "coverage>=7.5.4,<=7.6.9",
 ]
 #These are a list of externally maintained rocker extensions. use pip install rockerc[extensions] to install all of them
-extensions= ["pixi-rocker>=0.0.9","palanteer-rocker>=0.0.1","lazygit-rocker>=0.0.1","ghrocker==0.0.9","groot-rocker==0.4.1","cargo-rocker==0.0.3"]
+extensions = [
+  "pixi-rocker>=0.0.9",
+  "palanteer-rocker>=0.0.1",
+  "lazygit-rocker>=0.0.1",
+  "ghrocker==0.0.9",
+  "groot-rocker==0.4.1",
+  "cargo-rocker==0.0.3",
+]
 
 
 [build-system]
@@ -58,19 +65,19 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-include= ["rockerc"]
+include = ["rockerc"]
 
 [project.scripts]
 rockerc = "rockerc.rockerc:run_rockerc"
 
 # Environments
 [tool.pixi.environments]
-default = {features = ["test"], solve-group = "default" }
-py309 = ["py309","test"]
-py310 = ["py310","test"]
-py311 = ["py311","test"]
-py312 = ["py312","test"]
-py313 = ["py313","test"]
+default = { features = ["test"], solve-group = "default" }
+py309 = ["py309", "test"]
+py310 = ["py310", "test"]
+py311 = ["py311", "test"]
+py312 = ["py312", "test"]
+py313 = ["py313", "test"]
 
 
 [tool.pixi.tasks]
@@ -79,7 +86,7 @@ check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
 lint = { depends_on = ["ruff-lint", "pylint"] }
-style = { depends_on = ["format","lint"]}
+style = { depends_on = ["format", "lint"] }
 commit-format = "git commit -a -m'autoformat code' || true"
 test = "pytest"
 coverage = "coverage run -m pytest && coverage xml -o coverage.xml"
@@ -90,8 +97,14 @@ update-lock-push = { depends_on = ["update-lock", "push"] }
 fix = { depends_on = ["update-lock", "format", "ruff-lint"] }
 fix-commit-push = { depends_on = ["fix", "commit-format", "update-lock-push"] }
 ci-no-cover = { depends_on = ["style", "test"] }
-ci = { depends_on = ["format","ruff-lint", "pylint", "coverage", "coverage-report"] }
-ci-push = {depends_on=["format","ruff-lint","update-lock","ci","push"]}
+ci = { depends_on = [
+  "format",
+  "ruff-lint",
+  "pylint",
+  "coverage",
+  "coverage-report",
+] }
+ci-push = { depends_on = ["format", "ruff-lint", "update-lock", "ci", "push"] }
 clear-pixi = "rm -rf .pixi pixi.lock"
 setup-git-merge-driver = "git config merge.ourslock.driver true"
 update-from-template-repo = "./scripts/update_from_template.sh"
