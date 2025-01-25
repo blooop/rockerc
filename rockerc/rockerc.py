@@ -19,6 +19,7 @@ def yaml_dict_to_args(d: dict) -> str:
     cmd_str = ""
 
     image = d.pop("image", None)  # special value
+    # image = d.pop("create-dockerfile", None)  # special value
 
     if "args" in d:
         args = d.pop("args")
@@ -136,9 +137,13 @@ def run_rockerc(path: str = "."):
         # remove the dockerfile command as it does not need to be passed onto rocker
         merged_dict.pop("dockerfile")
 
+    create_dockerfile=False 
+    if "create-dockerfile" in merged_dict["args"]:
+        merged_dict["args"].remove("create-dockerfile")
+        create_dockerfile=True
+
     cmd_args = yaml_dict_to_args(merged_dict)
     if len(cmd_args) > 0:
-        create_dockerfile =False
         if len(sys.argv) > 1:
             #this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
             dockerfile_arg = "--create-dockerfile"

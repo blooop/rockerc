@@ -36,7 +36,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2b/c9/1c8fe3ce05d30c87eff498592c89015b19fade13df42850aafae09e94f35/charset_normalizer-3.4.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9f/79/6c7a800913a9dd23ac8c8da133ebb556771a5a3d4df36b46767b1baffd35/coverage-7.6.9-cp313-cp313-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/32/af/5857402c6fe87e03e1ec3db7f920621ecd22bea4fb3091433f8cae56b3ec/deps_rocker-0.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ff/9f/13e82d078377fc9ae6848501cdcbe019434dce9b936a02798b76c1a9ab69/deps_rocker-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -100,7 +100,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/28/89/60f51ad71f63aaaa7e51a2a2ad37919985a341a1d267070f212cdf6c2d22/charset_normalizer-3.4.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/eb/d3/48ce8c9a89c7013f89ec7e01402e7a136a2e849c8f8664ea7f17b225295c/coverage-7.6.9-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/32/af/5857402c6fe87e03e1ec3db7f920621ecd22bea4fb3091433f8cae56b3ec/deps_rocker-0.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ff/9f/13e82d078377fc9ae6848501cdcbe019434dce9b936a02798b76c1a9ab69/deps_rocker-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -167,7 +167,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f8/01/344ec40cf5d85c1da3c1f57566c59e0c9b56bcc5566c08804a95a6cc8257/charset_normalizer-3.4.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d0/c5/4466602195ecaced298d55af1e29abceb812addabefd5bd9116a204f7bab/coverage-7.6.9-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/32/af/5857402c6fe87e03e1ec3db7f920621ecd22bea4fb3091433f8cae56b3ec/deps_rocker-0.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ff/9f/13e82d078377fc9ae6848501cdcbe019434dce9b936a02798b76c1a9ab69/deps_rocker-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -235,7 +235,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/eb/5b/6f10bad0f6461fa272bfbbdf5d0023b5fb9bc6217c92bf068fa5a99820f5/charset_normalizer-3.4.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8b/20/8f50e7c7ad271144afbc2c1c6ec5541a8c81773f59352f8db544cad1a0ec/coverage-7.6.9-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/32/af/5857402c6fe87e03e1ec3db7f920621ecd22bea4fb3091433f8cae56b3ec/deps_rocker-0.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ff/9f/13e82d078377fc9ae6848501cdcbe019434dce9b936a02798b76c1a9ab69/deps_rocker-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -300,7 +300,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/16/92/92a76dc2ff3a12e69ba94e7e05168d37d0345fa08c87e1fe24d0c2a42223/charset_normalizer-3.4.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8b/10/ee7d696a17ac94f32f2dbda1e17e730bf798ae9931aec1fc01c1944cd4de/coverage-7.6.9-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/32/af/5857402c6fe87e03e1ec3db7f920621ecd22bea4fb3091433f8cae56b3ec/deps_rocker-0.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ff/9f/13e82d078377fc9ae6848501cdcbe019434dce9b936a02798b76c1a9ab69/deps_rocker-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -365,7 +365,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2b/c9/1c8fe3ce05d30c87eff498592c89015b19fade13df42850aafae09e94f35/charset_normalizer-3.4.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/2e/d53fa4befbf2cfa713304affc7ca780ce4fc1fd8710527771b58311a3229/click-8.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9f/79/6c7a800913a9dd23ac8c8da133ebb556771a5a3d4df36b46767b1baffd35/coverage-7.6.9-cp313-cp313-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/32/af/5857402c6fe87e03e1ec3db7f920621ecd22bea4fb3091433f8cae56b3ec/deps_rocker-0.3.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ff/9f/13e82d078377fc9ae6848501cdcbe019434dce9b936a02798b76c1a9ab69/deps_rocker-0.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -398,8 +398,6 @@ packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
   sha256: fe51de6107f9edc7aa4f786a70f4a883943bc9d39b3bb7307c04c41410990726
   md5: d7c89558ba9fa0495403155b64376d81
-  arch: x86_64
-  platform: linux
   license: None
   purls: []
   size: 2562
@@ -413,8 +411,6 @@ packages:
   - libgomp >=7.5.0
   constrains:
   - openmp_impl 9999
-  arch: x86_64
-  platform: linux
   license: BSD-3-Clause
   license_family: BSD
   purls: []
@@ -570,8 +566,6 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc-ng >=12
-  arch: x86_64
-  platform: linux
   license: bzip2-1.0.6
   license_family: BSD
   purls: []
@@ -580,8 +574,6 @@ packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.8.30-hbcca054_0.conda
   sha256: afee721baa6d988e27fef1832f68d6f32ac8cc99cdf6015732224c2841a09cea
   md5: c27d1c142233b5bc9ca570c6e2e0c244
-  arch: x86_64
-  platform: linux
   license: ISC
   purls: []
   size: 159003
@@ -659,22 +651,22 @@ packages:
   requires_dist:
   - tomli ; python_full_version <= '3.11' and extra == 'toml'
   requires_python: '>=3.9'
-- pypi: https://files.pythonhosted.org/packages/32/af/5857402c6fe87e03e1ec3db7f920621ecd22bea4fb3091433f8cae56b3ec/deps_rocker-0.3.1-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/ff/9f/13e82d078377fc9ae6848501cdcbe019434dce9b936a02798b76c1a9ab69/deps_rocker-0.7.0-py3-none-any.whl
   name: deps-rocker
-  version: 0.3.1
-  sha256: 9ecbd5137bfb19fcf761f648ed96c62f45aee3f480376256e1e6cff6ad0c739a
+  version: 0.7.0
+  sha256: 392877d4056de74b3cb7b0a2c2b03795d2a91d3ab9cd4bb8aabc4f7f5c2028d8
   requires_dist:
   - off-your-rocker>=0.1.0
   - pyyaml>=5.0
   - rocker>=0.2.17
   - toml>=0.10
-  - black>=23,<=24.10.0 ; extra == 'test'
-  - coverage>=7.5.4,<=7.6.8 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.122.0 ; extra == 'test'
-  - pylint>=3.2.5,<=3.3.1 ; extra == 'test'
+  - coverage>=7.5.4,<=7.6.10 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.123.2 ; extra == 'test'
+  - pre-commit<=4.0.1 ; extra == 'test'
+  - pylint>=3.2.5,<=3.3.3 ; extra == 'test'
   - pytest-cov>=4.1,<=6.0.0 ; extra == 'test'
-  - pytest>=7.4,<=8.3.3 ; extra == 'test'
-  - ruff>=0.5.0,<=0.8.1 ; extra == 'test'
+  - pytest>=7.4,<=8.3.4 ; extra == 'test'
+  - ruff>=0.5.0,<=0.8.6 ; extra == 'test'
   requires_python: '>=3.9'
 - pypi: https://files.pythonhosted.org/packages/46/d1/e73b6ad76f0b1fb7f23c35c6d95dbc506a9c8804f43dda8cb5b0fa6331fd/dill-0.3.9-py3-none-any.whl
   name: dill
@@ -785,8 +777,6 @@ packages:
   - __glibc >=2.17,<3.0.a0
   constrains:
   - binutils_impl_linux-64 2.43
-  arch: x86_64
-  platform: linux
   license: GPL-3.0-only
   license_family: GPL
   purls: []
@@ -800,8 +790,6 @@ packages:
   - libgcc >=13
   constrains:
   - expat 2.6.4.*
-  arch: x86_64
-  platform: linux
   license: MIT
   license_family: MIT
   purls: []
@@ -812,8 +800,6 @@ packages:
   md5: d645c6d2ac96843a2bfaccd2d62b3ac3
   depends:
   - libgcc-ng >=9.4.0
-  arch: x86_64
-  platform: linux
   license: MIT
   license_family: MIT
   purls: []
@@ -828,8 +814,6 @@ packages:
   constrains:
   - libgomp 14.2.0 h77fa898_1
   - libgcc-ng ==14.2.0=*_1
-  arch: x86_64
-  platform: linux
   license: GPL-3.0-only WITH GCC-exception-3.1
   license_family: GPL
   purls: []
@@ -840,8 +824,6 @@ packages:
   md5: e39480b9ca41323497b05492a63bc35b
   depends:
   - libgcc 14.2.0 h77fa898_1
-  arch: x86_64
-  platform: linux
   license: GPL-3.0-only WITH GCC-exception-3.1
   license_family: GPL
   purls: []
@@ -852,8 +834,6 @@ packages:
   md5: cc3573974587f12dda90d96e3e55a702
   depends:
   - _libgcc_mutex 0.1 conda_forge
-  arch: x86_64
-  platform: linux
   license: GPL-3.0-only WITH GCC-exception-3.1
   license_family: GPL
   purls: []
@@ -865,8 +845,6 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=13
-  arch: x86_64
-  platform: linux
   license: 0BSD
   purls: []
   size: 111132
@@ -877,8 +855,6 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc-ng >=12
-  arch: x86_64
-  platform: linux
   license: BSD-2-Clause
   license_family: BSD
   purls: []
@@ -889,8 +865,6 @@ packages:
   md5: 30fd6e37fe21f86f4bd26d6ee73eeec7
   depends:
   - libgcc-ng >=12
-  arch: x86_64
-  platform: linux
   license: LGPL-2.1-only
   license_family: GPL
   purls: []
@@ -903,8 +877,6 @@ packages:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=13
   - libzlib >=1.3.1,<2.0a0
-  arch: x86_64
-  platform: linux
   license: Unlicense
   purls: []
   size: 873551
@@ -914,8 +886,6 @@ packages:
   md5: 40b61aab5c7ba9ff276c41cfffe6b80b
   depends:
   - libgcc-ng >=12
-  arch: x86_64
-  platform: linux
   license: BSD-3-Clause
   license_family: BSD
   purls: []
@@ -926,8 +896,6 @@ packages:
   md5: 5aa797f8787fe7a17d1b0821485b5adc
   depends:
   - libgcc-ng >=12
-  arch: x86_64
-  platform: linux
   license: LGPL-2.1-or-later
   purls: []
   size: 100393
@@ -940,8 +908,6 @@ packages:
   - libgcc >=13
   constrains:
   - zlib 1.3.1 *_2
-  arch: x86_64
-  platform: linux
   license: Zlib
   license_family: Other
   purls: []
@@ -963,8 +929,6 @@ packages:
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc-ng >=12
-  arch: x86_64
-  platform: linux
   license: X11 AND BSD-3-Clause
   purls: []
   size: 889086
@@ -982,8 +946,6 @@ packages:
   - __glibc >=2.17,<3.0.a0
   - ca-certificates
   - libgcc >=13
-  arch: x86_64
-  platform: linux
   license: Apache-2.0
   license_family: Apache
   purls: []
@@ -1110,8 +1072,6 @@ packages:
   - tzdata
   constrains:
   - python_abi 3.10.* *_cp310
-  arch: x86_64
-  platform: linux
   license: Python-2.0
   purls: []
   size: 25199631
@@ -1140,8 +1100,6 @@ packages:
   - tzdata
   constrains:
   - python_abi 3.11.* *_cp311
-  arch: x86_64
-  platform: linux
   license: Python-2.0
   purls: []
   size: 30624804
@@ -1170,8 +1128,6 @@ packages:
   - tzdata
   constrains:
   - python_abi 3.12.* *_cp312
-  arch: x86_64
-  platform: linux
   license: Python-2.0
   purls: []
   size: 31565686
@@ -1198,8 +1154,6 @@ packages:
   - readline >=8.2,<9.0a0
   - tk >=8.6.13,<8.7.0a0
   - tzdata
-  arch: x86_64
-  platform: linux
   license: Python-2.0
   purls: []
   size: 33263183
@@ -1227,8 +1181,6 @@ packages:
   - tzdata
   constrains:
   - python_abi 3.9.* *_cp39
-  arch: x86_64
-  platform: linux
   license: Python-2.0
   purls: []
   size: 23622848
@@ -1239,8 +1191,6 @@ packages:
   md5: 381bbd2a92c863f640a55b6ff3c35161
   constrains:
   - python 3.13.* *_cp313
-  arch: x86_64
-  platform: linux
   license: BSD-3-Clause
   license_family: BSD
   purls: []
@@ -1277,8 +1227,6 @@ packages:
   depends:
   - libgcc-ng >=12
   - ncurses >=6.3,<7.0a0
-  arch: x86_64
-  platform: linux
   license: GPL-3.0-only
   license_family: GPL
   purls: []
@@ -1311,20 +1259,20 @@ packages:
   requires_python: '>=3.0'
 - pypi: .
   name: rockerc
-  version: 0.4.3
-  sha256: 284c8baf28cf1208a12f61ecc4eecf6b7c3274e897d56025c8bb32cfc34a4ed1
+  version: 0.5.1
+  sha256: 23f295b537ec7789edecd24b21f873116ef5b69c1861df804f3c16d82f2ebb32
   requires_dist:
   - rocker>=0.2.17
-  - deps-rocker>=0.2.5.4
+  - deps-rocker>=0.6
   - off-your-rocker>=0.1.0
   - pyyaml>=5
   - black>=23,<=24.10.0 ; extra == 'test'
-  - pylint>=3.2.5,<=3.3.2 ; extra == 'test'
+  - pylint>=3.2.5,<=3.3.3 ; extra == 'test'
   - pytest-cov>=4.1,<=6.0.0 ; extra == 'test'
   - pytest>=7.4,<=8.3.4 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.122.3 ; extra == 'test'
-  - ruff>=0.5.0,<=0.8.2 ; extra == 'test'
-  - coverage>=7.5.4,<=7.6.9 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.123.2 ; extra == 'test'
+  - ruff>=0.5.0,<=0.8.5 ; extra == 'test'
+  - coverage>=7.5.4,<=7.6.10 ; extra == 'test'
   - pixi-rocker>=0.0.9 ; extra == 'extensions'
   - palanteer-rocker>=0.0.1 ; extra == 'extensions'
   - lazygit-rocker>=0.0.1 ; extra == 'extensions'
@@ -1347,8 +1295,6 @@ packages:
   depends:
   - libgcc-ng >=12
   - libzlib >=1.2.13,<2.0.0a0
-  arch: x86_64
-  platform: linux
   license: TCL
   license_family: BSD
   purls: []
