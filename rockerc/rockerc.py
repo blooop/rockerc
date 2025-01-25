@@ -137,19 +137,19 @@ def run_rockerc(path: str = "."):
         # remove the dockerfile command as it does not need to be passed onto rocker
         merged_dict.pop("dockerfile")
 
-    create_dockerfile=False 
+    create_dockerfile = False
     if "create-dockerfile" in merged_dict["args"]:
         merged_dict["args"].remove("create-dockerfile")
-        create_dockerfile=True
+        create_dockerfile = True
 
     cmd_args = yaml_dict_to_args(merged_dict)
     if len(cmd_args) > 0:
         if len(sys.argv) > 1:
-            #this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
+            # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
             dockerfile_arg = "--create-dockerfile"
             if dockerfile_arg in sys.argv:
                 sys.argv.remove(dockerfile_arg)
-                create_dockerfile =True
+                create_dockerfile = True
             cmd_args += " " + " ".join(sys.argv[1:])
 
         cmd = f"rocker {cmd_args}"
