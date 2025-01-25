@@ -14,7 +14,7 @@ FROM nvidia/opengl:1.0-glvnd-devel-ubuntu18.04 as glvnd
 # Preamble from extension [x11]
 
 
-FROM rockerc:latest
+FROM ubuntu:22.04
 USER root
 # Snippet from extension [git]
 
@@ -42,6 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         jq \
         python3-pip \
         && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # INSTALLING PIP DEPS: language-toolchain
 RUN pip3 install -U \
     hatch \
@@ -49,6 +50,7 @@ RUN pip3 install -U \
     twine \
     uv \
     && echo "pip"
+
 # Snippet from extension [pixi]
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
