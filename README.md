@@ -12,7 +12,17 @@
 [![Python](https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 
-## Installation
+### Recommended Method:
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and then install it as a globally available tool on your system
+
+```
+uv tool install rockerc 
+```
+
+### Deprecated Method:
+
+Globally install via pip, but this is not really recommended
 
 ```
 pip install rockerc
