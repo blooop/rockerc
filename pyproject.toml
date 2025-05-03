@@ -43,10 +43,10 @@ python = "3.13.*"
 test = [
   "black>=23,<=25.1.0",
   "pylint>=3.2.5,<=3.3.6",
-  "pytest-cov>=4.1,<=6.1.0",
+  "pytest-cov>=4.1,<=6.1.1",
   "pytest>=7.4,<=8.3.5",
-  "hypothesis>=6.104.2,<=6.130.6",
-  "ruff>=0.5.0,<=0.11.2",
+  "hypothesis>=6.104.2,<=6.131.9",
+  "ruff>=0.5.0,<=0.11.8",
   "coverage>=7.5.4,<=7.8.0",
 ]
 #These are a list of externally maintained rocker extensions. use pip install rockerc[extensions] to install all of them
