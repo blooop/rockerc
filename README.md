@@ -16,25 +16,29 @@
 
 ### Recommended Method:
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and then install it as a globally available tool on your system
+Install [pipx](https://pypa.github.io/pipx/) (if not already installed):
 
 ```
-uv tool install rockerc 
+sudo apt install pipx
+pipx ensurepath
 ```
 
-### Deprecated Method:
-
-Globally install via pip, but this is not really recommended
+Then install rockerc and its dependencies globally with:
 
 ```
-pip install rockerc
+pipx install --include-deps rockerc
 ```
+
+This will ensure that `rockerc` and `rocker` commands are available on your PATH.
 
 ## Usage
+
+navigate to a directory with a `rockerc.yaml` file and run:
 ```
-#searches for rockerc.yaml and passes those arguments to rocker
 rockerc 
 ```
+
+This will search recursively for rockerc.yaml and pass those arguments to rocker
 
 ## Motivation
 
