@@ -128,6 +128,14 @@ def run_rockerc(path: str = "."):
 
     merged_dict = collect_arguments(path)
 
+    if not merged_dict:
+        print("No rockerc.yaml found in the specified directory. Please create a rockerc.yaml file with rocker arguments. See 'rocker -h' for help.")
+        sys.exit(1)
+
+    if "args" not in merged_dict:
+        print("No 'args' key found in rockerc.yaml. Please add an 'args' list with rocker arguments. See 'rocker -h' for help.")
+        sys.exit(1)
+
     if "dockerfile" in merged_dict:
         print("Building dockerfile...")
         merged_dict["image"] = build_docker(merged_dict["dockerfile"])
