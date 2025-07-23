@@ -69,6 +69,7 @@ include = ["rockerc"]
 
 [project.scripts]
 rockerc = "rockerc.rockerc:run_rockerc"
+renv = "rockerc.renv:main"
 
 # Environments
 [tool.pixi.environments]
