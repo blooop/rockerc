@@ -5,34 +5,35 @@ Rocker Environment (renv) - Workspace management tool for rockerc repositories.
 
 import argparse
 import subprocess
-import sys
 import os
 from pathlib import Path
 import shlex
 
 from . import rockerc
 
+# Version number - increment when making changes
+__version__ = "1.3.0"
+
 
 class RenvManager:
     """Manages git worktrees for different codebases with rockerc integration."""
 
     def __init__(self, repo_root=None, renv_home=None):
-        if repo_root is None:
-            repo_root = Path.cwd()
-
-        self.repo_root = Path(repo_root).resolve()
-
-        # Get renv home directory
+        # Get renv home directory first
         if renv_home:
             self.renv_home = Path(renv_home).expanduser().resolve()
         else:
             self.renv_home = self._get_renv_home()
 
+        # Always use renv_home as the repo root for git operations
+        if repo_root is None:
+            repo_root = self.renv_home
+
+        self.repo_root = Path(repo_root).resolve()
         self.worktrees_dir = self.renv_home
 
-        # Ensure we're in a git repository
-        if not (self.repo_root / ".git").exists():
-            raise RuntimeError(f"Not a git repository: {self.repo_root}")
+        # Initialize git repository in renv_home if it doesn't exist
+        self._ensure_git_repo()
 
     def _get_renv_home(self):
         """Get the renv home directory from environment or default."""
@@ -51,7 +52,7 @@ class RenvManager:
 
         # Check if RENV_HOME is already set in bashrc
         if bashrc_path.exists():
-            with open(bashrc_path, "r") as f:
+            with open(bashrc_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Remove existing RENV_HOME lines
@@ -61,11 +62,11 @@ class RenvManager:
             # Add new RENV_HOME line
             new_lines.append(export_line.strip())
 
-            with open(bashrc_path, "w") as f:
+            with open(bashrc_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(new_lines))
         else:
             # Create bashrc if it doesn't exist
-            with open(bashrc_path, "w") as f:
+            with open(bashrc_path, "w", encoding="utf-8") as f:
                 f.write(export_line)
 
         print(f"RENV_HOME set to: {renv_path}")
@@ -110,23 +111,26 @@ class RenvManager:
             # Use shlex to properly parse the command
             cmd_list = shlex.split(cmd)
 
-            result = subprocess.run(cmd_list, cwd=cwd, check=True)
+            subprocess.run(cmd_list, cwd=cwd, check=True)
             return True
 
         except Exception as e:
             print(f"Failed to run rockerc in {cwd}: {e}")
             return False
 
-    def _parse_repo_spec(self, repo_spec):
-        """Parse repo specification in format: repo_name:branch[:folder_in_repo]"""
+    def parse_repo_spec(self, repo_spec):
+        """Parse repo specification in format: repo_name[:branch[:folder_in_repo]]
+
+        If branch is not specified, defaults to 'main'.
+        Examples:
+        - blooop/bencher -> repo=blooop/bencher, branch=main
+        - blooop/bencher:develop -> repo=blooop/bencher, branch=develop
+        - blooop/bencher:main:src -> repo=blooop/bencher, branch=main, folder=src
+        """
         parts = repo_spec.split(":")
-        if len(parts) < 2:
-            raise ValueError(
-                f"Invalid repo spec: {repo_spec}. Expected format: repo_name:branch[:folder_in_repo]"
-            )
 
         repo_name = parts[0]
-        branch = parts[1]
+        branch = parts[1] if len(parts) > 1 and parts[1] else "main"
         folder_in_repo = parts[2] if len(parts) > 2 else None
 
         return repo_name, branch, folder_in_repo
@@ -151,23 +155,126 @@ class RenvManager:
         except subprocess.CalledProcessError:
             return []
 
+    def _ensure_git_repo(self):
+        """Ensure git repository exists in renv_home, create if needed."""
+        self.renv_home.mkdir(parents=True, exist_ok=True)
+
+        if not (self.repo_root / ".git").exists():
+            print(f"Initializing git repository in {self.repo_root}")
+            try:
+                subprocess.run(["git", "init"], cwd=self.repo_root, check=True, capture_output=True)
+                # Set up minimal git config for this repo
+                subprocess.run(
+                    ["git", "config", "user.email", "renv@example.com"],
+                    cwd=self.repo_root,
+                    check=True,
+                    capture_output=True,
+                )
+                subprocess.run(
+                    ["git", "config", "user.name", "Renv"],
+                    cwd=self.repo_root,
+                    check=True,
+                    capture_output=True,
+                )
+                # Create initial commit to avoid issues with worktrees
+                subprocess.run(
+                    ["git", "commit", "--allow-empty", "-m", "Initial commit"],
+                    cwd=self.repo_root,
+                    check=True,
+                    capture_output=True,
+                )
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(f"Failed to initialize git repository: {e}") from e
+
+    def generate_workspace_name(self, repo_name, branch):
+        """Generate a workspace name that is both a valid folder name and git branch name.
+        
+        Git branch name restrictions:
+        - No spaces, control characters
+        - No consecutive dots  
+        - Cannot start/end with slash
+        - Cannot contain ~, ^, :, ?, *, [, \
+        - Cannot end with .lock
+        """
+        # Extract just the repo name without org/user prefix
+        if "/" in repo_name:
+            repo_name = repo_name.split("/")[-1]
+
+        # Remove .git suffix if present
+        if repo_name.endswith(".git"):
+            repo_name = repo_name[:-4]
+
+        # Sanitize repo name for git branch and folder names
+        # Replace invalid characters with hyphens, then normalize
+        safe_repo = repo_name
+        for char in "~^:?*[\\. /":
+            safe_repo = safe_repo.replace(char, "-")
+
+        # Sanitize branch name similarly
+        safe_branch = branch
+        for char in "~^:?*[\\. /":
+            safe_branch = safe_branch.replace(char, "-")
+
+        # Remove consecutive hyphens and normalize
+        import re
+
+        safe_repo = re.sub(r"-+", "-", safe_repo).strip("-")
+        safe_branch = re.sub(r"-+", "-", safe_branch).strip("-")
+
+        # Ensure names don't start with hyphen or dot (git restriction)
+        if safe_repo.startswith(("-", ".")):
+            safe_repo = "repo-" + safe_repo.lstrip("-.")
+        if safe_branch.startswith(("-", ".")):
+            safe_branch = "branch-" + safe_branch.lstrip("-.")
+
+        # Generate final name
+        if safe_branch == "main":
+            # For main branch, just use repo name to keep it clean
+            workspace_name = safe_repo
+        else:
+            workspace_name = f"{safe_repo}-{safe_branch}"
+
+        # Ensure it doesn't end with .lock (git restriction)
+        if workspace_name.endswith(".lock"):
+            workspace_name = workspace_name[:-5] + "-lock"
+
+        return workspace_name
+
     def install(self, path=None):
         """Install and configure renv home directory."""
         if path is None:
-            path = Path.home() / "renv"
+            path = self.renv_home
+        else:
+            path = Path(path).expanduser().resolve()
 
-        self.renv_home = self._set_renv_home(path)
+        # Update renv_home and ensure git repo exists there
+        self.renv_home = path
+        self.repo_root = path
+        self.worktrees_dir = path
+
+        # Set up the directory and git repo
+        self._ensure_git_repo()
+        self._set_renv_home(path)
+
         print(f"Renv installation complete. Home directory: {self.renv_home}")
 
-    def add_workspace(self, repo_spec, workspace_name, run_rockerc=True):
+    def add_workspace(self, repo_spec, workspace_name=None, run_rockerc=True):
         """Add a new workspace by cloning a repo/branch and creating a worktree."""
-        repo_name, remote_branch, folder_in_repo = self._parse_repo_spec(repo_spec)
+        repo_name, remote_branch, folder_in_repo = self.parse_repo_spec(repo_spec)
+
+        # Auto-generate workspace name if not provided
+        if workspace_name is None:
+            workspace_name = self.generate_workspace_name(repo_name, remote_branch)
+            print(f"Auto-generated workspace name: {workspace_name}")
+
+        # Generate a safe branch name (replace invalid characters)
+        branch_name = workspace_name.replace(":", "_").replace("/", "_")
 
         # Check if branch already exists
         existing_branches = self._get_existing_branches()
-        if workspace_name in existing_branches:
+        if branch_name in existing_branches:
             print(
-                f"Branch '{workspace_name}' already exists. Use 'renv open {workspace_name}' to open it."
+                f"Branch '{branch_name}' already exists. Use 'renv open {workspace_name}' to open it."
             )
             return
 
@@ -182,10 +289,13 @@ class RenvManager:
             return
 
         try:
+            # Sanitize remote name (replace slashes with underscores)
+            sanitized_remote_name = repo_name.replace("/", "_").replace(":", "_")
+
             # Add remote if it doesn't exist
             try:
-                self._run_git_command(["remote", "get-url", repo_name])
-                print(f"Remote '{repo_name}' already exists")
+                self._run_git_command(["remote", "get-url", sanitized_remote_name])
+                print(f"Remote '{sanitized_remote_name}' already exists")
             except subprocess.CalledProcessError:
                 # Assume repo_name is a URL if it contains :// or @
                 if "://" in repo_name or "@" in repo_name:
@@ -195,23 +305,23 @@ class RenvManager:
                     if "/" in repo_name:
                         remote_url = f"https://github.com/{repo_name}.git"
                     else:
-                        raise ValueError(f"Cannot determine remote URL for: {repo_name}")
+                        raise ValueError(f"Cannot determine remote URL for: {repo_name}") from None
 
-                print(f"Adding remote '{repo_name}' -> '{remote_url}'")
-                self._run_git_command(["remote", "add", repo_name, remote_url])
+                print(f"Adding remote '{sanitized_remote_name}' -> '{remote_url}'")
+                self._run_git_command(["remote", "add", sanitized_remote_name, remote_url])
 
             # Fetch from the remote
-            print(f"Fetching from remote '{repo_name}'")
-            self._run_git_command(["fetch", repo_name])
+            print(f"Fetching from remote '{sanitized_remote_name}'")
+            self._run_git_command(["fetch", sanitized_remote_name])
 
             # Create new branch tracking the remote branch
-            remote_ref = f"{repo_name}/{remote_branch}"
-            print(f"Creating branch '{workspace_name}' from '{remote_ref}'")
-            self._run_git_command(["branch", workspace_name, remote_ref])
+            remote_ref = f"{sanitized_remote_name}/{remote_branch}"
+            print(f"Creating branch '{branch_name}' from '{remote_ref}'")
+            self._run_git_command(["branch", branch_name, remote_ref])
 
             # Create worktree
             print(f"Creating worktree at '{worktree_path}'")
-            self._run_git_command(["worktree", "add", str(worktree_path), workspace_name])
+            self._run_git_command(["worktree", "add", str(worktree_path), branch_name])
 
             # Handle folder filtering if specified
             if folder_in_repo:
@@ -241,7 +351,7 @@ class RenvManager:
             if worktree_path.exists():
                 self._run_git_command(["worktree", "remove", str(worktree_path)])
             try:
-                self._run_git_command(["branch", "-D", workspace_name])
+                self._run_git_command(["branch", "-D", branch_name])
             except subprocess.CalledProcessError:
                 pass  # Branch might not have been created
             raise
@@ -291,7 +401,8 @@ class RenvManager:
             print("Run 'renv install' to set up renv.")
             return
 
-        workspaces = [d for d in self.worktrees_dir.iterdir() if d.is_dir()]
+        # Filter out .git directory and only include actual workspaces
+        workspaces = [d for d in self.worktrees_dir.iterdir() if d.is_dir() and d.name != ".git"]
 
         if not workspaces:
             print("No workspaces found.")
@@ -331,14 +442,56 @@ class RenvManager:
         except subprocess.CalledProcessError as e:
             print(f"Failed to remove workspace: {e}")
 
+    def is_repo_spec(self, target):
+        """Determine if target looks like a repo specification.
+
+        Repo specs can be:
+        - user/repo (defaults to main branch)
+        - user/repo:branch
+        - https://github.com/user/repo.git
+        - https://github.com/user/repo.git:branch
+
+        Not repo specs:
+        - plain workspace names (no slashes, no dots, no protocol)
+        - file paths (start with / or ~)
+        """
+        # File paths are not repo specs
+        if target.startswith("/") or target.startswith("~"):
+            return False
+
+        # If it contains a protocol (http, git, ssh), it's a repo
+        if "://" in target:
+            return True
+
+        # If it contains a slash, it's likely user/repo format
+        if "/" in target:
+            return True
+
+        # If it ends with .git, it's a repo
+        if target.endswith(".git"):
+            return True
+
+        # Otherwise, treat as workspace name
+        return False
+
 
 def main():
     """Main entry point for the renv tool."""
-    parser = argparse.ArgumentParser(
-        description="Rocker Environment (renv) - Workspace management tool for rockerc repositories",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+    # First, try to parse just to see if we have a command
+    import sys
+
+    # Check if first argument (after script name) is a known command
+    known_commands = {"install", "add", "open", "run", "list", "remove"}
+
+    if len(sys.argv) > 1 and sys.argv[1] in known_commands:
+        # Use normal subcommand parsing
+        parser = argparse.ArgumentParser(
+            description=f"Rocker Environment (renv) v{__version__} - Workspace management tool for rockerc repositories",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog="""
 Examples:
+  renv bencher_main                                     # Open workspace (or add repo if format matches)
+  renv blooop/bencher:main                             # Add repo and open workspace
   renv install                                          # Set up renv home directory
   renv install ~/my-renv                               # Set up renv in custom location
   renv add https://github.com/user/repo.git:main my-workspace
@@ -347,70 +500,149 @@ Examples:
   renv run my-workspace                                # Run rockerc in workspace
   renv list                                            # List all workspaces
   renv remove my-workspace                             # Remove workspace
-        """,
-    )
+            """,
+        )
 
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+        # Add version argument
+        parser.add_argument("--version", action="version", version=f"renv {__version__}")
 
-    # Install command
-    install_parser = subparsers.add_parser("install", help="Set up renv home directory")
-    install_parser.add_argument(
-        "path", nargs="?", help="Custom path for renv home directory (default: ~/renv)"
-    )
+        subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Add command
-    add_parser = subparsers.add_parser("add", help="Add a new workspace")
-    add_parser.add_argument(
-        "repo_spec", help="Repository specification: repo_name:branch[:folder_in_repo]"
-    )
-    add_parser.add_argument("workspace_name", help="Name for the new workspace")
-    add_parser.add_argument(
-        "--no-rockerc", action="store_true", help="Skip running rockerc after creating workspace"
-    )
+        # Install command
+        install_parser = subparsers.add_parser("install", help="Set up renv home directory")
+        install_parser.add_argument(
+            "path", nargs="?", help="Custom path for renv home directory (default: ~/renv)"
+        )
 
-    # Open command
-    open_parser = subparsers.add_parser("open", help="Open an existing workspace")
-    open_parser.add_argument("workspace_name", help="Name of the workspace to open")
+        # Add command
+        add_parser = subparsers.add_parser("add", help="Add a new workspace")
+        add_parser.add_argument(
+            "repo_spec", help="Repository specification: repo_name:branch[:folder_in_repo]"
+        )
+        add_parser.add_argument(
+            "workspace_name",
+            nargs="?",
+            help="Name for the new workspace (auto-generated if not provided)",
+        )
+        add_parser.add_argument(
+            "--no-rockerc",
+            action="store_true",
+            help="Skip running rockerc after creating workspace",
+        )
 
-    # Run command
-    run_parser = subparsers.add_parser("run", help="Run rockerc in an existing workspace")
-    run_parser.add_argument("workspace_name", help="Name of the workspace to run rockerc in")
+        # Open command
+        open_parser = subparsers.add_parser("open", help="Open an existing workspace")
+        open_parser.add_argument("workspace_name", help="Name of the workspace to open")
 
-    # List command
-    subparsers.add_parser("list", help="List all available workspaces")
+        # Run command
+        run_parser = subparsers.add_parser("run", help="Run rockerc in an existing workspace")
+        run_parser.add_argument("workspace_name", help="Name of the workspace to run rockerc in")
 
-    # Remove command
-    remove_parser = subparsers.add_parser("remove", help="Remove a workspace")
-    remove_parser.add_argument("workspace_name", help="Name of the workspace to remove")
+        # List command
+        subparsers.add_parser("list", help="List all available workspaces")
 
-    args = parser.parse_args()
+        # Remove command
+        remove_parser = subparsers.add_parser("remove", help="Remove a workspace")
+        remove_parser.add_argument("workspace_name", help="Name of the workspace to remove")
 
-    if not args.command:
-        parser.print_help()
-        return
+        args = parser.parse_args()
 
-    try:
-        if args.command == "install":
-            manager = RenvManager()
-            manager.install(args.path)
+        # Handle explicit commands
+        try:
+            if args.command == "install":
+                # For install command, create manager with the target renv home
+                install_path = args.path if args.path else Path.home() / "renv"
+                manager = RenvManager(renv_home=install_path)
+                manager.install(args.path)
+            else:
+                manager = RenvManager()
+
+                if args.command == "add":
+                    run_rockerc = not args.no_rockerc
+                    manager.add_workspace(args.repo_spec, args.workspace_name, run_rockerc)
+                elif args.command == "open":
+                    manager.open_workspace(args.workspace_name)
+                elif args.command == "run":
+                    manager.run_workspace(args.workspace_name)
+                elif args.command == "list":
+                    manager.list_workspaces()
+                elif args.command == "remove":
+                    manager.remove_workspace(args.workspace_name)
+
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
+    else:
+        # Handle default behavior (target as first argument)
+        parser = argparse.ArgumentParser(
+            description=f"Rocker Environment (renv) v{__version__} - Workspace management tool for rockerc repositories",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog="""
+Examples:
+  renv bencher_main                                     # Open workspace (or add repo if format matches)
+  renv blooop/bencher:main                             # Add repo and open workspace
+  renv install                                          # Set up renv home directory
+  renv install ~/my-renv                               # Set up renv in custom location
+  renv add https://github.com/user/repo.git:main my-workspace
+  renv add user/repo:develop:src/package my-dev-workspace
+  renv open my-workspace                               # Open workspace in VS Code
+  renv run my-workspace                                # Run rockerc in workspace
+  renv list                                            # List all workspaces
+  renv remove my-workspace                             # Remove workspace
+            """,
+        )
+
+        # Add version argument
+        parser.add_argument("--version", action="version", version=f"renv {__version__}")
+
+        # Add positional argument for target
+        parser.add_argument(
+            "target",
+            nargs="?",
+            help="Workspace name to open, or repo specification to add (repo_name:branch[:folder])",
+        )
+
+        args = parser.parse_args()
+
+        # Handle default behavior when no command is specified
+        if args.target:
+            try:
+                # Auto-setup renv if not initialized
+                try:
+                    manager = RenvManager()
+                except RuntimeError:
+                    print("Renv not initialized. Setting up...")
+                    manager = RenvManager(renv_home=Path.home() / "renv")
+                    manager.install()
+
+                # Always treat target as repo spec for default command
+                # This ensures `renv user/repo` always works
+                if manager.is_repo_spec(args.target):
+                    # Target is a repo spec, add it (or update if exists) and open
+                    print(f"Setting up workspace for: {args.target}")
+                    repo_name, branch, _ = manager.parse_repo_spec(args.target)
+                    workspace_name = manager.generate_workspace_name(repo_name, branch)
+
+                    # Check if workspace already exists
+                    worktree_path = manager.worktrees_dir / workspace_name
+                    if worktree_path.exists():
+                        print(f"Workspace '{workspace_name}' already exists. Opening...")
+                        manager.open_workspace(workspace_name)
+                    else:
+                        print(f"Creating new workspace: {workspace_name}")
+                        manager.add_workspace(args.target, workspace_name)
+                        manager.open_workspace(workspace_name)
+                else:
+                    # Target looks like a workspace name, try to open it
+                    print(f"Opening workspace: {args.target}")
+                    manager.open_workspace(args.target)
+
+            except Exception as e:
+                print(f"Error: {e}", file=sys.stderr)
+                sys.exit(1)
         else:
-            manager = RenvManager()
-
-            if args.command == "add":
-                run_rockerc = not args.no_rockerc
-                manager.add_workspace(args.repo_spec, args.workspace_name, run_rockerc)
-            elif args.command == "open":
-                manager.open_workspace(args.workspace_name)
-            elif args.command == "run":
-                manager.run_workspace(args.workspace_name)
-            elif args.command == "list":
-                manager.list_workspaces()
-            elif args.command == "remove":
-                manager.remove_workspace(args.workspace_name)
-
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+            parser.print_help()
 
 
 if __name__ == "__main__":
