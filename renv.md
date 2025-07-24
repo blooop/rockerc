@@ -15,7 +15,7 @@ should clone https://github.com/blooop/bencher as a bare repo in ~/renv/blooop/b
 
 if I then did
 
-`renv blooop/bencher@over_time_limited`  it should check to see if the repo is already cloned (which it is), and then create a new worktree for the `over_time_limited` branch, change to that worktree, and use rockerc to build and enter a container.
+`renv blooop/bencher@feature/over_time_limited`  it should check to see if the repo is already cloned (which it is), and then create a new worktree for the `feature/over_time_limited` branch, change to that worktree, and use rockerc to build and enter a container.
 
 if I then did
 
@@ -25,3 +25,11 @@ In addition if I did
 
 `renv osrf/rocker` it should automatically set up the folder structure and bare repo clone of https://github.com/osrf/rocker:main in ~/renv/osrf/rocker and set up the worktree of the branch `main`
 
+
+
+extra: once all the basics work
+
+use: https://github.com/prompt-toolkit/python-prompt-toolkit
+
+to enable autocomplete.  ie, if I start typing blooop/ then it should autocomplete the available repos, and once
+I have typed blooop/bencher@ it should autocomplete the available branches. 

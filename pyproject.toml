@@ -1,6 +1,6 @@
 [project]
 name = "rockerc"
-version = "0.7.1"
+version = "0.7.2.4"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
@@ -11,6 +11,7 @@ dependencies = [
   "deps-rocker>=0.6",
   "off-your-rocker>=0.1.0",
   "pyyaml>=5",
+  "prompt-toolkit>=3.0",
 ]
 
 [tool.pixi.pypi-dependencies]
@@ -69,6 +70,7 @@ include = ["rockerc"]
 
 [project.scripts]
 rockerc = "rockerc.rockerc:run_rockerc"
+renv = "rockerc.renv:main"
 
 # Environments
 [tool.pixi.environments]
