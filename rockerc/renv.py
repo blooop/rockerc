@@ -206,9 +206,12 @@ def run_rockerc_in_worktree(worktree_dir: Path) -> None:
         worktree_dir: Path to the worktree directory
     """
     original_cwd = os.getcwd()
+    original_argv = sys.argv.copy()  # Save original argv
 
     try:
         os.chdir(worktree_dir)
+        # Clear sys.argv to prevent renv arguments from being passed to rocker
+        sys.argv = [sys.argv[0]]  # Keep only the script name
         logging.info(f"Running rockerc in {worktree_dir}")
         run_rockerc(str(worktree_dir))
     except Exception as e:
@@ -216,6 +219,7 @@ def run_rockerc_in_worktree(worktree_dir: Path) -> None:
         raise
     finally:
         os.chdir(original_cwd)
+        sys.argv = original_argv  # Restore original argv
 
 
 def setup_repo_environment(owner: str, repo: str, branch: str) -> Path:
