@@ -1,7 +1,7 @@
 
 make a tool that supports this commands
 
-renv [repo_name:branch]
+renv [user/repo_name:branch]
 
 This is a environment manager tool that makes it seamless to work in a variety of repos at the same time.
 

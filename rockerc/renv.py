@@ -14,21 +14,80 @@ Examples:
     renv blooop/bencher@feature_branch
 """
 
+
 import argparse
 import logging
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, List, Optional
+import toml
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import Completer, Completion
 
 from .rockerc import run_rockerc
 
-# TODO: Add autocomplete functionality using prompt-toolkit
-# Example implementation would include:
-# - Autocomplete for repo names (blooop/, osrf/, etc.)
-# - Autocomplete for branch names after @ symbol
-# - Integration with git commands to get available repos and branches
+
+# --- Autocompletion logic ---
+def list_owners_and_repos() -> List[str]:
+    base = get_renv_base_dir()
+    if not base.exists():
+        return []
+    owners = []
+    for owner_dir in base.iterdir():
+        if owner_dir.is_dir():
+            for repo_dir in owner_dir.iterdir():
+                if repo_dir.is_dir() and (repo_dir / "HEAD").exists():
+                    owners.append(f"{owner_dir.name}/{repo_dir.name}")
+    return owners
+
+def list_branches(owner: str, repo: str) -> List[str]:
+    repo_dir = get_repo_dir(owner, repo)
+    if not repo_dir.exists():
+        return []
+    try:
+        result = subprocess.run([
+            "git", "--git-dir", str(repo_dir), "branch", "-a", "--format=%(refname:short)"
+        ], capture_output=True, text=True, check=True)
+        branches = [b.strip() for b in result.stdout.splitlines() if b.strip()]
+        # Remove duplicate branch names
+        return sorted(set(branches))
+    except Exception:
+        return []
+
+class RenvCompleter(Completer):
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+        if "@" in text:
+            # Complete branch names
+            try:
+                owner_repo, partial_branch = text.split("@", 1)
+            except ValueError:
+                return
+            if "/" not in owner_repo:
+                return
+            owner, repo = owner_repo.split("/", 1)
+            for branch in list_branches(owner, repo):
+                if branch.startswith(partial_branch):
+                    yield Completion(branch, start_position=-len(partial_branch))
+        else:
+            # Complete owner/repo
+            for owner_repo in list_owners_and_repos():
+                if owner_repo.startswith(text):
+                    # Calculate how much of the completion to show
+                    completion_text = owner_repo[len(text):]
+                    yield Completion(completion_text, start_position=0)
+
+def get_version_from_pyproject() -> Optional[str]:
+    pyproject = Path(__file__).parent.parent / "pyproject.toml"
+    if not pyproject.exists():
+        return None
+    try:
+        data = toml.load(pyproject)
+        return data.get("project", {}).get("version")
+    except Exception:
+        return None
 
 
 def setup_logging():
@@ -247,10 +306,9 @@ def setup_repo_environment(owner: str, repo: str, branch: str) -> Path:
     return worktree_dir
 
 
-def main():
-    """Main entry point for renv."""
-    setup_logging()
 
+def main():
+    setup_logging()
     parser = argparse.ArgumentParser(
         description="Repository Environment Manager - seamlessly work in multiple repos using git worktrees and rocker containers",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -266,35 +324,46 @@ The tool will:
 3. Run rockerc in that worktree to build and enter a container
         """,
     )
-
     parser.add_argument(
         "repo_spec",
+        nargs="?",
         help="Repository specification in format 'owner/repo[@branch]'. If branch is omitted, 'main' is used.",
     )
-
     parser.add_argument(
         "--no-container",
         action="store_true",
         help="Set up the worktree but don't run rockerc (for debugging or manual container management)",
     )
-
     args = parser.parse_args()
-
+    # If no arguments, print version and exit
+    if args.repo_spec is None:
+        version = get_version_from_pyproject()
+        if version:
+            print(f"renv version: {version}")
+        else:
+            print("renv version: unknown")
+        # Prompt for repo_spec with autocomplete
+        try:
+            user_input = prompt(
+                "Enter repo[@branch]: ",
+                completer=RenvCompleter(),
+                complete_while_typing=True,
+            )
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting.")
+            sys.exit(0)
+        if not user_input.strip():
+            sys.exit(0)
+        args.repo_spec = user_input.strip()
     try:
-        # Parse the repository specification
         owner, repo, branch = parse_repo_spec(args.repo_spec)
         logging.info(f"Setting up environment for {owner}/{repo}@{branch}")
-
-        # Set up the repository environment
         worktree_dir = setup_repo_environment(owner, repo, branch)
-
         if args.no_container:
             logging.info(f"Environment ready at {worktree_dir}")
             logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
-            # Run rockerc in the worktree
             run_rockerc_in_worktree(worktree_dir)
-
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")
         sys.exit(1)
