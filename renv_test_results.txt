@@ -1,0 +1,30 @@
+renv Test Results
+====================
+
+Import get_version: PASS
+  Details: Successfully imported
+
+Version reading: PASS
+  Details: Version: 0.7.2.4
+
+Import autocompletion functions: PASS
+  Details: All functions imported
+
+Get existing repos: PASS
+  Details: Found 1 repos
+
+Repo completer: PASS
+  Details: Got 1 completions
+
+Get branches: PASS
+  Details: Got 0 branches (expected 0 for nonexistent repo)
+
+Argcomplete availability: PASS
+  Details: Available: True
+
+Package manager detection: FAIL
+  Details: 'list' object has no attribute 'get'
+
+Main function import: PASS
+  Details: Main function imported successfully
+
