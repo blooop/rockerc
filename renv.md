@@ -33,3 +33,5 @@ use: https://github.com/prompt-toolkit/python-prompt-toolkit
 
 to enable autocomplete.  ie, if I start typing blooop/ then it should autocomplete the available repos, and once
 I have typed blooop/bencher@ it should autocomplete the available branches. 
+
+or use https://pypi.org/project/argcomplete/
