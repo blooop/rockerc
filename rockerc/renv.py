@@ -48,10 +48,21 @@ def list_branches(owner: str, repo: str) -> List[str]:
         return []
     try:
         result = subprocess.run([
-            "git", "--git-dir", str(repo_dir), "branch", "-a", "--format=%(refname:short)"
+            "git", "--git-dir", str(repo_dir), "branch", "-a"
         ], capture_output=True, text=True, check=True)
-        branches = [b.strip() for b in result.stdout.splitlines() if b.strip()]
-        # Remove duplicate branch names
+        branches = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line or line.startswith('*'):
+                continue
+            # Remove 'remotes/origin/' prefix and clean up branch names
+            if line.startswith('remotes/origin/'):
+                branch = line.replace('remotes/origin/', '')
+                if branch != 'HEAD':  # Skip HEAD pointer
+                    branches.append(branch)
+            else:
+                branches.append(line)
+        # Remove duplicates and sort
         return sorted(set(branches))
     except Exception:
         return []
@@ -70,7 +81,9 @@ class RenvCompleter(Completer):
             owner, repo = owner_repo.split("/", 1)
             for branch in list_branches(owner, repo):
                 if branch.startswith(partial_branch):
-                    yield Completion(branch, start_position=-len(partial_branch))
+                    # Calculate how much of the completion to show
+                    completion_text = branch[len(partial_branch):]
+                    yield Completion(completion_text, start_position=0)
         else:
             # Complete owner/repo
             for owner_repo in list_owners_and_repos():
