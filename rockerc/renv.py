@@ -427,6 +427,16 @@ _renv_complete() {
     # Convert candidates to array and set COMPREPLY
     if [[ -n "$candidates" ]]; then
         COMPREPLY=($(compgen -W "$candidates" -- "$cur"))
+        
+        # Don't add space if we're completing a repo name (no @ in current word)
+        # This allows users to type @ after the repo name
+        if [[ "$cur" != *"@"* ]] && [[ ${#COMPREPLY[@]} -eq 1 ]]; then
+            # Check if the completion is a repo (contains /)
+            if [[ "${COMPREPLY[0]}" == *"/"* ]]; then
+                # Disable space suffix for repo completions
+                compopt -o nospace
+            fi
+        fi
     else
         COMPREPLY=()
     fi
