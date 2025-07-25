@@ -301,21 +301,30 @@ def fetch_repo(owner: str, repo: str) -> None:
         logging.warning(f"Failed to fetch changes: {e.stderr}")
 
 
-def run_rockerc_in_worktree(worktree_dir: Path) -> None:
+def run_rockerc_in_worktree(worktree_dir: Path, owner: str, repo: str, branch: str) -> None:
     """
     Run rockerc in the specified worktree directory.
 
     Args:
         worktree_dir: Path to the worktree directory
+        owner: Repository owner
+        repo: Repository name
+        branch: Branch name
     """
     original_cwd = os.getcwd()
     original_argv = sys.argv.copy()  # Save original argv
 
     try:
         os.chdir(worktree_dir)
-        # Clear sys.argv to prevent renv arguments from being passed to rocker
-        sys.argv = [sys.argv[0]]  # Keep only the script name
-        logging.info(f"Running rockerc in {worktree_dir}")
+        # Generate container name from repo@branch format
+        # Replace slashes in branch names with dashes for container name
+        safe_branch = branch.replace("/", "-")
+        container_name = f"{repo}-{safe_branch}"
+        
+        # Set sys.argv to pass the container name and hostname to rocker
+        # Keep the original program name and add the --name and --hostname arguments
+        sys.argv = [original_argv[0], "--name", container_name, "--hostname", container_name]
+        logging.info(f"Running rockerc in {worktree_dir} with container name and hostname: {container_name}")
         run_rockerc(str(worktree_dir))
     except Exception as e:
         logging.error(f"Failed to run rockerc: {e}")
@@ -652,7 +661,7 @@ The tool will:
             logging.info(f"Environment ready at {worktree_dir}")
             logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
-            run_rockerc_in_worktree(worktree_dir)
+            run_rockerc_in_worktree(worktree_dir, owner, repo, branch)
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")
         sys.exit(1)
