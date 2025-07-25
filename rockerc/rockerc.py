@@ -7,126 +7,113 @@ import os
 import logging
 
 
-def create_default_renvignore(renvignore_path: pathlib.Path) -> None:
-    """Create a default RENVIGNORE file with template content
+def create_default_config(defaults_path: pathlib.Path) -> None:
+    """Create a default rockerc.defaults.yaml file with sensible defaults
     
     Args:
-        renvignore_path: Path where the RENVIGNORE file should be created
+        defaults_path: Path where the rockerc.defaults.yaml file should be created
     """
-    template_content = """# RENVIGNORE - Extensions to disable in rockerc
-# 
-# This file allows you to disable specific rocker extensions without 
-# modifying your rockerc.yaml file. Simply uncomment the extensions
-# you want to disable by removing the # at the beginning of the line.
-#
-# Common extensions you might want to disable:
-
-# UI and Display Extensions:
-# x11          # Disable X11 forwarding (for headless environments)
-
-# Development Tools:
-# git          # Disable git integration
-# pixi         # Disable pixi package manager
-# deps         # Disable dependency installation
-
-# Hardware Extensions:
-nvidia       # Disable NVIDIA GPU support
-
-# Security and Access:
-# user         # Disable user mapping
-# ssh          # Disable SSH agent forwarding
-
-# Network and Remote:
-# pull         # Disable automatic image pulling
-
-# Custom Extensions (uncomment if installed):
-# groot-rocker
-# ghrocker  
-# lazygit-rocker
-# palanteer-rocker
-# cargo-rocker
-# pixi-rocker
-
-# You can also add custom extension names here
-"""
-    
     try:
         # Create parent directory if it doesn't exist
-        renvignore_path.parent.mkdir(parents=True, exist_ok=True)
+        defaults_path.parent.mkdir(parents=True, exist_ok=True)
         
-        with open(renvignore_path, "w", encoding="utf-8") as f:
-            f.write(template_content)
+        # Write YAML content with proper formatting
+        with open(defaults_path, "w", encoding="utf-8") as f:
+            f.write("# rockerc.defaults.yaml - Default configuration for rockerc\n")
+            f.write("# This file provides sensible defaults that work in most development environments.\n")
+            f.write("# Local rockerc.yaml files can override these settings.\n\n")
+            f.write("# Default base image\n")
+            f.write("image: ubuntu:24.04\n\n")
+            f.write("# Default extensions that are enabled by default\n")
+            f.write("args:\n")
+            f.write("  - user    # Enable user mapping for file permissions\n")
+            f.write("  - pull    # Enable automatic image pulling\n") 
+            f.write("  - deps    # Enable dependency installation\n")
+            f.write("  - git     # Enable git integration\n")
+            f.write("  - cwd     # Mount current working directory\n\n")
+            f.write("# Extensions that are disabled by default\n")
+            f.write("disable_args:\n")
+            f.write("  - nvidia  # Disable NVIDIA GPU support by default\n\n")
+            f.write("# Common extensions you might want to add locally:\n")
+            f.write("# - x11          # X11 forwarding for GUI applications\n")
+            f.write("# - nvidia       # NVIDIA GPU support\n")
+            f.write("# - ssh          # SSH agent forwarding\n")
+            f.write("# - pixi         # Pixi package manager\n\n")
+            f.write("# To override in your local rockerc.yaml:\n")
+            f.write("# \n")
+            f.write("# To change the base image:\n")
+            f.write("# image: python:3.11\n")
+            f.write("# \n")
+            f.write("# To disable a default extension:\n")
+            f.write("# disable_args:\n")
+            f.write("#   - pull       # This would disable the pull extension\n")
+            f.write("# \n")
+            f.write("# To add additional extensions:\n")
+            f.write("# args:\n")
+            f.write("#   - nvidia     # This would add nvidia to the defaults\n")
         
-        print(f"Created default RENVIGNORE file at {renvignore_path}")
+        print(f"Created default rockerc.defaults.yaml file at {defaults_path}")
     except Exception as e:
-        logging.warning(f"Failed to create default RENVIGNORE file: {e}")
+        logging.warning(f"Failed to create default rockerc.defaults.yaml file: {e}")
 
 
-def read_renvignore(path: str = ".") -> set:
-    """Read RENVIGNORE file and return a set of extensions to ignore
+def load_defaults_config(path: str = ".") -> dict:
+    """Load rockerc.defaults.yaml and return default configuration
     
-    Looks for RENVIGNORE file in the following order:
+    Looks for rockerc.defaults.yaml file in the following order:
     1. Current directory (for local overrides)
-    2. ~/.renv/RENVIGNORE (global renv config)
+    2. ~/.renv/rockerc.defaults.yaml (global renv config)
     3. Home directory (fallback)
     
-    If no RENVIGNORE file is found, creates a default one in ~/.renv/RENVIGNORE
+    If no defaults file is found, creates a default one in ~/.renv/rockerc.defaults.yaml
 
     Args:
-        path (str, optional): Path to search for RENVIGNORE file. Defaults to ".".
+        path (str, optional): Path to search for defaults file. Defaults to ".".
 
     Returns:
-        set: A set of extension names to ignore
+        dict: A dictionary with default configuration
     """
-    ignored_extensions = set()
-    
     # Search locations in order of preference
     search_paths = [
-        pathlib.Path(path) / "RENVIGNORE",  # Local directory
-        pathlib.Path.home() / "renv" / "RENVIGNORE",  # Global renv config
-        pathlib.Path.home() / "RENVIGNORE"  # Home directory fallback
+        pathlib.Path(path) / "rockerc.defaults.yaml",  # Local directory
+        pathlib.Path.home() / "renv" / "rockerc.defaults.yaml",  # Global renv config
+        pathlib.Path.home() / "rockerc.defaults.yaml"  # Home directory fallback
     ]
     
-    renvignore_found = False
-    for renvignore_path in search_paths:
-        if renvignore_path.exists():
-            print(f"loading ignore file {renvignore_path}")
+    defaults_found = False
+    defaults_config = {"args": []}
+    
+    for defaults_path in search_paths:
+        if defaults_path.exists():
+            print(f"loading defaults file {defaults_path}")
             try:
-                with open(renvignore_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        # Skip empty lines and comments
-                        if line and not line.startswith("#"):
-                            # Handle inline comments - split on # and take only the first part
-                            extension_name = line.split('#')[0].strip()
-                            if extension_name:
-                                ignored_extensions.add(extension_name)
-                renvignore_found = True
+                with open(defaults_path, "r", encoding="utf-8") as f:
+                    defaults_config = yaml.safe_load(f) or {"args": []}
+                defaults_found = True
                 break  # Use first found file
             except Exception as e:
-                logging.warning(f"Error reading RENVIGNORE file: {e}")
+                logging.warning(f"Error reading rockerc.defaults.yaml file: {e}")
                 continue
     
-    # If no RENVIGNORE file was found, create a default one in the global renv config location
-    if not renvignore_found:
-        global_renvignore_path = pathlib.Path.home() / "renv" / "RENVIGNORE"
-        create_default_renvignore(global_renvignore_path)
+    # If no defaults file was found, create a default one in the global renv config location
+    if not defaults_found:
+        global_defaults_path = pathlib.Path.home() / "renv" / "rockerc.defaults.yaml"
+        create_default_config(global_defaults_path)
         
         # Now read the newly created file
         try:
-            with open(global_renvignore_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    # Skip empty lines and comments
-                    if line and not line.startswith("#"):
-                        # Handle inline comments - split on # and take only the first part
-                        extension_name = line.split('#')[0].strip()
-                        if extension_name:
-                            ignored_extensions.add(extension_name)
+            with open(global_defaults_path, "r", encoding="utf-8") as f:
+                defaults_config = yaml.safe_load(f) or {"args": []}
         except Exception as e:
-            logging.warning(f"Error reading newly created RENVIGNORE file: {e}")
+            logging.warning(f"Error reading newly created rockerc.defaults.yaml file: {e}")
+            # Fallback to hardcoded defaults
+            defaults_config = {
+                "image": "ubuntu:24.04",
+                "args": ["user", "pull", "deps", "git", "cwd"],
+                "disable_args": ["nvidia"]
+            }
 
-    return ignored_extensions
+    return defaults_config
 
 
 def yaml_dict_to_args(d: dict) -> str:
@@ -170,21 +157,69 @@ def collect_arguments(path: str = ".") -> dict:
         dict: A dictionary of merged rockerc arguments
     """
     search_path = pathlib.Path(path)
-    merged_dict = {}
+    
+    # Start with defaults
+    defaults = load_defaults_config(path)
+    merged_dict = {"args": defaults.get("args", []).copy()}
+    
+    # Include default image if present
+    if "image" in defaults:
+        merged_dict["image"] = defaults["image"]
+    
+    # Load and merge local rockerc.yaml files
+    local_configs_found = False
     for p in search_path.glob("rockerc.yaml"):
         print(f"loading {p}")
-
+        local_configs_found = True
+        
         with open(p.as_posix(), "r", encoding="utf-8") as f:
-            merged_dict.update(yaml.safe_load(f))
+            local_config = yaml.safe_load(f) or {}
+            
+            # Handle disable_args - remove these from the current args
+            if "disable_args" in local_config:
+                disabled_args = local_config["disable_args"]
+                if isinstance(disabled_args, list):
+                    for arg in disabled_args:
+                        if arg in merged_dict["args"]:
+                            merged_dict["args"].remove(arg)
+                    print(f"Local disabled extensions: {', '.join(disabled_args)}")
+                
+                # Remove disable_args so it doesn't get passed to rocker
+                local_config.pop("disable_args")
+            
+            # Handle regular args - add these to existing args (avoiding duplicates)
+            if "args" in local_config:
+                local_args = local_config["args"]
+                if isinstance(local_args, list):
+                    for arg in local_args:
+                        if arg not in merged_dict["args"]:
+                            merged_dict["args"].append(arg)
+                    print(f"Added extensions: {', '.join([arg for arg in local_args if arg not in defaults.get('args', [])])}")
+                
+                # Remove args from local_config since we handled it specially
+                local_config.pop("args")
+            
+            # Merge other configuration options (image, dockerfile, etc.)
+            for key, value in local_config.items():
+                merged_dict[key] = value
     
-    # Apply RENVIGNORE filtering
-    ignored_extensions = read_renvignore(path)
-    if ignored_extensions and "args" in merged_dict:
-        original_args = merged_dict["args"][:]
-        merged_dict["args"] = [arg for arg in merged_dict["args"] if arg not in ignored_extensions]
-        removed_args = set(original_args) - set(merged_dict["args"])
-        if removed_args:
-            print(f"RENVIGNORE: disabled extensions: {', '.join(sorted(removed_args))}")
+    # Apply default disable_args at the end - these always override everything else
+    if "disable_args" in defaults:
+        default_disabled_args = defaults["disable_args"]
+        if isinstance(default_disabled_args, list):
+            removed_args = []
+            for arg in default_disabled_args:
+                if arg in merged_dict["args"]:
+                    merged_dict["args"].remove(arg)
+                    removed_args.append(arg)
+            if removed_args:
+                print(f"Default disabled extensions (final override): {', '.join(removed_args)}")
+    
+    # If no local config found, show what defaults are being used
+    if not local_configs_found:
+        if merged_dict["args"]:
+            print(f"Using default extensions: {', '.join(merged_dict['args'])}")
+        print("No local rockerc.yaml found - using defaults. Create rockerc.yaml to customize.")
     
     return merged_dict
 
