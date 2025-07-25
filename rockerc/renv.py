@@ -374,24 +374,20 @@ def get_completion_script_content() -> str:
 # Bash completion script for renv using fzf
 # This script provides fuzzy tab completion for renv commands
 
-# Function naming convention: _fzf_complete_<tool>
-# COMP_WORDS is passed to renv to generate context-aware suggestions
-# No filesystem scanning occurs—only renv's internal data is used
-
 _fzf_complete_renv() {
     # Get completion candidates from renv itself
     local candidates
-    candidates=$(renv --list-candidates "${COMP_WORDS[@]:1}" 2>/dev/null)
+    # Use the --list-candidates flag with proper error handling
+    candidates=$(renv --list-candidates "${COMP_WORDS[@]:1}" 2>/dev/null || echo "")
     
-    # Use fzf for fuzzy completion
-    _fzf_complete -- "$@" <<< "$candidates"
+    # Only proceed if we have candidates and fzf is available
+    if [[ -n "$candidates" ]] && command -v fzf >/dev/null 2>&1; then
+        _fzf_complete -- "$@" <<< "$candidates"
+    else
+        # Fallback to basic completion if fzf or candidates are not available
+        COMPREPLY=()
+    fi
 }
-
-# Optional post-processing hook for formatting results
-# _fzf_complete_renv_post() {
-#     # Add any custom formatting here if needed
-#     cat
-# }
 
 # Register the completion function
 complete -F _fzf_complete_renv -o default -o bashdefault renv
