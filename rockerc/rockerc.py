@@ -7,6 +7,128 @@ import os
 import logging
 
 
+def create_default_renvignore(renvignore_path: pathlib.Path) -> None:
+    """Create a default RENVIGNORE file with template content
+    
+    Args:
+        renvignore_path: Path where the RENVIGNORE file should be created
+    """
+    template_content = """# RENVIGNORE - Extensions to disable in rockerc
+# 
+# This file allows you to disable specific rocker extensions without 
+# modifying your rockerc.yaml file. Simply uncomment the extensions
+# you want to disable by removing the # at the beginning of the line.
+#
+# Common extensions you might want to disable:
+
+# UI and Display Extensions:
+# x11          # Disable X11 forwarding (for headless environments)
+
+# Development Tools:
+# git          # Disable git integration
+# pixi         # Disable pixi package manager
+# deps         # Disable dependency installation
+
+# Hardware Extensions:
+nvidia       # Disable NVIDIA GPU support
+
+# Security and Access:
+# user         # Disable user mapping
+# ssh          # Disable SSH agent forwarding
+
+# Network and Remote:
+# pull         # Disable automatic image pulling
+
+# Custom Extensions (uncomment if installed):
+# groot-rocker
+# ghrocker  
+# lazygit-rocker
+# palanteer-rocker
+# cargo-rocker
+# pixi-rocker
+
+# You can also add custom extension names here
+"""
+    
+    try:
+        # Create parent directory if it doesn't exist
+        renvignore_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(renvignore_path, "w", encoding="utf-8") as f:
+            f.write(template_content)
+        
+        print(f"Created default RENVIGNORE file at {renvignore_path}")
+    except Exception as e:
+        logging.warning(f"Failed to create default RENVIGNORE file: {e}")
+
+
+def read_renvignore(path: str = ".") -> set:
+    """Read RENVIGNORE file and return a set of extensions to ignore
+    
+    Looks for RENVIGNORE file in the following order:
+    1. Current directory (for local overrides)
+    2. ~/.renv/RENVIGNORE (global renv config)
+    3. Home directory (fallback)
+    
+    If no RENVIGNORE file is found, creates a default one in ~/.renv/RENVIGNORE
+
+    Args:
+        path (str, optional): Path to search for RENVIGNORE file. Defaults to ".".
+
+    Returns:
+        set: A set of extension names to ignore
+    """
+    ignored_extensions = set()
+    
+    # Search locations in order of preference
+    search_paths = [
+        pathlib.Path(path) / "RENVIGNORE",  # Local directory
+        pathlib.Path.home() / "renv" / "RENVIGNORE",  # Global renv config
+        pathlib.Path.home() / "RENVIGNORE"  # Home directory fallback
+    ]
+    
+    renvignore_found = False
+    for renvignore_path in search_paths:
+        if renvignore_path.exists():
+            print(f"loading ignore file {renvignore_path}")
+            try:
+                with open(renvignore_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        # Skip empty lines and comments
+                        if line and not line.startswith("#"):
+                            # Handle inline comments - split on # and take only the first part
+                            extension_name = line.split('#')[0].strip()
+                            if extension_name:
+                                ignored_extensions.add(extension_name)
+                renvignore_found = True
+                break  # Use first found file
+            except Exception as e:
+                logging.warning(f"Error reading RENVIGNORE file: {e}")
+                continue
+    
+    # If no RENVIGNORE file was found, create a default one in the global renv config location
+    if not renvignore_found:
+        global_renvignore_path = pathlib.Path.home() / "renv" / "RENVIGNORE"
+        create_default_renvignore(global_renvignore_path)
+        
+        # Now read the newly created file
+        try:
+            with open(global_renvignore_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    # Skip empty lines and comments
+                    if line and not line.startswith("#"):
+                        # Handle inline comments - split on # and take only the first part
+                        extension_name = line.split('#')[0].strip()
+                        if extension_name:
+                            ignored_extensions.add(extension_name)
+        except Exception as e:
+            logging.warning(f"Error reading newly created RENVIGNORE file: {e}")
+
+    return ignored_extensions
+
+
 def yaml_dict_to_args(d: dict) -> str:
     """Given a dictionary of arguments turn it into an argument string to pass to rocker
 
@@ -54,6 +176,16 @@ def collect_arguments(path: str = ".") -> dict:
 
         with open(p.as_posix(), "r", encoding="utf-8") as f:
             merged_dict.update(yaml.safe_load(f))
+    
+    # Apply RENVIGNORE filtering
+    ignored_extensions = read_renvignore(path)
+    if ignored_extensions and "args" in merged_dict:
+        original_args = merged_dict["args"][:]
+        merged_dict["args"] = [arg for arg in merged_dict["args"] if arg not in ignored_extensions]
+        removed_args = set(original_args) - set(merged_dict["args"])
+        if removed_args:
+            print(f"RENVIGNORE: disabled extensions: {', '.join(sorted(removed_args))}")
+    
     return merged_dict
 
 
