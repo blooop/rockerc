@@ -411,42 +411,35 @@ def generate_completion_candidates(partial_words: List[str]) -> List[str]:
 def get_completion_script_content() -> str:
     """Generate the bash completion script content."""
     return '''#!/bin/bash
-# Bash completion script for renv using fzf
-# This script provides fuzzy tab completion for renv commands
+# Bash completion script for renv
+# This script provides tab completion for renv commands
 
-_fzf_complete_renv() {
+_renv_complete() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
     # Get completion candidates from renv itself
     local candidates
-    # Use the --list-candidates flag with proper error handling
-    candidates=$(renv --list-candidates "${COMP_WORDS[@]:1}" 2>/dev/null || echo "")
+    candidates=$(renv --list-candidates "${COMP_WORDS[@]:1}" 2>/dev/null)
     
-    # Only proceed if we have candidates and fzf is available
-    if [[ -n "$candidates" ]] && command -v fzf >/dev/null 2>&1; then
-        _fzf_complete -- "$@" <<< "$candidates"
+    # Convert candidates to array and set COMPREPLY
+    if [[ -n "$candidates" ]]; then
+        COMPREPLY=($(compgen -W "$candidates" -- "$cur"))
     else
-        # Fallback to basic completion if fzf or candidates are not available
         COMPREPLY=()
     fi
 }
 
 # Register the completion function
-complete -F _fzf_complete_renv -o default -o bashdefault renv
+complete -F _renv_complete renv
 '''
 
 
 def install_completion() -> None:
-    """Install fzf-based bash completion for renv."""
+    """Install bash completion for renv."""
     print("Starting completion installation...")
-    
-    # Check for fzf
-    try:
-        result = subprocess.run(["command", "-v", "fzf"], shell=True, check=True, 
-                      capture_output=True, text=True)
-        print(f"fzf found at: {result.stdout.strip()}")
-    except subprocess.CalledProcessError:
-        print("Error: fzf is not installed or not in PATH.")
-        print("Please install fzf first: https://github.com/junegunn/fzf")
-        sys.exit(1)
     
     # Determine completion directory
     home = Path.home()
@@ -465,29 +458,12 @@ def install_completion() -> None:
     completion_file.write_text(completion_script)
     completion_file.chmod(0o755)
     
-    # Check if fzf bash integration is enabled
-    bash_config_files = [".bashrc", ".bash_profile", ".profile"]
-    fzf_integration_found = False
-    
-    for config_file in bash_config_files:
-        config_path = home / config_file
-        if config_path.exists():
-            content = config_path.read_text()
-            if 'eval "$(fzf --bash)"' in content or "fzf --bash" in content:
-                fzf_integration_found = True
-                break
-    
     print(f"✓ Completion script installed to {completion_file}")
-    
-    if not fzf_integration_found:
-        print("⚠ Warning: fzf bash integration not detected in your shell config.")
-        print("  Add this line to your ~/.bashrc or ~/.bash_profile:")
-        print('  eval "$(fzf --bash)"')
     
     print("\n📋 Next steps:")
     print("1. Reload your shell: source ~/.bashrc")
     print("2. Or start a new terminal session")
-    print("3. Try: renv <TAB> for fuzzy completion!")
+    print("3. Try: renv <TAB> for completion!")
 
 
 def uninstall_completion() -> None:
@@ -572,7 +548,7 @@ Examples:
   renv blooop/bencher@main          # Clone blooop/bencher and switch to main branch
   renv blooop/bencher@feature       # Switch to feature branch (creates worktree if needed)
   renv osrf/rocker                  # Clone osrf/rocker and switch to main branch (default)
-  renv --install                    # Install fzf-based bash completion
+  renv --install                    # Install bash completion
   renv --uninstall                  # Uninstall bash completion
   
 The tool will:
@@ -594,7 +570,7 @@ The tool will:
     parser.add_argument(
         "--install",
         action="store_true",
-        help="Install fzf-based bash completion for renv",
+        help="Install bash completion for renv",
     )
     parser.add_argument(
         "--uninstall",
