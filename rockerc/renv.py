@@ -320,6 +320,154 @@ def setup_repo_environment(owner: str, repo: str, branch: str) -> Path:
 
 
 
+# --- Bash completion functions ---
+
+def generate_completion_candidates(partial_words: List[str]) -> List[str]:
+    """
+    Generate completion candidates based on partial input.
+    
+    Args:
+        partial_words: List of partial words from COMP_WORDS
+        
+    Returns:
+        List of completion candidates
+    """
+    if not partial_words:
+        # No input yet, show all available owner/repo combinations
+        return list_owners_and_repos()
+    
+    current_word = partial_words[-1] if partial_words else ""
+    
+    if "@" in current_word:
+        # Completing branch names
+        try:
+            owner_repo, partial_branch = current_word.split("@", 1)
+        except ValueError:
+            return []
+        
+        if "/" not in owner_repo:
+            return []
+            
+        try:
+            owner, repo = owner_repo.split("/", 1)
+        except ValueError:
+            return []
+            
+        branches = list_branches(owner, repo)
+        candidates = []
+        for branch in branches:
+            if branch.startswith(partial_branch):
+                candidates.append(f"{owner_repo}@{branch}")
+        return candidates
+    else:
+        # Completing owner/repo
+        candidates = []
+        for owner_repo in list_owners_and_repos():
+            if owner_repo.startswith(current_word):
+                candidates.append(owner_repo)
+        return candidates
+
+
+def get_completion_script_content() -> str:
+    """Generate the bash completion script content."""
+    return '''#!/bin/bash
+# Bash completion script for renv using fzf
+# This script provides fuzzy tab completion for renv commands
+
+# Function naming convention: _fzf_complete_<tool>
+# COMP_WORDS is passed to renv to generate context-aware suggestions
+# No filesystem scanning occurs—only renv's internal data is used
+
+_fzf_complete_renv() {
+    # Get completion candidates from renv itself
+    local candidates
+    candidates=$(renv --list-candidates "${COMP_WORDS[@]:1}" 2>/dev/null)
+    
+    # Use fzf for fuzzy completion
+    _fzf_complete -- "$@" <<< "$candidates"
+}
+
+# Optional post-processing hook for formatting results
+# _fzf_complete_renv_post() {
+#     # Add any custom formatting here if needed
+#     cat
+# }
+
+# Register the completion function
+complete -F _fzf_complete_renv -o default -o bashdefault renv
+'''
+
+
+def install_completion() -> None:
+    """Install fzf-based bash completion for renv."""
+    print("Starting completion installation...")
+    
+    # Check for fzf
+    try:
+        result = subprocess.run(["command", "-v", "fzf"], shell=True, check=True, 
+                      capture_output=True, text=True)
+        print(f"fzf found at: {result.stdout.strip()}")
+    except subprocess.CalledProcessError:
+        print("Error: fzf is not installed or not in PATH.")
+        print("Please install fzf first: https://github.com/junegunn/fzf")
+        sys.exit(1)
+    
+    # Determine completion directory
+    home = Path.home()
+    completion_dir = home / ".local" / "share" / "bash-completion" / "completions"
+    completion_file = completion_dir / "renv"
+    
+    print(f"Completion directory: {completion_dir}")
+    print(f"Completion file: {completion_file}")
+    
+    # Create directory if it doesn't exist
+    completion_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Created directory: {completion_dir}")
+    
+    # Write completion script
+    completion_script = get_completion_script_content()
+    completion_file.write_text(completion_script)
+    completion_file.chmod(0o755)
+    
+    # Check if fzf bash integration is enabled
+    bash_config_files = [".bashrc", ".bash_profile", ".profile"]
+    fzf_integration_found = False
+    
+    for config_file in bash_config_files:
+        config_path = home / config_file
+        if config_path.exists():
+            content = config_path.read_text()
+            if 'eval "$(fzf --bash)"' in content or "fzf --bash" in content:
+                fzf_integration_found = True
+                break
+    
+    print(f"✓ Completion script installed to {completion_file}")
+    
+    if not fzf_integration_found:
+        print("⚠ Warning: fzf bash integration not detected in your shell config.")
+        print("  Add this line to your ~/.bashrc or ~/.bash_profile:")
+        print('  eval "$(fzf --bash)"')
+    
+    print("\n📋 Next steps:")
+    print("1. Reload your shell: source ~/.bashrc")
+    print("2. Or start a new terminal session")
+    print("3. Try: renv <TAB> for fuzzy completion!")
+
+
+def uninstall_completion() -> None:
+    """Uninstall bash completion for renv."""
+    completion_file = Path.home() / ".local" / "share" / "bash-completion" / "completions" / "renv"
+    
+    if completion_file.exists():
+        completion_file.unlink()
+        print(f"✓ Completion script removed from {completion_file}")
+    else:
+        print("ℹ Completion script was not found (already uninstalled?)")
+    
+    print("\n📋 Completion disabled.")
+    print("Reload your shell or start a new terminal session for changes to take effect.")
+
+
 def main():
     setup_logging()
     parser = argparse.ArgumentParser(
@@ -330,6 +478,8 @@ Examples:
   renv blooop/bencher@main          # Clone blooop/bencher and switch to main branch
   renv blooop/bencher@feature       # Switch to feature branch (creates worktree if needed)
   renv osrf/rocker                  # Clone osrf/rocker and switch to main branch (default)
+  renv --install                    # Install fzf-based bash completion
+  renv --uninstall                  # Uninstall bash completion
   
 The tool will:
 1. Clone the repository as a bare repo to ~/renv/owner/repo (if not already cloned)
@@ -347,7 +497,44 @@ The tool will:
         action="store_true",
         help="Set up the worktree but don't run rockerc (for debugging or manual container management)",
     )
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Install fzf-based bash completion for renv",
+    )
+    parser.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="Uninstall bash completion for renv",
+    )
+    parser.add_argument(
+        "--list-candidates",
+        nargs="*",
+        help="List completion candidates for given partial input (used by bash completion)",
+    )
     args = parser.parse_args()
+    
+    print(f"DEBUG: args.install = {args.install}")
+    print(f"DEBUG: args.uninstall = {args.uninstall}")
+    print(f"DEBUG: args.list_candidates = {args.list_candidates}")
+
+    # Handle completion installation/uninstallation
+    if args.install:
+        print("DEBUG: Running install_completion()")
+        install_completion()
+        return
+    
+    if args.uninstall:
+        uninstall_completion()
+        return
+    
+    # Handle completion candidate listing
+    if args.list_candidates is not None:
+        candidates = generate_completion_candidates(args.list_candidates)
+        for candidate in candidates:
+            print(candidate)
+        return
+
     # If no arguments, print version and exit
     if args.repo_spec is None:
         version = get_version_from_pyproject()

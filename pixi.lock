@@ -1488,13 +1488,14 @@ packages:
   name: rockerc
   version: 0.7.2.4
   path: .
-  sha256: 06cc31d81325c2bec43013eb4a05c0a4ce90d9c38a7d2c3cc83e59e81e091992
+  sha256: 6275b9075cb7ac11987f4841bc3855828df39fbdd8a848fd013c6618e5eed103
   requires_dist:
   - rocker>=0.2.17
   - deps-rocker>=0.6
   - off-your-rocker>=0.1.0
   - pyyaml>=5
   - prompt-toolkit>=3.0
+  - toml>=0.10.2
   - black>=23,<=25.1.0 ; extra == 'test'
   - pylint>=3.2.5,<=3.3.7 ; extra == 'test'
   - pytest-cov>=4.1,<=6.2.1 ; extra == 'test'
