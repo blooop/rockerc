@@ -221,7 +221,7 @@ def create_worktree(owner: str, repo: str, branch: str) -> Path:
     logging.info(f"Creating worktree for {owner}/{repo}@{branch}")
 
     try:
-        # First, try to create worktree from existing branch
+        # First, try to create worktree from existing local branch
         subprocess.run(
             ["git", "worktree", "add", str(worktree_dir), branch],
             cwd=repo_dir,
@@ -241,9 +241,40 @@ def create_worktree(owner: str, repo: str, branch: str) -> Path:
                 text=True,
             )
 
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Failed to create worktree for branch {branch}: {e.stderr}")
-            raise
+        except subprocess.CalledProcessError:
+            # If branch doesn't exist on remote either, create new branch from default branch
+            logging.info(f"Branch {branch} doesn't exist locally or on remote. Creating new branch from default branch.")
+            
+            # Determine the default branch (main or master)
+            default_branch = get_default_branch(repo_dir)
+            logging.info(f"Using {default_branch} as base for new branch {branch}")
+            
+            try:
+                # First try to create from remote reference
+                subprocess.run(
+                    ["git", "worktree", "add", "-b", branch, str(worktree_dir), f"origin/{default_branch}"],
+                    cwd=repo_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                logging.info(f"Successfully created new branch {branch} from origin/{default_branch}")
+                
+            except subprocess.CalledProcessError:
+                # If remote reference doesn't exist, try with local branch reference
+                try:
+                    subprocess.run(
+                        ["git", "worktree", "add", "-b", branch, str(worktree_dir), default_branch],
+                        cwd=repo_dir,
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    logging.info(f"Successfully created new branch {branch} from {default_branch}")
+                    
+                except subprocess.CalledProcessError as e:
+                    logging.error(f"Failed to create new branch {branch} from {default_branch}: {e.stderr}")
+                    raise
 
     logging.info(f"Successfully created worktree at {worktree_dir}")
     return worktree_dir
@@ -462,6 +493,64 @@ def uninstall_completion() -> None:
     
     print("\n📋 Completion disabled.")
     print("Reload your shell or start a new terminal session for changes to take effect.")
+
+
+def get_default_branch(repo_dir: Path) -> str:
+    """
+    Get the default branch name for a repository.
+    
+    Args:
+        repo_dir: Path to the bare repository directory
+        
+    Returns:
+        Name of the default branch (e.g., 'main' or 'master')
+    """
+    try:
+        # For bare repositories, try to get the default branch from HEAD
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=repo_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        default_branch = result.stdout.strip()
+        if default_branch and default_branch != "HEAD":
+            return default_branch
+    except subprocess.CalledProcessError:
+        pass
+    
+    try:
+        # If that fails, try to determine from available local branches
+        result = subprocess.run(
+            ["git", "branch"],
+            cwd=repo_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        branches = []
+        for line in result.stdout.strip().split('\n'):
+            line = line.strip()
+            if line:
+                # Remove the * marker if present
+                branch = line.lstrip('* ')
+                branches.append(branch)
+        
+        # Look for common default branch names in order of preference
+        for default_name in ['main', 'master', 'develop']:
+            if default_name in branches:
+                return default_name
+        
+        # If no common default found, use the first branch
+        if branches:
+            return branches[0]
+                    
+    except subprocess.CalledProcessError:
+        pass
+    
+    # Fallback to 'main' if all else fails
+    return 'main'
 
 
 def main():
