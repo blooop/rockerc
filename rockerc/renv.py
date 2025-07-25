@@ -512,15 +512,24 @@ The tool will:
         nargs="*",
         help="List completion candidates for given partial input (used by bash completion)",
     )
+    parser.add_argument(
+        "--version", "-v",
+        action="store_true",
+        help="Show version information",
+    )
     args = parser.parse_args()
-    
-    print(f"DEBUG: args.install = {args.install}")
-    print(f"DEBUG: args.uninstall = {args.uninstall}")
-    print(f"DEBUG: args.list_candidates = {args.list_candidates}")
+
+    # Handle version display
+    if args.version:
+        version = get_version_from_pyproject()
+        if version:
+            print(f"renv version: {version}")
+        else:
+            print("renv version: unknown")
+        return
 
     # Handle completion installation/uninstallation
     if args.install:
-        print("DEBUG: Running install_completion()")
         install_completion()
         return
     
@@ -535,17 +544,12 @@ The tool will:
             print(candidate)
         return
 
-    # If no arguments, print version and exit
+    # If no arguments, prompt for input
     if args.repo_spec is None:
-        version = get_version_from_pyproject()
-        if version:
-            print(f"renv version: {version}")
-        else:
-            print("renv version: unknown")
-        # Prompt for repo_spec with autocomplete
+        # Prompt for repo_spec with autocomplete - simple text without color for compatibility
         try:
             user_input = prompt(
-                "Enter repo[@branch]: ",
+                "Enter user_name/repo_name@branch_name: ",
                 completer=RenvCompleter(),
                 complete_while_typing=True,
             )
