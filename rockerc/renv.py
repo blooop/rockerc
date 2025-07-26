@@ -168,6 +168,20 @@ def get_version_from_pyproject() -> Optional[str]:
 
 
 def setup_logging():
+def ensure_defaults_yaml():
+    """
+    Ensure the template rockerc.defaults.template.yaml is copied to rockerc.defaults.yaml if missing.
+    """
+    import shutil
+    defaults_path = Path.home() / "renv" / "rockerc.defaults.yaml"
+    template_path = Path(__file__).parent.parent / "rockerc.defaults.template.yaml"
+    if not defaults_path.exists():
+        try:
+            defaults_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(template_path, defaults_path)
+            logging.info(f"Copied template defaults to {defaults_path}")
+        except Exception as e:
+            logging.warning(f"Could not copy template defaults: {e}")
     """Set up logging for renv."""
     logging.basicConfig(level=logging.INFO, format="[renv] %(levelname)s: %(message)s")
 
@@ -671,6 +685,7 @@ def get_default_branch(repo_dir: Path) -> str:
 
 def main():
     setup_logging()
+    ensure_defaults_yaml()
     parser = argparse.ArgumentParser(
         description="Repository Environment Manager - seamlessly work in multiple repos using git worktrees and rocker containers",
         formatter_class=argparse.RawDescriptionHelpFormatter,
