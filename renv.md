@@ -26,12 +26,24 @@ In addition if I did
 `renv osrf/rocker` it should automatically set up the folder structure and bare repo clone of https://github.com/osrf/rocker:main in ~/renv/osrf/rocker and set up the worktree of the branch `main`
 
 
+### 2. Intelligent Autocompletion
 
-extra: once all the basics work
+The tool should includes comprehensive autocompletion support using `iterfzf`:
 
-use: https://github.com/prompt-toolkit/python-prompt-toolkit
+#### User Completion
+When typing a partial username, it completes based on existing directories in `~/renv/`:
+```bash
+renv blo<TAB>    # Completes to blooop/ if ~/renv/blooop/ exists
+```
 
-to enable autocomplete.  ie, if I start typing blooop/ then it should autocomplete the available repos, and once
-I have typed blooop/bencher@ it should autocomplete the available branches. 
+#### Repository Completion
+When typing after a username with `/`, it completes repository names:
+```bash
+renv blooop/ben<TAB>    # Completes to blooop/bencher if ~/renv/blooop/bencher exists
+```
 
-or use https://pypi.org/project/argcomplete/
+#### Branch Completion
+When typing after a repository with `@`, it completes branch names using git commands:
+```bash
+renv blooop/bencher@fea<TAB>    # Completes to available branches like feature/xyz
+```
