@@ -392,26 +392,31 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         if not ((mount_dir / ".git").exists() or (mount_dir / "HEAD").exists()):
             raise RuntimeError(f"The directory {mount_dir} is not a valid git repository or worktree. Aborting container launch.")
 
-        # Change to the worktree directory (or subfolder if specified)
+        # Determine mount directory for docker
+        docker_mount = str(mount_dir)
         if subfolder:
             target_dir = mount_dir / subfolder
             if not target_dir.exists():
                 raise ValueError(f"Subfolder '{subfolder}' does not exist in {mount_dir}")
-            os.chdir(target_dir)
-            logging.info(f"Working in subfolder: {subfolder}")
+            logging.info(f"Will mount {docker_mount} to /workspaces and start in subfolder: /workspaces/{subfolder}")
         else:
-            os.chdir(mount_dir)
-            
+            logging.info(f"Will mount {docker_mount} to /workspaces and start in /workspaces")
+
         # Generate container name from repo@branch format
         safe_branch = branch.replace("/", "-")
         container_name = f"{repo}-{safe_branch}"
         if subfolder:
             safe_subfolder = subfolder.replace("/", "-")
             container_name = f"{repo}-{safe_branch}-{safe_subfolder}"
-        
-        # Set sys.argv to pass the container name and hostname to rocker
-        sys.argv = [original_argv[0], "--name", container_name, "--hostname", container_name]
-        logging.info(f"Running rockerc in {mount_dir} with container name and hostname: {container_name}")
+
+        # Set sys.argv to pass the container name, hostname, and volume to rocker (remove --workdir)
+        sys.argv = [
+            original_argv[0],
+            "--name", container_name,
+            "--hostname", container_name,
+            "--volume", f"{docker_mount}:/workspaces",
+        ]
+        logging.info(f"Running rockerc with volume: {docker_mount}:/workspaces (no workdir argument)")
         run_rockerc(str(mount_dir))
     except Exception as e:
         logging.error(f"Failed to run rockerc: {e}")

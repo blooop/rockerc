@@ -351,9 +351,8 @@ def attach_to_container(container_name: str) -> None:
             subprocess.run(["docker", "start", container_name], check=True)
         
         logging.info(f"Attaching to existing container '{container_name}'...")
-        # Use docker exec to attach to the running container with an interactive shell
-        # Start in /workspaces if it exists, otherwise default to /home/ags
-        workdir = "/workspaces" if os.path.exists("/workspaces") else "/home/ags"
+        # Always start in /workspaces (where the repo is mounted)
+        workdir = "/workspaces"
         subprocess.run([
             "docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"
         ], check=True)
@@ -424,9 +423,9 @@ def run_rockerc(path: str = "."):
         create_dockerfile = True
 
     cmd_args = yaml_dict_to_args(merged_dict)
+    # Do not forcibly set --workdir /workspaces; let caller decide if needed
     if len(cmd_args) > 0:
         if len(sys.argv) > 1:
-            # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
             dockerfile_arg = "--create-dockerfile"
             if dockerfile_arg in sys.argv:
                 sys.argv.remove(dockerfile_arg)
@@ -436,22 +435,19 @@ def run_rockerc(path: str = "."):
         cmd = f"rocker {cmd_args}"
         logging.info(f"running cmd: {cmd}")
         split_cmd = shlex.split(cmd)
-        
+
         if create_dockerfile:
             save_rocker_cmd(split_cmd)
         else:
-            # Check if container already exists and attach to it if it does
             container_name = extract_container_name_from_args(split_cmd)
             if container_name and container_exists(container_name):
                 logging.info(f"Container '{container_name}' already exists. Attaching to it instead of creating a new one.")
                 attach_to_container(container_name)
                 return
-            
-            # Run rocker normally if container doesn't exist
+
             try:
                 subprocess.run(split_cmd, check=True)
             except subprocess.CalledProcessError as e:
-                # If rocker fails due to container name conflict, try to attach to existing container
                 error_output = str(e)
                 if container_name and ("already in use" in error_output or "Conflict" in error_output):
                     logging.info(f"Container name conflict detected. Attempting to attach to existing container '{container_name}'...")
@@ -460,7 +456,6 @@ def run_rockerc(path: str = "."):
                         return
                     else:
                         logging.error(f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected.")
-                # Re-raise the exception if it's not a container name conflict
                 raise
     else:
         logging.error(
