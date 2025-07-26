@@ -299,6 +299,88 @@ def save_rocker_cmd(split_cmd: str):
         sys.exit(1)
 
 
+def container_exists(container_name: str) -> bool:
+    """Check if a Docker container with the given name exists.
+    
+    Args:
+        container_name: Name of the container to check
+        
+    Returns:
+        bool: True if container exists, False otherwise
+    """
+    try:
+        result = subprocess.run([
+            "docker", "ps", "-a", "--filter", f"name=^/{container_name}$", "--format", "{{.Names}}"
+        ], capture_output=True, text=True, check=True)
+        return container_name in result.stdout.strip().split('\n')
+    except subprocess.CalledProcessError:
+        return False
+
+
+def container_is_running(container_name: str) -> bool:
+    """Check if a Docker container is currently running.
+    
+    Args:
+        container_name: Name of the container to check
+        
+    Returns:
+        bool: True if container is running, False otherwise
+    """
+    try:
+        result = subprocess.run([
+            "docker", "ps", "--filter", f"name=^/{container_name}$", "--format", "{{.Names}}"
+        ], capture_output=True, text=True, check=True)
+        return container_name in result.stdout.strip().split('\n')
+    except subprocess.CalledProcessError:
+        return False
+
+
+def attach_to_container(container_name: str) -> None:
+    """Attach to an existing Docker container.
+    
+    Args:
+        container_name: Name of the container to attach to
+    """
+    try:
+        if not container_is_running(container_name):
+            logging.info(f"Container '{container_name}' exists but is not running. Starting it...")
+            subprocess.run(["docker", "start", container_name], check=True)
+        
+        logging.info(f"Attaching to existing container '{container_name}'...")
+        # Use docker exec to attach to the running container with an interactive shell
+        subprocess.run([
+            "docker", "exec", "-it", container_name, "/bin/bash"
+        ], check=True)
+        
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to attach to container '{container_name}': {e}")
+        # If we can't attach, suggest removing the conflicting container
+        logging.error("You may need to remove the existing container:")
+        logging.error(f"  docker rm {container_name}")
+        logging.error("Or remove it forcefully if it's running:")
+        logging.error(f"  docker rm -f {container_name}")
+        raise
+
+
+def extract_container_name_from_args(split_cmd: list) -> str:
+    """Extract container name from rocker command arguments.
+    
+    Args:
+        split_cmd: List of command arguments
+        
+    Returns:
+        str: Container name or empty string if not found
+    """
+    try:
+        # Look for --name argument
+        name_index = split_cmd.index("--name")
+        if name_index + 1 < len(split_cmd):
+            return split_cmd[name_index + 1]
+    except ValueError:
+        pass
+    return ""
+
+
 def run_rockerc(path: str = "."):
     """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
 
@@ -348,9 +430,32 @@ def run_rockerc(path: str = "."):
         cmd = f"rocker {cmd_args}"
         logging.info(f"running cmd: {cmd}")
         split_cmd = shlex.split(cmd)
+        
         if create_dockerfile:
             save_rocker_cmd(split_cmd)
-        subprocess.run(split_cmd, check=True)
+        else:
+            # Check if container already exists and attach to it if it does
+            container_name = extract_container_name_from_args(split_cmd)
+            if container_name and container_exists(container_name):
+                logging.info(f"Container '{container_name}' already exists. Attaching to it instead of creating a new one.")
+                attach_to_container(container_name)
+                return
+            
+            # Run rocker normally if container doesn't exist
+            try:
+                subprocess.run(split_cmd, check=True)
+            except subprocess.CalledProcessError as e:
+                # If rocker fails due to container name conflict, try to attach to existing container
+                error_output = str(e)
+                if container_name and ("already in use" in error_output or "Conflict" in error_output):
+                    logging.info(f"Container name conflict detected. Attempting to attach to existing container '{container_name}'...")
+                    if container_exists(container_name):
+                        attach_to_container(container_name)
+                        return
+                    else:
+                        logging.error(f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected.")
+                # Re-raise the exception if it's not a container name conflict
+                raise
     else:
         logging.error(
             "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
