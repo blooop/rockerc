@@ -172,28 +172,34 @@ def setup_logging():
     logging.basicConfig(level=logging.INFO, format="[renv] %(levelname)s: %(message)s")
 
 
-def parse_repo_spec(repo_spec: str) -> Tuple[str, str, str]:
+def parse_repo_spec(repo_spec: str) -> Tuple[str, str, str, str]:
     """
-    Parse a repository specification like 'owner/repo@branch' or 'owner/repo'.
+    Parse a repository specification like 'owner/repo@branch#subfolder' or 'owner/repo'.
 
     Args:
         repo_spec: Repository specification string
 
     Returns:
-        Tuple of (owner, repo, branch)
+        Tuple of (owner, repo, branch, subfolder)
 
     Raises:
         ValueError: If the repo specification is invalid
     """
-    if "@" in repo_spec:
-        repo_part, branch = repo_spec.split("@", 1)
+    # Check for subfolder specification
+    if "#" in repo_spec:
+        repo_part, subfolder = repo_spec.split("#", 1)
     else:
         repo_part = repo_spec
+        subfolder = ""
+    
+    if "@" in repo_part:
+        repo_part, branch = repo_part.split("@", 1)
+    else:
         branch = "main"
 
     if "/" not in repo_part:
         raise ValueError(
-            f"Invalid repo specification: {repo_spec}. Expected format: owner/repo[@branch]"
+            f"Invalid repo specification: {repo_spec}. Expected format: owner/repo[@branch][#subfolder]"
         )
 
     owner, repo = repo_part.split("/", 1)
@@ -201,7 +207,7 @@ def parse_repo_spec(repo_spec: str) -> Tuple[str, str, str]:
     if not owner or not repo:
         raise ValueError(f"Invalid repo specification: {repo_spec}. Owner and repo cannot be empty")
 
-    return owner, repo, branch
+    return owner, repo, branch, subfolder
 
 
 def get_renv_base_dir() -> Path:
@@ -365,7 +371,7 @@ def fetch_repo(owner: str, repo: str) -> None:
         logging.warning(f"Failed to fetch changes: {e.stderr}")
 
 
-def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: str) -> None:
+def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: str, subfolder: str = "") -> None:
     """
     Run rockerc in the specified worktree directory.
 
@@ -374,22 +380,39 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         owner: Repository owner
         repo: Repository name
         branch: Branch name
+        subfolder: Optional subfolder within the repository
     """
     original_cwd = os.getcwd()
     original_argv = sys.argv.copy()  # Save original argv
 
     try:
-        os.chdir(worktree_dir)
+        # Always mount the worktree root to /workspaces
+        mount_dir = worktree_dir
+        # Check for .git or worktree metadata
+        if not ((mount_dir / ".git").exists() or (mount_dir / "HEAD").exists()):
+            raise RuntimeError(f"The directory {mount_dir} is not a valid git repository or worktree. Aborting container launch.")
+
+        # Change to the worktree directory (or subfolder if specified)
+        if subfolder:
+            target_dir = mount_dir / subfolder
+            if not target_dir.exists():
+                raise ValueError(f"Subfolder '{subfolder}' does not exist in {mount_dir}")
+            os.chdir(target_dir)
+            logging.info(f"Working in subfolder: {subfolder}")
+        else:
+            os.chdir(mount_dir)
+            
         # Generate container name from repo@branch format
-        # Replace slashes in branch names with dashes for container name
         safe_branch = branch.replace("/", "-")
         container_name = f"{repo}-{safe_branch}"
+        if subfolder:
+            safe_subfolder = subfolder.replace("/", "-")
+            container_name = f"{repo}-{safe_branch}-{safe_subfolder}"
         
         # Set sys.argv to pass the container name and hostname to rocker
-        # Keep the original program name and add the --name and --hostname arguments
         sys.argv = [original_argv[0], "--name", container_name, "--hostname", container_name]
-        logging.info(f"Running rockerc in {worktree_dir} with container name and hostname: {container_name}")
-        run_rockerc(str(worktree_dir))
+        logging.info(f"Running rockerc in {mount_dir} with container name and hostname: {container_name}")
+        run_rockerc(str(mount_dir))
     except Exception as e:
         logging.error(f"Failed to run rockerc: {e}")
         raise
@@ -619,22 +642,25 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  renv blooop/bencher@main          # Clone blooop/bencher and switch to main branch
-  renv blooop/bencher@feature       # Switch to feature branch (creates worktree if needed)
-  renv osrf/rocker                  # Clone osrf/rocker and switch to main branch (default)
-  renv --install                    # Install bash completion
-  renv --uninstall                  # Uninstall bash completion
+  renv blooop/bencher@main             # Clone blooop/bencher and switch to main branch
+  renv blooop/bencher@feature          # Switch to feature branch (creates worktree if needed)
+  renv blooop/bencher@main#scripts     # Work in the scripts subfolder of main branch
+  renv osrf/rocker                     # Clone osrf/rocker and switch to main branch (default)
+  renv --install                       # Install bash completion
+  renv --uninstall                     # Uninstall bash completion
   
 The tool will:
 1. Clone the repository as a bare repo to ~/renv/owner/repo (if not already cloned)
 2. Create a worktree for the specified branch at ~/renv/owner/repo/worktree-{branch}
+3. Optionally change to a subfolder within the repository if specified with #subfolder
+4. Run rockerc in that directory to build and enter a container
 3. Run rockerc in that worktree to build and enter a container
         """,
     )
     parser.add_argument(
         "repo_spec",
         nargs="?",
-        help="Repository specification in format 'owner/repo[@branch]'. If branch is omitted, 'main' is used.",
+        help="Repository specification in format 'owner/repo[@branch][#subfolder]'. If branch is omitted, 'main' is used.",
     )
     parser.add_argument(
         "--no-container",
@@ -703,14 +729,22 @@ The tool will:
             sys.exit(0)
         args.repo_spec = user_input.strip()
     try:
-        owner, repo, branch = parse_repo_spec(args.repo_spec)
-        logging.info(f"Setting up environment for {owner}/{repo}@{branch}")
+        owner, repo, branch, subfolder = parse_repo_spec(args.repo_spec)
+        if subfolder:
+            logging.info(f"Setting up environment for {owner}/{repo}@{branch}#{subfolder}")
+        else:
+            logging.info(f"Setting up environment for {owner}/{repo}@{branch}")
         worktree_dir = setup_repo_environment(owner, repo, branch)
         if args.no_container:
-            logging.info(f"Environment ready at {worktree_dir}")
-            logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
+            if subfolder:
+                target_dir = worktree_dir / subfolder
+                logging.info(f"Environment ready at {target_dir}")
+                logging.info(f"To manually run rockerc: cd {target_dir} && rockerc")
+            else:
+                logging.info(f"Environment ready at {worktree_dir}")
+                logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
-            run_rockerc_in_worktree(worktree_dir, owner, repo, branch)
+            run_rockerc_in_worktree(worktree_dir, owner, repo, branch, subfolder)
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")
         sys.exit(1)
