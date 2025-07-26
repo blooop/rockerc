@@ -65,3 +65,8 @@ dockerfile: Dockerfile
 ```
 
 will look for the dockerfile relative to the rockerc.yaml file
+
+
+# development
+
+`pip inject rockervsc -e .`
