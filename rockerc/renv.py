@@ -371,7 +371,7 @@ def fetch_repo(owner: str, repo: str) -> None:
         logging.warning(f"Failed to fetch changes: {e.stderr}")
 
 
-def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: str, subfolder: str = "") -> None:
+def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: str, subfolder: str = "", command: list[str] | None = None) -> None:
     """
     Run rockerc in the specified worktree directory.
 
@@ -381,6 +381,7 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         repo: Repository name
         branch: Branch name
         subfolder: Optional subfolder within the repository
+        command: Optional command to run inside the container
     """
     original_cwd = os.getcwd()
     original_argv = sys.argv.copy()  # Save original argv
@@ -409,24 +410,42 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
             safe_subfolder = subfolder.replace("/", "-")
             container_name = f"{repo}-{safe_branch}-{safe_subfolder}"
 
-        # Set workdir for container (default /workspaces, or /workspaces/{subfolder} if subfolder is set)
+        # Mount both the bare repo and the worktree for proper git operations
+        bare_repo_dir = get_repo_dir(_owner, repo)
+        docker_bare_repo_mount = "/repo.git"
+        docker_worktree_mount = "/repo"
         if subfolder:
-            docker_workdir = f"/workspaces/{subfolder}"
+            docker_workdir = f"{docker_worktree_mount}/{subfolder}"
         else:
-            docker_workdir = "/workspaces"
+            docker_workdir = docker_worktree_mount
 
-        # Set sys.argv to pass the container name, hostname, volume, and workdir via oyr-run-arg
+        # Set GIT_DIR and GIT_WORK_TREE env vars for git to work in the container
+        worktree_name = f"worktree-{safe_branch}"
+        git_dir_in_container = f"{docker_bare_repo_mount}/worktrees/{worktree_name}"
+        git_work_tree_in_container = docker_workdir
+
+        # Collect all docker run arguments into a single string, properly quoted
+        docker_run_args = [
+            f"--workdir={docker_workdir}",
+            f"--env=GIT_DIR={git_dir_in_container}",
+            f"--env=GIT_WORK_TREE={git_work_tree_in_container}",
+        ]
+        # Join with spaces, and ensure the whole string is passed as a single argument
+        docker_run_args_str = " ".join(docker_run_args)
         sys.argv = [
             original_argv[0],
             "--name", container_name,
             "--hostname", container_name,
-            "--volume", f"{docker_mount}:/workspaces",
-            f'--oyr-run-arg="--workdir {docker_workdir}"',
+            "--volume", f"{bare_repo_dir}:{docker_bare_repo_mount}",
+            "--volume", f"{worktree_dir}:{docker_worktree_mount}",
+            f"--oyr-run-arg={docker_run_args_str}",
         ]
-        # Ensure --oyr-run-arg is a single argument (not split)
-        # If using subprocess or CLI, this will be passed as one argument
-        logging.info(f"Running rockerc with volume: {docker_mount}:/workspaces and workdir: {docker_workdir}")
-        run_rockerc(str(mount_dir))
+        if command:
+            sys.argv.extend(command)
+
+        logging.info(f"Running rockerc with volumes: {bare_repo_dir}:{docker_bare_repo_mount}, {worktree_dir}:{docker_worktree_mount} and workdir: {docker_workdir}")
+        logging.info(f"Setting GIT_DIR={git_dir_in_container} and GIT_WORK_TREE={git_work_tree_in_container} in container")
+        run_rockerc(str(worktree_dir))
     except Exception as e:
         logging.error(f"Failed to run rockerc: {e}")
         raise
