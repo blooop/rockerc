@@ -168,6 +168,9 @@ def get_version_from_pyproject() -> Optional[str]:
 
 
 def setup_logging():
+    """Set up logging for renv."""
+    logging.basicConfig(level=logging.INFO, format="[renv] %(levelname)s: %(message)s")
+
 def ensure_defaults_yaml():
     """
     Ensure the template rockerc.defaults.template.yaml is copied to rockerc.defaults.yaml if missing.
@@ -178,12 +181,40 @@ def ensure_defaults_yaml():
     if not defaults_path.exists():
         try:
             defaults_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy(template_path, defaults_path)
-            logging.info(f"Copied template defaults to {defaults_path}")
+            if template_path.exists() and template_path.stat().st_size > 0:
+                shutil.copy(template_path, defaults_path)
+                logging.info(f"Copied template defaults to {defaults_path}")
+            else:
+                logging.warning(f"Template file {template_path} does not exist or is empty. Skipping copy.")
         except Exception as e:
             logging.warning(f"Could not copy template defaults: {e}")
-    """Set up logging for renv."""
-    logging.basicConfig(level=logging.INFO, format="[renv] %(levelname)s: %(message)s")
+    ensure_github_known_host()
+
+def ensure_github_known_host():
+    """
+    Ensure that GitHub's SSH fingerprint is present in ~/.ssh/known_hosts to avoid SSH prompts.
+    """
+    ssh_dir = Path.home() / ".ssh"
+    known_hosts = ssh_dir / "known_hosts"
+    github_host = "github.com"
+    # Create .ssh directory if missing
+    ssh_dir.mkdir(parents=True, exist_ok=True)
+    # Check if github.com is already in known_hosts
+    if known_hosts.exists():
+        try:
+            with known_hosts.open("r") as f:
+                if any(github_host in line for line in f):
+                    return  # Already present
+        except Exception:
+            pass
+    try:
+        import subprocess
+        result = subprocess.run(["ssh-keyscan", github_host], capture_output=True, text=True, check=True)
+        with known_hosts.open("a") as f:
+            f.write(result.stdout)
+        logging.info(f"Added {github_host} fingerprint to {known_hosts}")
+    except Exception as e:
+        logging.warning(f"Could not add {github_host} to known_hosts: {e}")
 
 
 def parse_repo_spec(repo_spec: str) -> Tuple[str, str, str, str]:
