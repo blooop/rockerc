@@ -458,8 +458,9 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
 
         # Mount both the bare repo and the worktree for proper git operations
         bare_repo_dir = get_repo_dir(_owner, repo)
+        # Use the actual repo name for the worktree mount and workdir
         docker_bare_repo_mount = "/repo.git"
-        docker_worktree_mount = "/repo"
+        docker_worktree_mount = f"/{repo}"
         if subfolder:
             docker_workdir = f"{docker_worktree_mount}/{subfolder}"
         else:
