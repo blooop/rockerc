@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import sys
 import tempfile
-import os
 sys.path.insert(0, '/workspaces/rockerc')
 
 try:

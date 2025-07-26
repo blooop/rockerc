@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Tests for renv completion functionality."""
 
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 import sys
 import os

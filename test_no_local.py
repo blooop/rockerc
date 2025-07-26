@@ -5,7 +5,7 @@ import os
 sys.path.insert(0, '/workspaces/rockerc')
 
 try:
-    from rockerc.rockerc import load_defaults_config, collect_arguments
+    from rockerc.rockerc import collect_arguments
     
     # Test in a temporary directory with no local rockerc.yaml
     with tempfile.TemporaryDirectory() as temp_dir:

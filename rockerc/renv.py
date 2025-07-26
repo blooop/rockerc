@@ -2,7 +2,8 @@
 """
 renv - Repository Environment Manager
 
-A tool that makes it seamless to work in a variety of repos at the same time
+A tool that makes it seamless to work in a va                return (2, owner_repo, branch)
+            return (0, combo, "")ty of repos at the same time
 using git worktrees and rocker containers.
 
 Usage:
@@ -23,8 +24,7 @@ import sys
 from pathlib import Path
 from typing import Tuple, List, Optional
 import toml
-from prompt_toolkit import prompt
-from prompt_toolkit.completion import Completer, Completion
+from iterfzf import iterfzf
 
 from .rockerc import run_rockerc
 
@@ -67,30 +67,83 @@ def list_branches(owner: str, repo: str) -> List[str]:
     except Exception:
         return []
 
-class RenvCompleter(Completer):
-    def get_completions(self, document, complete_event):
-        text = document.text_before_cursor
-        if "@" in text:
-            # Complete branch names
+def get_all_repo_branch_combinations() -> List[str]:
+    """Get all possible repo@branch combinations for fuzzy search."""
+    combinations = []
+    
+    # Get all existing repos
+    owner_repos = list_owners_and_repos()
+    
+    for owner_repo in owner_repos:
+        # Add the repo without branch first (defaults to main)
+        combinations.append(owner_repo)
+        
+        # Add all branches for each repo
+        if "/" in owner_repo:
             try:
-                owner_repo, partial_branch = text.split("@", 1)
-            except ValueError:
-                return
-            if "/" not in owner_repo:
-                return
-            owner, repo = owner_repo.split("/", 1)
-            for branch in list_branches(owner, repo):
-                if branch.startswith(partial_branch):
-                    # Calculate how much of the completion to show
-                    completion_text = branch[len(partial_branch):]
-                    yield Completion(completion_text, start_position=0)
-        else:
-            # Complete owner/repo
-            for owner_repo in list_owners_and_repos():
-                if owner_repo.startswith(text):
-                    # Calculate how much of the completion to show
-                    completion_text = owner_repo[len(text):]
-                    yield Completion(completion_text, start_position=0)
+                owner, repo = owner_repo.split("/", 1)
+                branches = list_branches(owner, repo)
+                
+                # Sort branches to put main/master first, then alphabetically
+                def branch_sort_key(branch):
+                    if branch == "main":
+                        return (0, branch)
+                    if branch == "master":
+                        return (1, branch)
+                    return (2, branch)
+                
+                sorted_branches = sorted(branches, key=branch_sort_key)
+                
+                for branch in sorted_branches:
+                    combinations.append(f"{owner_repo}@{branch}")
+            except Exception:
+                # If there's an error getting branches, just skip this repo
+                continue
+    
+    # Sort combinations: repos without @ first, then with @
+    def combination_sort_key(combo):
+        if "@" in combo:
+            owner_repo, branch = combo.split("@", 1)
+            if branch == "main":
+                return (1, owner_repo, branch)
+            if branch == "master":
+                return (2, owner_repo, branch)
+            return (3, owner_repo, branch)
+        return (0, combo, "")
+    
+    return sorted(combinations, key=combination_sort_key)
+
+
+def fuzzy_select_repo_spec() -> Optional[str]:
+    """Use fuzzy finder to select a repository specification."""
+    options = get_all_repo_branch_combinations()
+    
+    if not options:
+        print("No repositories found. Please clone some repositories first.")
+        print("Example: renv blooop/bencher@main")
+        return None
+    
+    try:
+        # Use iterfzf for fuzzy selection with custom options
+        selected = iterfzf(
+            options,
+            prompt="Select repo@branch (type 'bl ben ma' for blooop/bencher@main): ",
+            multi=False,
+            print_query=False,
+            query=""
+        )
+        return selected
+    except KeyboardInterrupt:
+        return None
+    except Exception as e:
+        print(f"Error during fuzzy selection: {e}")
+        # Fallback to a simple input prompt
+        print("Falling back to simple input...")
+        try:
+            user_input = input("Enter repo@branch (e.g., blooop/bencher@main): ").strip()
+            return user_input if user_input else None
+        except (KeyboardInterrupt, EOFError):
+            return None
 
 def get_version_from_pyproject() -> Optional[str]:
     pyproject = Path(__file__).parent.parent / "pyproject.toml"
@@ -301,7 +354,7 @@ def fetch_repo(owner: str, repo: str) -> None:
         logging.warning(f"Failed to fetch changes: {e.stderr}")
 
 
-def run_rockerc_in_worktree(worktree_dir: Path, owner: str, repo: str, branch: str) -> None:
+def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: str) -> None:
     """
     Run rockerc in the specified worktree directory.
 
@@ -626,17 +679,16 @@ The tool will:
 
     # If no arguments, prompt for input
     if args.repo_spec is None:
-        # Prompt for repo_spec with autocomplete - simple text without color for compatibility
+        # Use fuzzy finder for interactive selection
         try:
-            user_input = prompt(
-                "Enter user_name/repo_name@branch_name: ",
-                completer=RenvCompleter(),
-                complete_while_typing=True,
-            )
+            user_input = fuzzy_select_repo_spec()
+            if user_input is None:
+                print("\nExiting.")
+                sys.exit(0)
         except (KeyboardInterrupt, EOFError):
             print("\nExiting.")
             sys.exit(0)
-        if not user_input.strip():
+        if not user_input or not user_input.strip():
             sys.exit(0)
         args.repo_spec = user_input.strip()
     try:

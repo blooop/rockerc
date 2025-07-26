@@ -12,7 +12,7 @@ dependencies = [
   "off-your-rocker>=0.1.0",
   "pyyaml>=5",
   "prompt-toolkit>=3.0",
-  "toml>=0.10.2",
+  "toml>=0.10.2", "iterfzf>=1.8.0.62.0,<2",
 ]
 
 [tool.pixi.pypi-dependencies]
