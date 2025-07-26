@@ -1,6 +1,6 @@
 [project]
 name = "rockerc"
-version = "0.8.3"
+version = "0.8.5"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
@@ -73,6 +73,7 @@ include = ["rockerc"]
 [project.scripts]
 rockerc = "rockerc.rockerc:run_rockerc"
 renv = "rockerc.renv:main"
+renvsc = "rockerc.renv:main_vsc"
 
 # Environments
 [tool.pixi.environments]

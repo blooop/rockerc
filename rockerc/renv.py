@@ -16,7 +16,6 @@ Examples:
 """
 
 
-import argparse
 import logging
 import os
 import subprocess
@@ -753,27 +752,19 @@ def get_default_branch(repo_dir: Path) -> str:
     return 'main'
 
 
-def main():
+def _main_common(run_container_func, tool_name: str):
+    import argparse
     setup_logging()
     ensure_defaults_yaml()
     parser = argparse.ArgumentParser(
-        description="Repository Environment Manager - seamlessly work in multiple repos using git worktrees and rocker containers",
+        description=f"Repository Environment Manager - seamlessly work in multiple repos using git worktrees and rocker containers ({tool_name})",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
 Examples:
-  renv blooop/bencher@main             # Clone blooop/bencher and switch to main branch
-  renv blooop/bencher@feature          # Switch to feature branch (creates worktree if needed)
-  renv blooop/bencher@main#scripts     # Work in the scripts subfolder of main branch
-  renv osrf/rocker                     # Clone osrf/rocker and switch to main branch (default)
-  renv --install                       # Install bash completion
-  renv --uninstall                     # Uninstall bash completion
-  
-The tool will:
-1. Clone the repository as a bare repo to ~/renv/owner/repo (if not already cloned)
-2. Create a worktree for the specified branch at ~/renv/owner/repo/worktree-{branch}
-3. Optionally change to a subfolder within the repository if specified with #subfolder
-4. Run rockerc in that directory to build and enter a container
-3. Run rockerc in that worktree to build and enter a container
+  {tool_name} blooop/bencher@main             # Clone blooop/bencher and switch to main branch
+  {tool_name} blooop/bencher@feature          # Switch to feature branch (creates worktree if needed)
+  {tool_name} blooop/bencher@main#scripts     # Work in the scripts subfolder of main branch
+  {tool_name} osrf/rocker                     # Clone osrf/rocker and switch to main branch (default)
         """,
     )
     parser.add_argument(
@@ -784,17 +775,7 @@ The tool will:
     parser.add_argument(
         "--no-container",
         action="store_true",
-        help="Set up the worktree but don't run rockerc (for debugging or manual container management)",
-    )
-    parser.add_argument(
-        "--install",
-        action="store_true",
-        help="Install bash completion for renv",
-    )
-    parser.add_argument(
-        "--uninstall",
-        action="store_true",
-        help="Uninstall bash completion for renv",
+        help=f"Set up the worktree but don't run {tool_name} (for debugging or manual container management)",
     )
     parser.add_argument(
         "--list-candidates",
@@ -812,20 +793,11 @@ The tool will:
     if args.version:
         version = get_version_from_pyproject()
         if version:
-            print(f"renv version: {version}")
+            print(f"{tool_name} version: {version}")
         else:
-            print("renv version: unknown")
+            print(f"{tool_name} version: unknown")
         return
 
-    # Handle completion installation/uninstallation
-    if args.install:
-        install_completion()
-        return
-    
-    if args.uninstall:
-        uninstall_completion()
-        return
-    
     # Handle completion candidate listing
     if args.list_candidates is not None:
         candidates = generate_completion_candidates(args.list_candidates)
@@ -835,7 +807,6 @@ The tool will:
 
     # If no arguments, prompt for input
     if args.repo_spec is None:
-        # Use fuzzy finder for interactive selection
         try:
             user_input = fuzzy_select_repo_spec()
             if user_input is None:
@@ -858,12 +829,12 @@ The tool will:
             if subfolder:
                 target_dir = worktree_dir / subfolder
                 logging.info(f"Environment ready at {target_dir}")
-                logging.info(f"To manually run rockerc: cd {target_dir} && rockerc")
+                logging.info(f"To manually run {tool_name}: cd {target_dir} && {tool_name}")
             else:
                 logging.info(f"Environment ready at {worktree_dir}")
-                logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
+                logging.info(f"To manually run {tool_name}: cd {worktree_dir} && {tool_name}")
         else:
-            run_rockerc_in_worktree(worktree_dir, owner, repo, branch, subfolder)
+            run_container_func(worktree_dir, subfolder)
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")
         sys.exit(1)
@@ -877,6 +848,21 @@ The tool will:
         logging.error(f"Unexpected error: {e}")
         sys.exit(1)
 
+def main():
+    def run_rockerc_entry(worktree_dir, subfolder):
+        if subfolder:
+            target_dir = worktree_dir / subfolder
+        else:
+            target_dir = worktree_dir
+        os.chdir(target_dir)
+        run_rockerc(str(worktree_dir))
+    _main_common(run_rockerc_entry, "rockerc")
 
-if __name__ == "__main__":
-    main()
+def main_vsc():
+    def run_rockervsc_entry(worktree_dir, subfolder):
+        if subfolder:
+            target_dir = worktree_dir / subfolder
+        else:
+            target_dir = worktree_dir
+        os.chdir(target_dir)
+    _main_common(run_rockervsc_entry, "rockervsc")
