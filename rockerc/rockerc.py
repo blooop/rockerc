@@ -30,10 +30,14 @@ def create_default_config(defaults_path: pathlib.Path) -> None:
             f.write("  - pull    # Enable automatic image pulling\n") 
             f.write("  - deps    # Enable dependency installation\n")
             f.write("  - git     # Enable git integration\n")
-            f.write("  - cwd     # Mount current working directory\n\n")
+            # cwd is now ignored by default
+            # f.write("  - cwd     # Mount current working directory\n\n")
+            f.write("\n")
             f.write("# Extensions that are disabled by default\n")
             f.write("disable_args:\n")
-            f.write("  - nvidia  # Disable NVIDIA GPU support by default\n\n")
+            f.write("  - nvidia  # Disable NVIDIA GPU support by default\n")
+            f.write("  - create-dockerfile  # Disable automatic Dockerfile creation\n")
+            f.write("  - cwd  # Disable automatic mounting of current working directory\n\n")
             f.write("# Common extensions you might want to add locally:\n")
             f.write("# - x11          # X11 forwarding for GUI applications\n")
             f.write("# - nvidia       # NVIDIA GPU support\n")
@@ -348,8 +352,10 @@ def attach_to_container(container_name: str) -> None:
         
         logging.info(f"Attaching to existing container '{container_name}'...")
         # Use docker exec to attach to the running container with an interactive shell
+        # Start in /workspaces if it exists, otherwise default to /home/ags
+        workdir = "/workspaces" if os.path.exists("/workspaces") else "/home/ags"
         subprocess.run([
-            "docker", "exec", "-it", container_name, "/bin/bash"
+            "docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"
         ], check=True)
         
     except subprocess.CalledProcessError as e:
