@@ -409,14 +409,23 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
             safe_subfolder = subfolder.replace("/", "-")
             container_name = f"{repo}-{safe_branch}-{safe_subfolder}"
 
-        # Set sys.argv to pass the container name, hostname, and volume to rocker (remove --workdir)
+        # Set workdir for container (default /workspaces, or /workspaces/{subfolder} if subfolder is set)
+        if subfolder:
+            docker_workdir = f"/workspaces/{subfolder}"
+        else:
+            docker_workdir = "/workspaces"
+
+        # Set sys.argv to pass the container name, hostname, volume, and workdir via oyr-run-arg
         sys.argv = [
             original_argv[0],
             "--name", container_name,
             "--hostname", container_name,
             "--volume", f"{docker_mount}:/workspaces",
+            f'--oyr-run-arg="--workdir {docker_workdir}"',
         ]
-        logging.info(f"Running rockerc with volume: {docker_mount}:/workspaces (no workdir argument)")
+        # Ensure --oyr-run-arg is a single argument (not split)
+        # If using subprocess or CLI, this will be passed as one argument
+        logging.info(f"Running rockerc with volume: {docker_mount}:/workspaces and workdir: {docker_workdir}")
         run_rockerc(str(mount_dir))
     except Exception as e:
         logging.error(f"Failed to run rockerc: {e}")
