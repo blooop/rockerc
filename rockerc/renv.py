@@ -249,7 +249,8 @@ def clone_bare_repo(owner: str, repo: str) -> None:
         repo: Repository name
     """
     repo_dir = get_repo_dir(owner, repo)
-    repo_url = f"https://github.com/{owner}/{repo}"
+    # Prefer SSH for cloning to avoid username/password prompts
+    repo_url = f"git@github.com:{owner}/{repo}.git"
 
     logging.info(f"Cloning {repo_url} as bare repository to {repo_dir}")
 
