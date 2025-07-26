@@ -53,8 +53,19 @@ def list_branches(owner: str, repo: str) -> List[str]:
         branches = []
         for line in result.stdout.splitlines():
             line = line.strip()
-            if not line or line.startswith('*'):
+            if not line:
                 continue
+            
+            # Remove git status prefixes: '*' (current), '+' (worktree)
+            if line.startswith('*'):
+                line = line[1:].strip()
+            elif line.startswith('+'):
+                line = line[1:].strip()
+            
+            # Skip if line becomes empty after prefix removal
+            if not line:
+                continue
+            
             # Remove 'remotes/origin/' prefix and clean up branch names
             if line.startswith('remotes/origin/'):
                 branch = line.replace('remotes/origin/', '')
