@@ -489,9 +489,48 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         if command:
             sys.argv.extend(command)
 
+        # --- Fix: Set working directory before calling run_rockerc ---
+        # If subfolder is specified, chdir to worktree_dir/subfolder, else worktree_dir
+        if subfolder:
+            target_dir = worktree_dir / subfolder
+        else:
+            target_dir = worktree_dir
+
+
+        # Patch: Attach logic matches launch logic
+        attach_dir = docker_workdir
+        logging.info(f"Attach directory for container: {attach_dir}")
+
         logging.info(f"Running rockerc with volumes: {bare_repo_dir}:{docker_bare_repo_mount}, {worktree_dir}:{docker_worktree_mount} and workdir: {docker_workdir}")
         logging.info(f"Setting GIT_DIR={git_dir_in_container} and GIT_WORK_TREE={git_work_tree_in_container} in container")
-        run_rockerc(str(worktree_dir))
+
+        # --- Attach to container if it exists, else launch ---
+        def container_exists(name):
+            result = subprocess.run(["docker", "ps", "-a", "--format", "{{.Names}}"], capture_output=True, text=True)
+            return name in result.stdout.splitlines()
+
+        def container_running(name):
+            result = subprocess.run(["docker", "ps", "--format", "{{.Names}}"], capture_output=True, text=True)
+            return name in result.stdout.splitlines()
+
+        if container_exists(container_name):
+            logging.info(f"Container '{container_name}' already exists. Attaching to it instead of creating a new one.")
+            if not container_running(container_name):
+                logging.info(f"Container '{container_name}' exists but is not running. Starting it...")
+                subprocess.run(["docker", "start", container_name], check=True)
+            logging.info(f"Attaching to existing container '{container_name}'...")
+            try:
+                subprocess.run(["docker", "exec", "-it", "-w", attach_dir, container_name, "/bin/bash"], check=True)
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Failed to attach to container '{container_name}': {e}")
+                logging.error("You may need to remove the existing container:")
+                logging.error(f"  docker rm {container_name}")
+                logging.error("Or remove it forcefully if it's running:")
+                logging.error(f"  docker rm -f {container_name}")
+                raise
+        else:
+            os.chdir(target_dir)
+            run_rockerc(str(worktree_dir))
     except Exception as e:
         logging.error(f"Failed to run rockerc: {e}")
         raise
