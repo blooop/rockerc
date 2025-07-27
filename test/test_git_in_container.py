@@ -36,7 +36,7 @@ def setup_git_repo(tmp_path):
     return bare_repo_dir, worktree_dir
 
 
-def test_git_status_in_container(setup_git_repo, monkeypatch):
+def test_git_status_in_container(setup_git_repo, monkeypatch):  # pylint: disable=redefined-outer-name
     """Test that git status works inside the container."""
     bare_repo_dir, worktree_dir = setup_git_repo
 

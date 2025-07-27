@@ -478,12 +478,12 @@ def run_rockerc(path: str = "."):
                     if container_exists(container_name):
                         attach_to_container(container_name)
                         return
-                    else:
-                        logging.error(
-                            f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected."
-                        )
+
+                    logging.error(
+                        f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected."
+                    )
                 raise
-    else:
+
         logging.error(
             "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
         )

@@ -447,6 +447,7 @@ def run_rockerc_in_worktree(
     _owner: str,
     repo: str,
     branch: str,
+    *,
     subfolder: str = "",
     command: list[str] | None = None,
     force: bool = False,
@@ -981,7 +982,13 @@ The tool will:
                 logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
             run_rockerc_in_worktree(
-                worktree_dir, owner, repo, branch, subfolder, force=args.force, nocache=args.nocache
+                worktree_dir,
+                owner,
+                repo,
+                branch,
+                subfolder=subfolder,
+                force=args.force,
+                nocache=args.nocache,
             )
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")

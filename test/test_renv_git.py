@@ -181,14 +181,14 @@ class TestRenvGitOperations(unittest.TestCase):
 
         # First call (rev-parse) fails
         # Second call (branch listing) succeeds
-        def side_effect(*args, **kwargs):
+        def side_effect(*args, **_kwargs):
             if "rev-parse" in args[0]:
                 raise subprocess.CalledProcessError(1, "git")
-            else:
-                mock_result = MagicMock()
-                mock_result.stdout = "* main\n  develop\n  feature\n"
-                mock_result.returncode = 0
-                return mock_result
+
+            mock_result = MagicMock()
+            mock_result.stdout = "* main\n  develop\n  feature\n"
+            mock_result.returncode = 0
+            return mock_result
 
         mock_run.side_effect = side_effect
 
@@ -202,14 +202,14 @@ class TestRenvGitOperations(unittest.TestCase):
     def test_get_default_branch_prefers_main_over_master(self, mock_run):
         """Test that 'main' is preferred over 'master' when both exist."""
 
-        def side_effect(*args, **kwargs):
+        def side_effect(*args, **_kwargs):
             if "rev-parse" in args[0]:
                 raise subprocess.CalledProcessError(1, "git")
-            else:
-                mock_result = MagicMock()
-                mock_result.stdout = "  master\n  main\n  develop\n"
-                mock_result.returncode = 0
-                return mock_result
+
+            mock_result = MagicMock()
+            mock_result.stdout = "  master\n  main\n  develop\n"
+            mock_result.returncode = 0
+            return mock_result
 
         mock_run.side_effect = side_effect
 
@@ -223,14 +223,14 @@ class TestRenvGitOperations(unittest.TestCase):
     def test_get_default_branch_uses_master_when_no_main(self, mock_run):
         """Test that 'master' is used when 'main' doesn't exist."""
 
-        def side_effect(*args, **kwargs):
+        def side_effect(*args, **_kwargs):
             if "rev-parse" in args[0]:
                 raise subprocess.CalledProcessError(1, "git")
-            else:
-                mock_result = MagicMock()
-                mock_result.stdout = "  master\n  develop\n  feature\n"
-                mock_result.returncode = 0
-                return mock_result
+
+            mock_result = MagicMock()
+            mock_result.stdout = "  master\n  develop\n  feature\n"
+            mock_result.returncode = 0
+            return mock_result
 
         mock_run.side_effect = side_effect
 

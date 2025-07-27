@@ -39,7 +39,7 @@ class TestRenvFuzzyFinder(unittest.TestCase):
             ("osrf", "rocker", ["main", "master", "melodic"]),
         ]
 
-        for owner, repo, branches in repos:
+        for owner, repo, _branches in repos:
             repo_dir = Path(self.temp_dir) / owner / repo
             repo_dir.mkdir(parents=True)
             (repo_dir / "HEAD").touch()
@@ -218,10 +218,10 @@ class TestRenvFuzzyFinder(unittest.TestCase):
         def mock_branches(owner, repo):
             if owner == "blooop" and repo == "bencher":
                 return ["main", "develop"]
-            elif owner == "microsoft" and repo == "vscode":
-                raise Exception("Git error")  # Simulate git error
-            else:
-                return ["main"]
+            if owner == "microsoft" and repo == "vscode":
+                raise RuntimeError("Git error")  # Simulate git error
+
+            return ["main"]
 
         mock_list_branches.side_effect = mock_branches
 

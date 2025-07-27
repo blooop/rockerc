@@ -26,7 +26,7 @@ class TestAtCharacterFix(unittest.TestCase):
 
     @patch("rockerc.renv.run_rockerc")
     @patch("os.chdir")
-    def test_sys_argv_cleared_before_rockerc(self, mock_chdir, mock_run_rockerc):
+    def test_sys_argv_cleared_before_rockerc(self, _mock_chdir, mock_run_rockerc):
         """Test that sys.argv is cleared before calling run_rockerc."""
 
         # Set up sys.argv with problematic @ character

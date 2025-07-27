@@ -175,7 +175,7 @@ class TestRenvWorkflows(unittest.TestCase):
     @patch("rockerc.renv.fetch_repo")
     @patch("rockerc.renv.repo_exists")
     def test_workflow_multiple_repos(
-        self, mock_repo_exists, mock_fetch, mock_create_worktree, mock_clone
+        self, mock_repo_exists, _mock_fetch, mock_create_worktree, mock_clone
     ):
         """Test Workflow 4: Work on Multiple Repos."""
         mock_repo_exists.return_value = False
@@ -240,14 +240,15 @@ class TestRenvWorkflows(unittest.TestCase):
 
     def test_subfolder_workflow(self):
         """Test workflow with subfolder specification (#subfolder)."""
-        from rockerc.renv import parse_repo_spec
+        from rockerc.renv import parse_repo_spec  # Test parsing with subfolder
 
-        # Test parsing with subfolder
-        owner, repo, branch, subfolder = parse_repo_spec("blooop/bencher@main#scripts")
+        _owner, _repo, _branch, subfolder = parse_repo_spec("blooop/bencher@main#scripts")
         self.assertEqual(subfolder, "scripts")
 
         # Test with complex subfolder path
-        owner, repo, branch, subfolder = parse_repo_spec("company/project#docs/examples/tutorial")
+        _owner, _repo, _branch, subfolder = parse_repo_spec(
+            "company/project#docs/examples/tutorial"
+        )
         self.assertEqual(subfolder, "docs/examples/tutorial")
 
     def test_fuzzy_search_preparation(self):

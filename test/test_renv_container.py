@@ -32,7 +32,7 @@ class TestRenvContainerIntegration(unittest.TestCase):
     @patch("subprocess.run")
     @patch("rockerc.renv.run_rockerc")
     @patch("os.chdir")
-    def test_container_name_generation(self, mock_chdir, mock_run_rockerc, mock_subprocess):
+    def test_container_name_generation(self, _mock_chdir, _mock_run_rockerc, mock_subprocess):
         """Test that container names are generated correctly."""
         test_cases = [
             ("blooop", "bencher", "main", "bencher-main"),
@@ -57,13 +57,12 @@ class TestRenvContainerIntegration(unittest.TestCase):
 
                 # Check that sys.argv was set up with correct container name
                 # The function modifies sys.argv before calling run_rockerc
-                expected_name_in_argv = any(expected_name in str(arg) for arg in sys.argv)
                 # Note: This is a simplified test - in practice we'd need more sophisticated mocking
 
     @patch("subprocess.run")
     @patch("rockerc.renv.run_rockerc")
     @patch("os.chdir")
-    def test_volume_mounting_setup(self, mock_chdir, mock_run_rockerc, mock_subprocess):
+    def test_volume_mounting_setup(self, _mock_chdir, _mock_run_rockerc, mock_subprocess):
         """Test that Docker volumes are set up correctly."""
         # Mock container doesn't exist
         mock_subprocess.return_value.stdout = ""
@@ -82,7 +81,7 @@ class TestRenvContainerIntegration(unittest.TestCase):
     @patch("subprocess.run")
     @patch("rockerc.renv.run_rockerc")
     @patch("os.chdir")
-    def test_git_environment_variables(self, mock_chdir, mock_run_rockerc, mock_subprocess):
+    def test_git_environment_variables(self, _mock_chdir, _mock_run_rockerc, mock_subprocess):
         """Test that GIT_DIR and GIT_WORK_TREE environment variables are set."""
         # Mock container doesn't exist
         mock_subprocess.return_value.stdout = ""
@@ -140,7 +139,7 @@ class TestRenvContainerIntegration(unittest.TestCase):
     @patch("subprocess.run")
     @patch("rockerc.renv.run_rockerc")
     @patch("os.chdir")
-    def test_force_rebuild_container(self, mock_chdir, mock_run_rockerc, mock_subprocess):
+    def test_force_rebuild_container(self, _mock_chdir, _mock_run_rockerc, mock_subprocess):
         """Test force rebuild functionality."""
         # Mock container exists
         mock_subprocess.return_value.stdout = "existing-container\n"
@@ -165,7 +164,7 @@ class TestRenvContainerIntegration(unittest.TestCase):
     @patch("subprocess.run")
     @patch("rockerc.renv.run_rockerc")
     @patch("os.chdir")
-    def test_nocache_rebuild(self, mock_chdir, mock_run_rockerc, mock_subprocess):
+    def test_nocache_rebuild(self, _mock_chdir, _mock_run_rockerc, mock_subprocess):
         """Test no-cache rebuild functionality."""
         # Mock container doesn't exist
         mock_subprocess.return_value.stdout = ""
@@ -184,7 +183,7 @@ class TestRenvContainerIntegration(unittest.TestCase):
     @patch("subprocess.run")
     @patch("rockerc.renv.run_rockerc")
     @patch("os.chdir")
-    def test_subfolder_handling(self, mock_chdir, mock_run_rockerc, mock_subprocess):
+    def test_subfolder_handling(self, mock_chdir, _mock_run_rockerc, mock_subprocess):
         """Test handling of subfolder specification."""
         # Create subfolder in worktree
         subfolder_dir = self.worktree_dir / "scripts"
@@ -208,7 +207,7 @@ class TestRenvContainerIntegration(unittest.TestCase):
     @patch("subprocess.run")
     @patch("rockerc.renv.run_rockerc")
     @patch("os.chdir")
-    def test_invalid_worktree_detection(self, mock_chdir, mock_run_rockerc, mock_subprocess):
+    def test_invalid_worktree_detection(self, _mock_chdir, _mock_run_rockerc, _mock_subprocess):
         """Test detection of invalid worktree directories."""
         # Remove .git file to make it invalid
         (self.worktree_dir / ".git").unlink()
@@ -225,7 +224,7 @@ class TestRenvContainerIntegration(unittest.TestCase):
     @patch("subprocess.run")
     @patch("rockerc.renv.run_rockerc")
     @patch("os.chdir")
-    def test_container_attach_workflow(self, mock_chdir, mock_run_rockerc, mock_subprocess):
+    def test_container_attach_workflow(self, _mock_chdir, _mock_run_rockerc, mock_subprocess):
         """Test container attachment when container already exists and is running."""
 
         # Mock container exists and is running
@@ -236,16 +235,16 @@ class TestRenvContainerIntegration(unittest.TestCase):
                 mock_result = MagicMock()
                 mock_result.stdout = "existing-container\n"
                 return mock_result
-            elif "ps" in " ".join(cmd) and "-a" not in " ".join(cmd):
+            if "ps" in " ".join(cmd) and "-a" not in " ".join(cmd):
                 # Container is running
                 mock_result = MagicMock()
                 mock_result.stdout = "existing-container\n"
                 return mock_result
-            elif "exec" in " ".join(cmd):
+            if "exec" in " ".join(cmd):
                 # Mock successful attach
                 return MagicMock()
-            else:
-                return MagicMock()
+
+            return MagicMock()
 
         mock_subprocess.side_effect = mock_subprocess_side_effect
 
