@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Tuple, List, Optional
 import toml
 from iterfzf import iterfzf
+import yaml  
 
 from .rockerc import run_rockerc
 
@@ -873,10 +874,7 @@ def load_defaults_config(path: str = ".") -> dict:
     Returns:
         dict: A dictionary with default configuration
     """
-    from pathlib import Path
-    import yaml
-    import logging
-
+    # Use top-level imports
     # Search locations in order of preference
     search_paths = [
         Path(path) / "rockerc.defaults.yaml",  # Local directory
