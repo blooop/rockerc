@@ -130,25 +130,55 @@ def get_all_repo_branch_combinations() -> List[str]:
     return sorted(combinations, key=combination_sort_key)
 
 
-def fuzzy_select_repo_spec() -> Optional[str]:
-    """Use fuzzy finder to select a repository specification."""
-    options = get_all_repo_branch_combinations()
+def colorize_repo_branch_combo(combo: str) -> str:
+    """
+    Colorize owner/repo@branch combos for fzf display using bright, readable colors for dark themes.
+    """
+    # Bright ANSI color codes for dark themes
+    COLOR_OWNER = "\033[93m"   # Bright Yellow
+    COLOR_REPO = "\033[96m"    # Bright Cyan
+    COLOR_BRANCH = "\033[95m"  # Bright Magenta
+    COLOR_RESET = "\033[0m"
+    if "@" in combo:
+        owner_repo, branch = combo.split("@", 1)
+        if "/" in owner_repo:
+            owner, repo = owner_repo.split("/", 1)
+            return f"{COLOR_OWNER}{owner}{COLOR_RESET}/{COLOR_REPO}{repo}{COLOR_RESET}@{COLOR_BRANCH}{branch}{COLOR_RESET}"
+        else:
+            return f"{COLOR_REPO}{owner_repo}{COLOR_RESET}@{COLOR_BRANCH}{branch}{COLOR_RESET}"
+    elif "/" in combo:
+        owner, repo = combo.split("/", 1)
+        return f"{COLOR_OWNER}{owner}{COLOR_RESET}/{COLOR_REPO}{repo}{COLOR_RESET}"
+    else:
+        return combo
 
+
+def fuzzy_select_repo_spec() -> Optional[str]:
+    """Use fuzzy finder to select a repository specification with colored suggestions."""
+    options = get_all_repo_branch_combinations()
     if not options:
         print("No repositories found. Please clone some repositories first.")
         print("Example: renv blooop/bencher@main")
         return None
-
+    # Colorize options for fzf display
+    colored_options = [colorize_repo_branch_combo(opt) for opt in options]
     try:
-        # Use iterfzf for fuzzy selection with custom options
+        # Use iterfzf for fuzzy selection with ANSI color support
         selected = iterfzf(
-            options,
+            colored_options,
             prompt="Select repo@branch (type 'bl ben ma' for blooop/bencher@main): ",
             multi=False,
             print_query=False,
             query="",
+            ansi=True,
         )
-        return selected
+        if selected is None:
+            return None
+        # Remove ANSI codes from selected value to get the actual repo spec
+        import re
+        ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
+        clean_selected = ansi_escape.sub('', selected)
+        return clean_selected
     except KeyboardInterrupt:
         return None
     except Exception as e:
@@ -920,16 +950,26 @@ def load_defaults_config(path: str = ".") -> dict:
 
 def ensure_manifest_rocker_repo():
     """
-    Ensure that blooop/manifest_rocker is cloned into the renv environment.
+    Ensure that blooop/manifest_rocker is cloned into the renv environment as 'renv'.
     """
     owner = "blooop"
     repo = "manifest_rocker"
-    if not repo_exists(owner, repo):
+    target_repo_name = "renv"
+    target_dir = get_renv_base_dir() / owner / target_repo_name
+    if not (target_dir.exists() and (target_dir / "HEAD").exists()):
         try:
+            # Clone to a temp dir, then rename
+            temp_dir = get_renv_base_dir() / owner / repo
+            if temp_dir.exists():
+                import shutil
+                shutil.rmtree(temp_dir)
             clone_bare_repo(owner, repo)
-            logging.info(f"Cloned {owner}/{repo} into renv environment.")
+            # Rename manifest_rocker to renv
+            if temp_dir.exists():
+                temp_dir.rename(target_dir)
+            logging.info(f"Cloned {owner}/{repo} into renv environment as '{target_repo_name}'.")
         except Exception as e:
-            logging.warning(f"Could not clone {owner}/{repo}: {e}")
+            logging.warning(f"Could not clone {owner}/{repo} as '{target_repo_name}': {e}")
 
 
 def main():
