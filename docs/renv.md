@@ -1,4 +1,4 @@
-# renv - Repository Environment Manager
+# renv - Rocker Environment Manager
 
 ## Overview
 
