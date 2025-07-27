@@ -2,6 +2,7 @@
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from rockerc.renv import list_branches
@@ -13,7 +14,7 @@ for branch in branches:
     print(f"  '{branch}'")
 
 # Check for the + prefix specifically
-plus_branches = [b for b in branches if b.startswith('+')]
+plus_branches = [b for b in branches if b.startswith("+")]
 if plus_branches:
     print(f"\n❌ Still found {len(plus_branches)} branches with + prefix:")
     for branch in plus_branches:

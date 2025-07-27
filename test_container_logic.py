@@ -2,12 +2,29 @@
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from rockerc.rockerc import container_exists, container_is_running, extract_container_name_from_args
 
 # Test the container name extraction
-test_cmd = ['rocker', '--user', '--pull', '--deps', '--git', '--cwd', '--x11', '--ssh', '--pixi', '--uv', 'ubuntu:22.04', '--name', 'manifest_rocker-new', '--hostname', 'manifest_rocker-new']
+test_cmd = [
+    "rocker",
+    "--user",
+    "--pull",
+    "--deps",
+    "--git",
+    "--cwd",
+    "--x11",
+    "--ssh",
+    "--pixi",
+    "--uv",
+    "ubuntu:22.04",
+    "--name",
+    "manifest_rocker-new",
+    "--hostname",
+    "manifest_rocker-new",
+]
 
 container_name = extract_container_name_from_args(test_cmd)
 print(f"Extracted container name: '{container_name}'")

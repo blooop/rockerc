@@ -42,34 +42,38 @@ def list_owners_and_repos() -> List[str]:
                     owners.append(f"{owner_dir.name}/{repo_dir.name}")
     return owners
 
+
 def list_branches(owner: str, repo: str) -> List[str]:
     repo_dir = get_repo_dir(owner, repo)
     if not repo_dir.exists():
         return []
     try:
-        result = subprocess.run([
-            "git", "--git-dir", str(repo_dir), "branch", "-a"
-        ], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["git", "--git-dir", str(repo_dir), "branch", "-a"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
         branches = []
         for line in result.stdout.splitlines():
             line = line.strip()
             if not line:
                 continue
-            
+
             # Remove git status prefixes: '*' (current), '+' (worktree)
-            if line.startswith('*'):
+            if line.startswith("*"):
                 line = line[1:].strip()
-            elif line.startswith('+'):
+            elif line.startswith("+"):
                 line = line[1:].strip()
-            
+
             # Skip if line becomes empty after prefix removal
             if not line:
                 continue
-            
+
             # Remove 'remotes/origin/' prefix and clean up branch names
-            if line.startswith('remotes/origin/'):
-                branch = line.replace('remotes/origin/', '')
-                if branch != 'HEAD':  # Skip HEAD pointer
+            if line.startswith("remotes/origin/"):
+                branch = line.replace("remotes/origin/", "")
+                if branch != "HEAD":  # Skip HEAD pointer
                     branches.append(branch)
             else:
                 branches.append(line)
@@ -78,23 +82,24 @@ def list_branches(owner: str, repo: str) -> List[str]:
     except Exception:
         return []
 
+
 def get_all_repo_branch_combinations() -> List[str]:
     """Get all possible repo@branch combinations for fuzzy search."""
     combinations = []
-    
+
     # Get all existing repos
     owner_repos = list_owners_and_repos()
-    
+
     for owner_repo in owner_repos:
         # Add the repo without branch first (defaults to main)
         combinations.append(owner_repo)
-        
+
         # Add all branches for each repo
         if "/" in owner_repo:
             try:
                 owner, repo = owner_repo.split("/", 1)
                 branches = list_branches(owner, repo)
-                
+
                 # Sort branches to put main/master first, then alphabetically
                 def branch_sort_key(branch):
                     if branch == "main":
@@ -102,15 +107,15 @@ def get_all_repo_branch_combinations() -> List[str]:
                     if branch == "master":
                         return (1, branch)
                     return (2, branch)
-                
+
                 sorted_branches = sorted(branches, key=branch_sort_key)
-                
+
                 for branch in sorted_branches:
                     combinations.append(f"{owner_repo}@{branch}")
             except Exception:
                 # If there's an error getting branches, just skip this repo
                 continue
-    
+
     # Sort combinations: repos without @ first, then with @
     def combination_sort_key(combo):
         if "@" in combo:
@@ -121,19 +126,19 @@ def get_all_repo_branch_combinations() -> List[str]:
                 return (2, owner_repo, branch)
             return (3, owner_repo, branch)
         return (0, combo, "")
-    
+
     return sorted(combinations, key=combination_sort_key)
 
 
 def fuzzy_select_repo_spec() -> Optional[str]:
     """Use fuzzy finder to select a repository specification."""
     options = get_all_repo_branch_combinations()
-    
+
     if not options:
         print("No repositories found. Please clone some repositories first.")
         print("Example: renv blooop/bencher@main")
         return None
-    
+
     try:
         # Use iterfzf for fuzzy selection with custom options
         selected = iterfzf(
@@ -141,7 +146,7 @@ def fuzzy_select_repo_spec() -> Optional[str]:
             prompt="Select repo@branch (type 'bl ben ma' for blooop/bencher@main): ",
             multi=False,
             print_query=False,
-            query=""
+            query="",
         )
         return selected
     except KeyboardInterrupt:
@@ -155,6 +160,7 @@ def fuzzy_select_repo_spec() -> Optional[str]:
             return user_input if user_input else None
         except (KeyboardInterrupt, EOFError):
             return None
+
 
 def get_version_from_pyproject() -> Optional[str]:
     pyproject = Path(__file__).parent.parent / "pyproject.toml"
@@ -171,11 +177,13 @@ def setup_logging():
     """Set up logging for renv."""
     logging.basicConfig(level=logging.INFO, format="[renv] %(levelname)s: %(message)s")
 
+
 def ensure_defaults_yaml():
     """
     Ensure the template rockerc.defaults.template.yaml is copied to rockerc.defaults.yaml if missing.
     """
     import shutil
+
     defaults_path = Path.home() / "renv" / "rockerc.defaults.yaml"
     template_path = Path(__file__).parent.parent / "rockerc.defaults.template.yaml"
     if not defaults_path.exists():
@@ -185,10 +193,13 @@ def ensure_defaults_yaml():
                 shutil.copy(template_path, defaults_path)
                 logging.info(f"Copied template defaults to {defaults_path}")
             else:
-                logging.warning(f"Template file {template_path} does not exist or is empty. Skipping copy.")
+                logging.warning(
+                    f"Template file {template_path} does not exist or is empty. Skipping copy."
+                )
         except Exception as e:
             logging.warning(f"Could not copy template defaults: {e}")
     ensure_github_known_host()
+
 
 def ensure_github_known_host():
     """
@@ -209,7 +220,10 @@ def ensure_github_known_host():
             pass
     try:
         import subprocess
-        result = subprocess.run(["ssh-keyscan", github_host], capture_output=True, text=True, check=True)
+
+        result = subprocess.run(
+            ["ssh-keyscan", github_host], capture_output=True, text=True, check=True
+        )
         with known_hosts.open("a") as f:
             f.write(result.stdout)
         logging.info(f"Added {github_host} fingerprint to {known_hosts}")
@@ -236,7 +250,7 @@ def parse_repo_spec(repo_spec: str) -> Tuple[str, str, str, str]:
     else:
         repo_part = repo_spec
         subfolder = ""
-    
+
     if "@" in repo_part:
         repo_part, branch = repo_part.split("@", 1)
     else:
@@ -359,23 +373,35 @@ def create_worktree(owner: str, repo: str, branch: str) -> Path:
 
         except subprocess.CalledProcessError:
             # If branch doesn't exist on remote either, create new branch from default branch
-            logging.info(f"Branch {branch} doesn't exist locally or on remote. Creating new branch from default branch.")
-            
+            logging.info(
+                f"Branch {branch} doesn't exist locally or on remote. Creating new branch from default branch."
+            )
+
             # Determine the default branch (main or master)
             default_branch = get_default_branch(repo_dir)
             logging.info(f"Using {default_branch} as base for new branch {branch}")
-            
+
             try:
                 # First try to create from remote reference
                 subprocess.run(
-                    ["git", "worktree", "add", "-b", branch, str(worktree_dir), f"origin/{default_branch}"],
+                    [
+                        "git",
+                        "worktree",
+                        "add",
+                        "-b",
+                        branch,
+                        str(worktree_dir),
+                        f"origin/{default_branch}",
+                    ],
                     cwd=repo_dir,
                     check=True,
                     capture_output=True,
                     text=True,
                 )
-                logging.info(f"Successfully created new branch {branch} from origin/{default_branch}")
-                
+                logging.info(
+                    f"Successfully created new branch {branch} from origin/{default_branch}"
+                )
+
             except subprocess.CalledProcessError:
                 # If remote reference doesn't exist, try with local branch reference
                 try:
@@ -387,9 +413,11 @@ def create_worktree(owner: str, repo: str, branch: str) -> Path:
                         text=True,
                     )
                     logging.info(f"Successfully created new branch {branch} from {default_branch}")
-                    
+
                 except subprocess.CalledProcessError as e:
-                    logging.error(f"Failed to create new branch {branch} from {default_branch}: {e.stderr}")
+                    logging.error(
+                        f"Failed to create new branch {branch} from {default_branch}: {e.stderr}"
+                    )
                     raise
 
     logging.info(f"Successfully created worktree at {worktree_dir}")
@@ -417,7 +445,16 @@ def fetch_repo(owner: str, repo: str) -> None:
         logging.warning(f"Failed to fetch changes: {e.stderr}")
 
 
-def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: str, subfolder: str = "", command: list[str] | None = None, force: bool = False, nocache: bool = False) -> None:
+def run_rockerc_in_worktree(
+    worktree_dir: Path,
+    _owner: str,
+    repo: str,
+    branch: str,
+    subfolder: str = "",
+    command: list[str] | None = None,
+    force: bool = False,
+    nocache: bool = False,
+) -> None:
     """
     Run rockerc in the specified worktree directory.
 
@@ -439,7 +476,9 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         mount_dir = worktree_dir
         # Check for .git or worktree metadata
         if not ((mount_dir / ".git").exists() or (mount_dir / "HEAD").exists()):
-            raise RuntimeError(f"The directory {mount_dir} is not a valid git repository or worktree. Aborting container launch.")
+            raise RuntimeError(
+                f"The directory {mount_dir} is not a valid git repository or worktree. Aborting container launch."
+            )
 
         # Determine mount directory for docker
         docker_mount = str(mount_dir)
@@ -447,7 +486,9 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
             target_dir = mount_dir / subfolder
             if not target_dir.exists():
                 raise ValueError(f"Subfolder '{subfolder}' does not exist in {mount_dir}")
-            logging.info(f"Will mount {docker_mount} to /workspaces and start in subfolder: /workspaces/{subfolder}")
+            logging.info(
+                f"Will mount {docker_mount} to /workspaces and start in subfolder: /workspaces/{subfolder}"
+            )
         else:
             logging.info(f"Will mount {docker_mount} to /workspaces and start in /workspaces")
 
@@ -483,10 +524,14 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         docker_run_args_str = " ".join(docker_run_args)
         sys.argv = [
             original_argv[0],
-            "--name", container_name,
-            "--hostname", container_name,
-            "--volume", f"{bare_repo_dir}:{docker_bare_repo_mount}",
-            "--volume", f"{worktree_dir}:{docker_worktree_mount}",
+            "--name",
+            container_name,
+            "--hostname",
+            container_name,
+            "--volume",
+            f"{bare_repo_dir}:{docker_bare_repo_mount}",
+            "--volume",
+            f"{worktree_dir}:{docker_worktree_mount}",
             f"--oyr-run-arg={docker_run_args_str}",
         ]
         if command:
@@ -499,21 +544,28 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         else:
             target_dir = worktree_dir
 
-
         # Patch: Attach logic matches launch logic
         attach_dir = docker_workdir
         logging.info(f"Attach directory for container: {attach_dir}")
 
-        logging.info(f"Running rockerc with volumes: {bare_repo_dir}:{docker_bare_repo_mount}, {worktree_dir}:{docker_worktree_mount} and workdir: {docker_workdir}")
-        logging.info(f"Setting GIT_DIR={git_dir_in_container} and GIT_WORK_TREE={git_work_tree_in_container} in container")
+        logging.info(
+            f"Running rockerc with volumes: {bare_repo_dir}:{docker_bare_repo_mount}, {worktree_dir}:{docker_worktree_mount} and workdir: {docker_workdir}"
+        )
+        logging.info(
+            f"Setting GIT_DIR={git_dir_in_container} and GIT_WORK_TREE={git_work_tree_in_container} in container"
+        )
 
         # --- Attach to container if it exists, else launch ---
         def container_exists(name):
-            result = subprocess.run(["docker", "ps", "-a", "--format", "{{.Names}}"], capture_output=True, text=True)
+            result = subprocess.run(
+                ["docker", "ps", "-a", "--format", "{{.Names}}"], capture_output=True, text=True
+            )
             return name in result.stdout.splitlines()
 
         def container_running(name):
-            result = subprocess.run(["docker", "ps", "--format", "{{.Names}}"], capture_output=True, text=True)
+            result = subprocess.run(
+                ["docker", "ps", "--format", "{{.Names}}"], capture_output=True, text=True
+            )
             return name in result.stdout.splitlines()
 
         def remove_container(name):
@@ -527,19 +579,30 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         # Handle force rebuild
         if (force or nocache) and container_exists(container_name):
             if force:
-                logging.info(f"Force flag specified. Removing existing container '{container_name}' to rebuild...")
+                logging.info(
+                    f"Force flag specified. Removing existing container '{container_name}' to rebuild..."
+                )
             if nocache:
-                logging.info(f"No-cache flag specified. Removing existing container '{container_name}' to rebuild with no cache...")
+                logging.info(
+                    f"No-cache flag specified. Removing existing container '{container_name}' to rebuild with no cache..."
+                )
             remove_container(container_name)
 
         if container_exists(container_name) and not (force or nocache):
-            logging.info(f"Container '{container_name}' already exists. Attaching to it instead of creating a new one.")
+            logging.info(
+                f"Container '{container_name}' already exists. Attaching to it instead of creating a new one."
+            )
             if not container_running(container_name):
-                logging.info(f"Container '{container_name}' exists but is not running. Starting it...")
+                logging.info(
+                    f"Container '{container_name}' exists but is not running. Starting it..."
+                )
                 subprocess.run(["docker", "start", container_name], check=True)
             logging.info(f"Attaching to existing container '{container_name}'...")
             try:
-                subprocess.run(["docker", "exec", "-it", "-w", attach_dir, container_name, "/bin/bash"], check=True)
+                subprocess.run(
+                    ["docker", "exec", "-it", "-w", attach_dir, container_name, "/bin/bash"],
+                    check=True,
+                )
             except subprocess.CalledProcessError as e:
                 logging.error(f"Failed to attach to container '{container_name}': {e}")
                 logging.error("You may need to remove the existing container:")
@@ -551,11 +614,17 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
                 raise
         else:
             if force:
-                logging.info(f"Building new container '{container_name}' (force rebuild requested)...")
+                logging.info(
+                    f"Building new container '{container_name}' (force rebuild requested)..."
+                )
             elif nocache:
-                logging.info(f"Building new container '{container_name}' (no-cache rebuild requested)...")
+                logging.info(
+                    f"Building new container '{container_name}' (no-cache rebuild requested)..."
+                )
             else:
-                logging.info(f"Container '{container_name}' does not exist. Building new container...")
+                logging.info(
+                    f"Container '{container_name}' does not exist. Building new container..."
+                )
             os.chdir(target_dir)
             if nocache:
                 os.environ["ROCKERC_NO_CACHE"] = "1"
@@ -595,40 +664,40 @@ def setup_repo_environment(owner: str, repo: str, branch: str) -> Path:
     return worktree_dir
 
 
-
 # --- Bash completion functions ---
+
 
 def generate_completion_candidates(partial_words: List[str]) -> List[str]:
     """
     Generate completion candidates based on partial input.
-    
+
     Args:
         partial_words: List of partial words from COMP_WORDS
-        
+
     Returns:
         List of completion candidates
     """
     if not partial_words:
         # No input yet, show all available owner/repo combinations
         return list_owners_and_repos()
-    
+
     current_word = partial_words[-1] if partial_words else ""
-    
+
     if "@" in current_word:
         # Completing branch names
         try:
             owner_repo, partial_branch = current_word.split("@", 1)
         except ValueError:
             return []
-        
+
         if "/" not in owner_repo:
             return []
-            
+
         try:
             owner, repo = owner_repo.split("/", 1)
         except ValueError:
             return []
-            
+
         branches = list_branches(owner, repo)
         candidates = []
         for branch in branches:
@@ -646,7 +715,7 @@ def generate_completion_candidates(partial_words: List[str]) -> List[str]:
 
 def get_completion_script_content() -> str:
     """Generate the bash completion script content."""
-    return '''#!/bin/bash
+    return """#!/bin/bash
 # Bash completion script for renv
 # This script provides tab completion for renv commands
 
@@ -680,32 +749,32 @@ _renv_complete() {
 
 # Register the completion function
 complete -F _renv_complete renv
-'''
+"""
 
 
 def install_completion() -> None:
     """Install bash completion for renv."""
     print("Starting completion installation...")
-    
+
     # Determine completion directory
     home = Path.home()
     completion_dir = home / ".local" / "share" / "bash-completion" / "completions"
     completion_file = completion_dir / "renv"
-    
+
     print(f"Completion directory: {completion_dir}")
     print(f"Completion file: {completion_file}")
-    
+
     # Create directory if it doesn't exist
     completion_dir.mkdir(parents=True, exist_ok=True)
     print(f"Created directory: {completion_dir}")
-    
+
     # Write completion script
     completion_script = get_completion_script_content()
     completion_file.write_text(completion_script)
     completion_file.chmod(0o755)
-    
+
     print(f"✓ Completion script installed to {completion_file}")
-    
+
     print("\n📋 Next steps:")
     print("1. Reload your shell: source ~/.bashrc")
     print("2. Or start a new terminal session")
@@ -715,13 +784,13 @@ def install_completion() -> None:
 def uninstall_completion() -> None:
     """Uninstall bash completion for renv."""
     completion_file = Path.home() / ".local" / "share" / "bash-completion" / "completions" / "renv"
-    
+
     if completion_file.exists():
         completion_file.unlink()
         print(f"✓ Completion script removed from {completion_file}")
     else:
         print("ℹ Completion script was not found (already uninstalled?)")
-    
+
     print("\n📋 Completion disabled.")
     print("Reload your shell or start a new terminal session for changes to take effect.")
 
@@ -729,10 +798,10 @@ def uninstall_completion() -> None:
 def get_default_branch(repo_dir: Path) -> str:
     """
     Get the default branch name for a repository.
-    
+
     Args:
         repo_dir: Path to the bare repository directory
-        
+
     Returns:
         Name of the default branch (e.g., 'main' or 'master')
     """
@@ -750,7 +819,7 @@ def get_default_branch(repo_dir: Path) -> str:
             return default_branch
     except subprocess.CalledProcessError:
         pass
-    
+
     try:
         # If that fails, try to determine from available local branches
         result = subprocess.run(
@@ -761,27 +830,27 @@ def get_default_branch(repo_dir: Path) -> str:
             text=True,
         )
         branches = []
-        for line in result.stdout.strip().split('\n'):
+        for line in result.stdout.strip().split("\n"):
             line = line.strip()
             if line:
                 # Remove the * marker if present
-                branch = line.lstrip('* ')
+                branch = line.lstrip("* ")
                 branches.append(branch)
-        
+
         # Look for common default branch names in order of preference
-        for default_name in ['main', 'master', 'develop']:
+        for default_name in ["main", "master", "develop"]:
             if default_name in branches:
                 return default_name
-        
+
         # If no common default found, use the first branch
         if branches:
             return branches[0]
-                    
+
     except subprocess.CalledProcessError:
         pass
-    
+
     # Fallback to 'main' if all else fails
-    return 'main'
+    return "main"
 
 
 def main():
@@ -820,7 +889,8 @@ The tool will:
         help="Set up the worktree but don't run rockerc (for debugging or manual container management)",
     )
     parser.add_argument(
-        "--force", "-f",
+        "--force",
+        "-f",
         action="store_true",
         help="Force rebuild the container even if it already exists",
     )
@@ -840,7 +910,8 @@ The tool will:
         help="List completion candidates for given partial input (used by bash completion)",
     )
     parser.add_argument(
-        "--version", "-v",
+        "--version",
+        "-v",
         action="store_true",
         help="Show version information",
     )
@@ -864,11 +935,11 @@ The tool will:
     if args.install:
         install_completion()
         return
-    
+
     if args.uninstall:
         uninstall_completion()
         return
-    
+
     # Handle completion candidate listing
     if args.list_candidates is not None:
         candidates = generate_completion_candidates(args.list_candidates)
@@ -906,7 +977,9 @@ The tool will:
                 logging.info(f"Environment ready at {worktree_dir}")
                 logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
-            run_rockerc_in_worktree(worktree_dir, owner, repo, branch, subfolder, force=args.force, nocache=args.nocache)
+            run_rockerc_in_worktree(
+                worktree_dir, owner, repo, branch, subfolder, force=args.force, nocache=args.nocache
+            )
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")
         sys.exit(1)

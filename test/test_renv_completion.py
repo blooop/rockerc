@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add the project root to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 try:
     from rockerc.renv import (
@@ -38,28 +38,28 @@ class TestRenvCompletion(unittest.TestCase):
         self.assertTrue(len(option_candidates) > 0)
         self.assertIn("--install", option_candidates)
 
-    @patch('rockerc.renv.Path')
+    @patch("rockerc.renv.Path")
     def test_repo_completion_with_existing_repos(self, mock_path):
         """Test completion when repositories exist."""
         # Mock the renv directory structure
         mock_renv_dir = MagicMock()
         mock_renv_dir.exists.return_value = True
-        
+
         # Create mock owner directories
         mock_owner_dir = MagicMock()
         mock_owner_dir.name = "blooop"
         mock_owner_dir.is_dir.return_value = True
-        
+
         # Create mock repo directories
         mock_repo_dir = MagicMock()
         mock_repo_dir.name = "bencher"
         mock_repo_dir.is_dir.return_value = True
-        
+
         mock_owner_dir.iterdir.return_value = [mock_repo_dir]
         mock_renv_dir.iterdir.return_value = [mock_owner_dir]
-        
+
         mock_path.home.return_value.joinpath.return_value = mock_renv_dir
-        
+
         candidates = generate_completion_candidates([])
         self.assertIn("blooop/bencher", candidates)
 
@@ -78,7 +78,7 @@ class TestRenvCompletion(unittest.TestCase):
         # Should return some candidates (even if empty due to no real repos)
         self.assertIsInstance(candidates, list)
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_git_branch_fetching(self, mock_run):
         """Test git branch fetching for completion."""
         # Mock successful git branch command
@@ -86,11 +86,11 @@ class TestRenvCompletion(unittest.TestCase):
         mock_result.stdout = "  origin/main\n  origin/develop\n  origin/feature/test\n"
         mock_result.returncode = 0
         mock_run.return_value = mock_result
-        
+
         # Test would require more setup to actually trigger branch fetching
         # This is more of a structural test
         self.assertTrue(True)  # Placeholder for more complex branch testing
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

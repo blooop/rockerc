@@ -7,7 +7,7 @@ print(f"Original: {repr(test_line)}")
 line = test_line.strip()
 print(f"After strip(): {repr(line)}")
 
-if line.startswith('+'):
+if line.startswith("+"):
     line = line[1:].strip()
     print(f"After removing + prefix: {repr(line)}")
 
