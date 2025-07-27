@@ -1,71 +1,10 @@
 import sys
 import subprocess
 import pathlib
-import yaml
+import yaml  # Re-added for local YAML parsing
 import shlex
 import os
 import logging
-
-
-
-
-def load_defaults_config(path: str = ".") -> dict:
-    """Load rockerc.defaults.yaml and return default configuration
-
-    Looks for rockerc.defaults.yaml file in the following order:
-    1. Current directory (for local overrides)
-    2. ~/.renv/rockerc.defaults.yaml (global renv config)
-    3. Home directory (fallback)
-
-    If no defaults file is found, creates a default one in ~/.renv/rockerc.defaults.yaml
-
-    Args:
-        path (str, optional): Path to search for defaults file. Defaults to ".".
-
-    Returns:
-        dict: A dictionary with default configuration
-    """
-    # Search locations in order of preference
-    search_paths = [
-        pathlib.Path(path) / "rockerc.defaults.yaml",  # Local directory
-        pathlib.Path.home() / "renv" / "rockerc.defaults.yaml",  # Global renv config
-        pathlib.Path.home() / "rockerc.defaults.yaml",  # Home directory fallback
-    ]
-
-    defaults_found = False
-    defaults_config = {"args": []}
-
-    for defaults_path in search_paths:
-        if defaults_path.exists():
-            print(f"loading defaults file {defaults_path}")
-            try:
-                with open(defaults_path, "r", encoding="utf-8") as f:
-                    defaults_config = yaml.safe_load(f) or {"args": []}
-                defaults_found = True
-                break  # Use first found file
-            except Exception as e:
-                logging.warning(f"Error reading rockerc.defaults.yaml file: {e}")
-                continue
-
-    # If no defaults file was found, create a default one in the global renv config location
-    if not defaults_found:
-        global_defaults_path = pathlib.Path.home() / "renv" / "rockerc.defaults.yaml"
-        create_default_config(global_defaults_path)
-
-        # Now read the newly created file
-        try:
-            with open(global_defaults_path, "r", encoding="utf-8") as f:
-                defaults_config = yaml.safe_load(f) or {"args": []}
-        except Exception as e:
-            logging.warning(f"Error reading newly created rockerc.defaults.yaml file: {e}")
-            # Fallback to hardcoded defaults
-            defaults_config = {
-                "image": "ubuntu:24.04",
-                "args": ["user", "pull", "deps", "git", "cwd"],
-                "disable_args": ["nvidia"],
-            }
-
-    return defaults_config
 
 
 def yaml_dict_to_args(d: dict) -> str:
@@ -99,85 +38,7 @@ def yaml_dict_to_args(d: dict) -> str:
     return cmd_str
 
 
-def collect_arguments(path: str = ".") -> dict:
-    """Search for rockerc.yaml files and return a merged dictionary
-
-    Args:
-        path (str, optional): path to reach for files. Defaults to ".".
-
-    Returns:
-        dict: A dictionary of merged rockerc arguments
-    """
-    search_path = pathlib.Path(path)
-
-    # Start with defaults
-    defaults = load_defaults_config(path)
-    merged_dict = {"args": defaults.get("args", []).copy()}
-
-    # Include default image if present
-    if "image" in defaults:
-        merged_dict["image"] = defaults["image"]
-
-    # Load and merge local rockerc.yaml files
-    local_configs_found = False
-    for p in search_path.glob("rockerc.yaml"):
-        print(f"loading {p}")
-        local_configs_found = True
-
-        with open(p.as_posix(), "r", encoding="utf-8") as f:
-            local_config = yaml.safe_load(f) or {}
-
-            # Handle disable_args - remove these from the current args
-            if "disable_args" in local_config:
-                disabled_args = local_config["disable_args"]
-                if isinstance(disabled_args, list):
-                    for arg in disabled_args:
-                        if arg in merged_dict["args"]:
-                            merged_dict["args"].remove(arg)
-                    print(f"Local disabled extensions: {', '.join(disabled_args)}")
-
-                # Remove disable_args so it doesn't get passed to rocker
-                local_config.pop("disable_args")
-
-            # Handle regular args - add these to existing args (avoiding duplicates)
-            if "args" in local_config:
-                local_args = local_config["args"]
-                if isinstance(local_args, list):
-                    for arg in local_args:
-                        if arg not in merged_dict["args"]:
-                            merged_dict["args"].append(arg)
-                    print(
-                        f"Added extensions: {', '.join([arg for arg in local_args if arg not in defaults.get('args', [])])}"
-                    )
-
-                # Remove args from local_config since we handled it specially
-                local_config.pop("args")
-
-            # Merge other configuration options (image, dockerfile, etc.)
-            for key, value in local_config.items():
-                merged_dict[key] = value
-
-    # Apply default disable_args at the end - these always override everything else
-    if "disable_args" in defaults:
-        default_disabled_args = defaults["disable_args"]
-        if isinstance(default_disabled_args, list):
-            removed_args = []
-            for arg in default_disabled_args:
-                if arg in merged_dict["args"]:
-                    merged_dict["args"].remove(arg)
-                    removed_args.append(arg)
-            if removed_args:
-                print(f"Default disabled extensions (final override): {', '.join(removed_args)}")
-
-    # If no local config found, show what defaults are being used
-    if not local_configs_found:
-        if merged_dict["args"]:
-            print(f"Using default extensions: {', '.join(merged_dict['args'])}")
-        print("No local rockerc.yaml found - using defaults. Create rockerc.yaml to customize.")
-
-    return merged_dict
-
-
+# NOTE: collect_arguments is now imported from renv, which parses defaults and passes them as arguments.
 def build_docker(dockerfile_path: str = ".") -> str:
     """Build a Docker image from a Dockerfile and return an autogenerated image tag based on where rocker was run.
 
@@ -348,6 +209,66 @@ def extract_container_name_from_args(split_cmd: list) -> str:
     except ValueError:
         pass
     return ""
+
+
+def collect_arguments(path: str = ".") -> dict:
+    """Search for rockerc.yaml files and return a merged dictionary
+
+    Args:
+        path (str, optional): path to reach for files. Defaults to ".".
+
+    Returns:
+        dict: A dictionary of merged rockerc arguments
+    """
+    search_path = pathlib.Path(path)
+
+    # Start with defaults passed in as command line arguments (from renv)
+    merged_dict = {"args": []}
+
+    # Load and merge local rockerc.yaml files
+    local_configs_found = False
+    for p in search_path.glob("rockerc.yaml"):
+        print(f"loading {p}")
+        local_configs_found = True
+
+        with open(p.as_posix(), "r", encoding="utf-8") as f:
+            local_config = yaml.safe_load(f) or {}
+
+            # Handle disable_args - remove these from the current args
+            if "disable_args" in local_config:
+                disabled_args = local_config["disable_args"]
+                if isinstance(disabled_args, list):
+                    for arg in disabled_args:
+                        if arg in merged_dict["args"]:
+                            merged_dict["args"].remove(arg)
+                    print(f"Local disabled extensions: {', '.join(disabled_args)}")
+
+                # Remove disable_args so it doesn't get passed to rocker
+                local_config.pop("disable_args")
+
+            # Handle regular args - add these to existing args (avoiding duplicates)
+            if "args" in local_config:
+                local_args = local_config["args"]
+                if isinstance(local_args, list):
+                    for arg in local_args:
+                        if arg not in merged_dict["args"]:
+                            merged_dict["args"].append(arg)
+                    print(f"Added extensions: {', '.join(local_args)}")
+
+                # Remove args from local_config since we handled it specially
+                local_config.pop("args")
+
+            # Merge other configuration options (image, dockerfile, etc.)
+            for key, value in local_config.items():
+                merged_dict[key] = value
+
+    # If no local config found, show what defaults are being used
+    if not local_configs_found:
+        if merged_dict["args"]:
+            print(f"Using default extensions: {', '.join(merged_dict['args'])}")
+        print("No local rockerc.yaml found - using defaults. Create rockerc.yaml to customize.")
+
+    return merged_dict
 
 
 def run_rockerc(path: str = "."):

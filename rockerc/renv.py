@@ -857,6 +857,69 @@ def get_default_branch(repo_dir: Path) -> str:
     return "main"
 
 
+def load_defaults_config(path: str = ".") -> dict:
+    """Load rockerc.defaults.yaml and return default configuration
+
+    Looks for rockerc.defaults.yaml file in the following order:
+    1. Current directory (for local overrides)
+    2. ~/.renv/rockerc.defaults.yaml (global renv config)
+    3. Home directory (fallback)
+
+    If no defaults file is found, creates a default one in ~/.renv/rockerc.defaults.yaml
+
+    Args:
+        path (str, optional): Path to search for defaults file. Defaults to ".".
+
+    Returns:
+        dict: A dictionary with default configuration
+    """
+    from pathlib import Path
+    import yaml
+    import logging
+
+    # Search locations in order of preference
+    search_paths = [
+        Path(path) / "rockerc.defaults.yaml",  # Local directory
+        Path.home() / "renv" / "rockerc.defaults.yaml",  # Global renv config
+        Path.home() / "rockerc.defaults.yaml",  # Home directory fallback
+    ]
+
+    defaults_found = False
+    defaults_config = {"args": []}
+
+    for defaults_path in search_paths:
+        if defaults_path.exists():
+            print(f"loading defaults file {defaults_path}")
+            try:
+                with open(defaults_path, "r", encoding="utf-8") as f:
+                    defaults_config = yaml.safe_load(f) or {"args": []}
+                defaults_found = True
+                break  # Use first found file
+            except Exception as e:
+                logging.warning(f"Error reading rockerc.defaults.yaml file: {e}")
+                continue
+
+    # If no defaults file was found, create a default one in the global renv config location
+    if not defaults_found:
+        global_defaults_path = Path.home() / "renv" / "rockerc.defaults.yaml"
+        # Use ensure_defaults_yaml to create the file if missing
+        ensure_defaults_yaml()
+        # Now read the newly created file
+        try:
+            with open(global_defaults_path, "r", encoding="utf-8") as f:
+                defaults_config = yaml.safe_load(f) or {"args": []}
+        except Exception as e:
+            logging.warning(f"Error reading newly created rockerc.defaults.yaml file: {e}")
+            # Fallback to hardcoded defaults
+            defaults_config = {
+                "image": "ubuntu:24.04",
+                "args": ["user", "pull", "deps", "git", "cwd"],
+                "disable_args": ["nvidia"],
+            }
+
+    return defaults_config
+
+
 def main():
     setup_logging()
     ensure_defaults_yaml()
