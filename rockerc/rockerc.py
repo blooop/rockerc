@@ -7,60 +7,6 @@ import os
 import logging
 
 
-def create_default_config(defaults_path: pathlib.Path) -> None:
-    """Create a default rockerc.defaults.yaml file with sensible defaults
-
-    Args:
-        defaults_path: Path where the rockerc.defaults.yaml file should be created
-    """
-    try:
-        # Create parent directory if it doesn't exist
-        defaults_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Write YAML content with proper formatting
-        with open(defaults_path, "w", encoding="utf-8") as f:
-            f.write("# rockerc.defaults.yaml - Default configuration for rockerc\n")
-            f.write(
-                "# This file provides sensible defaults that work in most development environments.\n"
-            )
-            f.write("# Local rockerc.yaml files can override these settings.\n\n")
-            f.write("# Default base image\n")
-            f.write("image: ubuntu:24.04\n\n")
-            f.write("# Default extensions that are enabled by default\n")
-            f.write("args:\n")
-            f.write("  - user    # Enable user mapping for file permissions\n")
-            f.write("  - pull    # Enable automatic image pulling\n")
-            f.write("  - deps    # Enable dependency installation\n")
-            f.write("  - git     # Enable git integration\n")
-            # cwd is now ignored by default
-            # f.write("  - cwd     # Mount current working directory\n\n")
-            f.write("\n")
-            f.write("# Extensions that are disabled by default\n")
-            f.write("disable_args:\n")
-            f.write("  - nvidia  # Disable NVIDIA GPU support by default\n")
-            f.write("  - create-dockerfile  # Disable automatic Dockerfile creation\n")
-            f.write("  - cwd  # Disable automatic mounting of current working directory\n\n")
-            f.write("# Common extensions you might want to add locally:\n")
-            f.write("# - x11          # X11 forwarding for GUI applications\n")
-            f.write("# - nvidia       # NVIDIA GPU support\n")
-            f.write("# - ssh          # SSH agent forwarding\n")
-            f.write("# - pixi         # Pixi package manager\n\n")
-            f.write("# To override in your local rockerc.yaml:\n")
-            f.write("# \n")
-            f.write("# To change the base image:\n")
-            f.write("# image: python:3.11\n")
-            f.write("# \n")
-            f.write("# To disable a default extension:\n")
-            f.write("# disable_args:\n")
-            f.write("#   - pull       # This would disable the pull extension\n")
-            f.write("# \n")
-            f.write("# To add additional extensions:\n")
-            f.write("# args:\n")
-            f.write("#   - nvidia     # This would add nvidia to the defaults\n")
-
-        print(f"Created default rockerc.defaults.yaml file at {defaults_path}")
-    except Exception as e:
-        logging.warning(f"Failed to create default rockerc.defaults.yaml file: {e}")
 
 
 def load_defaults_config(path: str = ".") -> dict:
