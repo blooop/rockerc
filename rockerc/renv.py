@@ -417,7 +417,7 @@ def fetch_repo(owner: str, repo: str) -> None:
         logging.warning(f"Failed to fetch changes: {e.stderr}")
 
 
-def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: str, subfolder: str = "", command: list[str] | None = None) -> None:
+def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: str, subfolder: str = "", command: list[str] | None = None, force: bool = False) -> None:
     """
     Run rockerc in the specified worktree directory.
 
@@ -428,6 +428,7 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         branch: Branch name
         subfolder: Optional subfolder within the repository
         command: Optional command to run inside the container
+        force: If True, force rebuild the container even if it already exists
     """
     original_cwd = os.getcwd()
     original_argv = sys.argv.copy()  # Save original argv
@@ -514,7 +515,20 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
             result = subprocess.run(["docker", "ps", "--format", "{{.Names}}"], capture_output=True, text=True)
             return name in result.stdout.splitlines()
 
-        if container_exists(container_name):
+        def remove_container(name):
+            """Remove a container (stop first if running)."""
+            if container_running(name):
+                logging.info(f"Stopping running container '{name}'...")
+                subprocess.run(["docker", "stop", name], check=True)
+            logging.info(f"Removing container '{name}'...")
+            subprocess.run(["docker", "rm", name], check=True)
+
+        # Handle force rebuild
+        if force and container_exists(container_name):
+            logging.info(f"Force flag specified. Removing existing container '{container_name}' to rebuild...")
+            remove_container(container_name)
+
+        if container_exists(container_name) and not force:
             logging.info(f"Container '{container_name}' already exists. Attaching to it instead of creating a new one.")
             if not container_running(container_name):
                 logging.info(f"Container '{container_name}' exists but is not running. Starting it...")
@@ -528,8 +542,14 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
                 logging.error(f"  docker rm {container_name}")
                 logging.error("Or remove it forcefully if it's running:")
                 logging.error(f"  docker rm -f {container_name}")
+                logging.error("Alternatively, use the --force flag to automatically rebuild:")
+                logging.error(f"  renv --force {_owner}/{repo}@{branch}")
                 raise
         else:
+            if force:
+                logging.info(f"Building new container '{container_name}' (force rebuild requested)...")
+            else:
+                logging.info(f"Container '{container_name}' does not exist. Building new container...")
             os.chdir(target_dir)
             run_rockerc(str(worktree_dir))
     except Exception as e:
@@ -766,6 +786,7 @@ Examples:
   renv blooop/bencher@feature          # Switch to feature branch (creates worktree if needed)
   renv blooop/bencher@main#scripts     # Work in the scripts subfolder of main branch
   renv osrf/rocker                     # Clone osrf/rocker and switch to main branch (default)
+  renv --force blooop/bencher@main     # Force rebuild container even if it exists
   renv --install                       # Install bash completion
   renv --uninstall                     # Uninstall bash completion
   
@@ -773,8 +794,9 @@ The tool will:
 1. Clone the repository as a bare repo to ~/renv/owner/repo (if not already cloned)
 2. Create a worktree for the specified branch at ~/renv/owner/repo/worktree-{branch}
 3. Optionally change to a subfolder within the repository if specified with #subfolder
-4. Run rockerc in that directory to build and enter a container
-3. Run rockerc in that worktree to build and enter a container
+4. If a container exists for this repo@branch, attach to it automatically
+5. If --force is used, remove existing container and rebuild from scratch
+6. Run rockerc in that directory to build and enter a container
         """,
     )
     parser.add_argument(
@@ -786,6 +808,11 @@ The tool will:
         "--no-container",
         action="store_true",
         help="Set up the worktree but don't run rockerc (for debugging or manual container management)",
+    )
+    parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Force rebuild the container even if it already exists",
     )
     parser.add_argument(
         "--install",
@@ -864,7 +891,7 @@ The tool will:
                 logging.info(f"Environment ready at {worktree_dir}")
                 logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
-            run_rockerc_in_worktree(worktree_dir, owner, repo, branch, subfolder)
+            run_rockerc_in_worktree(worktree_dir, owner, repo, branch, subfolder, force=args.force)
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")
         sys.exit(1)
