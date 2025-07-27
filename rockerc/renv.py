@@ -132,12 +132,12 @@ def get_all_repo_branch_combinations() -> List[str]:
 
 def colorize_repo_branch_combo(combo: str) -> str:
     """
-    Colorize owner/repo@branch combos for fzf display using custom palette: #F97300, #B13BFF, #2F58CD.
+    Colorize owner/repo@branch combos for fzf display using custom palette: #F97300, #B13BFF, #00C4C4.
     """
     # 24-bit ANSI escape codes for true color
     COLOR_OWNER = "\033[38;2;249;115;0m"    # #F97300 (orange)
     COLOR_REPO = "\033[38;2;177;59;255m"    # #B13BFF (purple)
-    COLOR_BRANCH = "\033[38;2;47;88;205m"   # #2F58CD (blue)
+    COLOR_BRANCH = "\033[38;2;0;196;196m"   # #00C4C4 (cyan)
     COLOR_RESET = "\033[0m"
     if "@" in combo:
         owner_repo, branch = combo.split("@", 1)
