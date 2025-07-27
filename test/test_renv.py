@@ -24,24 +24,51 @@ class TestRenvParsing(unittest.TestCase):
 
     def test_parse_repo_spec_with_branch(self):
         """Test parsing repo spec with branch."""
-        owner, repo, branch = parse_repo_spec("blooop/bencher@main")
+        owner, repo, branch, subfolder = parse_repo_spec("blooop/bencher@main")
         self.assertEqual(owner, "blooop")
         self.assertEqual(repo, "bencher")
         self.assertEqual(branch, "main")
+        self.assertEqual(subfolder, "")
 
     def test_parse_repo_spec_without_branch(self):
         """Test parsing repo spec without branch (defaults to main)."""
-        owner, repo, branch = parse_repo_spec("blooop/bencher")
+        owner, repo, branch, subfolder = parse_repo_spec("blooop/bencher")
         self.assertEqual(owner, "blooop")
         self.assertEqual(repo, "bencher")
         self.assertEqual(branch, "main")
+        self.assertEqual(subfolder, "")
 
     def test_parse_repo_spec_with_feature_branch(self):
         """Test parsing repo spec with feature branch."""
-        owner, repo, branch = parse_repo_spec("osrf/rocker@feature-branch")
+        owner, repo, branch, subfolder = parse_repo_spec("osrf/rocker@feature-branch")
         self.assertEqual(owner, "osrf")
         self.assertEqual(repo, "rocker")
         self.assertEqual(branch, "feature-branch")
+        self.assertEqual(subfolder, "")
+
+    def test_parse_repo_spec_with_subfolder(self):
+        """Test parsing repo spec with subfolder."""
+        owner, repo, branch, subfolder = parse_repo_spec("blooop/bencher@main#scripts")
+        self.assertEqual(owner, "blooop")
+        self.assertEqual(repo, "bencher")
+        self.assertEqual(branch, "main")
+        self.assertEqual(subfolder, "scripts")
+
+    def test_parse_repo_spec_with_nested_subfolder(self):
+        """Test parsing repo spec with nested subfolder."""
+        owner, repo, branch, subfolder = parse_repo_spec("osrf/rocker#docs/examples")
+        self.assertEqual(owner, "osrf")
+        self.assertEqual(repo, "rocker")
+        self.assertEqual(branch, "main")
+        self.assertEqual(subfolder, "docs/examples")
+
+    def test_parse_repo_spec_with_branch_and_subfolder(self):
+        """Test parsing repo spec with both branch and subfolder."""
+        owner, repo, branch, subfolder = parse_repo_spec("blooop/bencher@feature#src/main")
+        self.assertEqual(owner, "blooop")
+        self.assertEqual(repo, "bencher")
+        self.assertEqual(branch, "feature")
+        self.assertEqual(subfolder, "src/main")
 
     def test_parse_repo_spec_invalid_no_slash(self):
         """Test parsing invalid repo spec without slash."""

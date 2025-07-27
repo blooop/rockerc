@@ -218,8 +218,6 @@ def ensure_github_known_host():
         except Exception:
             pass
     try:
-        import subprocess
-
         result = subprocess.run(
             ["ssh-keyscan", github_host], capture_output=True, text=True, check=True
         )
@@ -557,13 +555,19 @@ def run_rockerc_in_worktree(
         # --- Attach to container if it exists, else launch ---
         def container_exists(name):
             result = subprocess.run(
-                ["docker", "ps", "-a", "--format", "{{.Names}}"], capture_output=True, text=True
+                ["docker", "ps", "-a", "--format", "{{.Names}}"],
+                capture_output=True,
+                text=True,
+                check=False,
             )
             return name in result.stdout.splitlines()
 
         def container_running(name):
             result = subprocess.run(
-                ["docker", "ps", "--format", "{{.Names}}"], capture_output=True, text=True
+                ["docker", "ps", "--format", "{{.Names}}"],
+                capture_output=True,
+                text=True,
+                check=False,
             )
             return name in result.stdout.splitlines()
 
@@ -703,13 +707,13 @@ def generate_completion_candidates(partial_words: List[str]) -> List[str]:
             if branch.startswith(partial_branch):
                 candidates.append(f"{owner_repo}@{branch}")
         return candidates
-    else:
-        # Completing owner/repo
-        candidates = []
-        for owner_repo in list_owners_and_repos():
-            if owner_repo.startswith(current_word):
-                candidates.append(owner_repo)
-        return candidates
+
+    # Completing owner/repo
+    candidates = []
+    for owner_repo in list_owners_and_repos():
+        if owner_repo.startswith(current_word):
+            candidates.append(owner_repo)
+    return candidates
 
 
 def get_completion_script_content() -> str:

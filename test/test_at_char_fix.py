@@ -34,7 +34,7 @@ class TestAtCharacterFix(unittest.TestCase):
 
         with patch.object(sys, "argv", original_argv):
             # Call the function that should clear sys.argv
-            run_rockerc_in_worktree(Path("/tmp/test"))
+            run_rockerc_in_worktree(Path("/tmp/test"), "blooop", "bencher", "main")
 
             # Check that run_rockerc was called
             mock_run_rockerc.assert_called_once_with("/tmp/test")
@@ -47,16 +47,18 @@ class TestAtCharacterFix(unittest.TestCase):
         from rockerc.renv import parse_repo_spec
 
         # Test parsing of repo specs with @ symbol
-        owner, repo, branch = parse_repo_spec("blooop/bencher@main")
+        owner, repo, branch, subfolder = parse_repo_spec("blooop/bencher@main")
         self.assertEqual(owner, "blooop")
         self.assertEqual(repo, "bencher")
         self.assertEqual(branch, "main")
+        self.assertEqual(subfolder, "")
 
         # Test with complex branch names containing slashes
-        owner, repo, branch = parse_repo_spec("blooop/bencher@feature/some-feature")
+        owner, repo, branch, subfolder = parse_repo_spec("blooop/bencher@feature/some-feature")
         self.assertEqual(owner, "blooop")
         self.assertEqual(repo, "bencher")
         self.assertEqual(branch, "feature/some-feature")
+        self.assertEqual(subfolder, "")
 
 
 if __name__ == "__main__":
