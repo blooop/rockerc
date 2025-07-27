@@ -15,7 +15,6 @@ Examples:
     renv blooop/bencher@feature_branch
 """
 
-
 import argparse
 import logging
 import os

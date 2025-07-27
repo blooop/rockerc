@@ -11,12 +11,12 @@ try:
     # Test loading defaults
     defaults = load_defaults_config()
     print(f"Defaults: {defaults}")
-    print(f'Default args: {defaults.get("args", [])}')
-    print(f'Default disable_args: {defaults.get("disable_args", [])}')
+    print(f"Default args: {defaults.get('args', [])}")
+    print(f"Default disable_args: {defaults.get('disable_args', [])}")
 
     # Test collecting arguments (which merges defaults with local config)
     merged = collect_arguments()
-    print(f'Final merged args: {merged.get("args", [])}')
+    print(f"Final merged args: {merged.get('args', [])}")
 
     # Check if nvidia is properly disabled
     if "nvidia" not in merged.get("args", []):

@@ -4,7 +4,6 @@ from rockerc.rockerc import yaml_dict_to_args, collect_arguments
 
 
 class TestBasicClass(TestCase):
-
     # Converts dictionary with 'image' and 'args' keys to argument string
     def test_converts_dict_with_image_and_args_to_string(self):
         d = {
@@ -24,7 +23,6 @@ class TestBasicClass(TestCase):
         assert result == expected
 
     def test_realistic(self):
-
         d = {
             "args": ["nvidia", "x11", "user", "pull", "deps", "git"],
             "image": "ubuntu:22.04",
