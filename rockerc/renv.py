@@ -417,7 +417,7 @@ def fetch_repo(owner: str, repo: str) -> None:
         logging.warning(f"Failed to fetch changes: {e.stderr}")
 
 
-def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: str, subfolder: str = "", command: list[str] | None = None, force: bool = False) -> None:
+def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: str, subfolder: str = "", command: list[str] | None = None, force: bool = False, nocache: bool = False) -> None:
     """
     Run rockerc in the specified worktree directory.
 
@@ -429,6 +429,7 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         subfolder: Optional subfolder within the repository
         command: Optional command to run inside the container
         force: If True, force rebuild the container even if it already exists
+        nocache: If True, rebuild the container with no cache
     """
     original_cwd = os.getcwd()
     original_argv = sys.argv.copy()  # Save original argv
@@ -524,11 +525,14 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
             subprocess.run(["docker", "rm", name], check=True)
 
         # Handle force rebuild
-        if force and container_exists(container_name):
-            logging.info(f"Force flag specified. Removing existing container '{container_name}' to rebuild...")
+        if (force or nocache) and container_exists(container_name):
+            if force:
+                logging.info(f"Force flag specified. Removing existing container '{container_name}' to rebuild...")
+            if nocache:
+                logging.info(f"No-cache flag specified. Removing existing container '{container_name}' to rebuild with no cache...")
             remove_container(container_name)
 
-        if container_exists(container_name) and not force:
+        if container_exists(container_name) and not (force or nocache):
             logging.info(f"Container '{container_name}' already exists. Attaching to it instead of creating a new one.")
             if not container_running(container_name):
                 logging.info(f"Container '{container_name}' exists but is not running. Starting it...")
@@ -548,9 +552,15 @@ def run_rockerc_in_worktree(worktree_dir: Path, _owner: str, repo: str, branch: 
         else:
             if force:
                 logging.info(f"Building new container '{container_name}' (force rebuild requested)...")
+            elif nocache:
+                logging.info(f"Building new container '{container_name}' (no-cache rebuild requested)...")
             else:
                 logging.info(f"Container '{container_name}' does not exist. Building new container...")
             os.chdir(target_dir)
+            if nocache:
+                os.environ["ROCKERC_NO_CACHE"] = "1"
+                logging.info("Rebuilding container with --nocache (ROCKERC_NO_CACHE=1)")
+                sys.argv.append("--nocache")
             run_rockerc(str(worktree_dir))
     except Exception as e:
         logging.error(f"Failed to run rockerc: {e}")
@@ -834,6 +844,11 @@ The tool will:
         action="store_true",
         help="Show version information",
     )
+    parser.add_argument(
+        "--nocache",
+        action="store_true",
+        help="Rebuild the container with no cache (pass --no-cache to docker build)",
+    )
     args = parser.parse_args()
 
     # Handle version display
@@ -891,7 +906,7 @@ The tool will:
                 logging.info(f"Environment ready at {worktree_dir}")
                 logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
-            run_rockerc_in_worktree(worktree_dir, owner, repo, branch, subfolder, force=args.force)
+            run_rockerc_in_worktree(worktree_dir, owner, repo, branch, subfolder, force=args.force, nocache=args.nocache)
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")
         sys.exit(1)
