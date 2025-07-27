@@ -918,9 +918,24 @@ def load_defaults_config(path: str = ".") -> dict:
     return defaults_config
 
 
+def ensure_manifest_rocker_repo():
+    """
+    Ensure that blooop/manifest_rocker is cloned into the renv environment.
+    """
+    owner = "blooop"
+    repo = "manifest_rocker"
+    if not repo_exists(owner, repo):
+        try:
+            clone_bare_repo(owner, repo)
+            logging.info(f"Cloned {owner}/{repo} into renv environment.")
+        except Exception as e:
+            logging.warning(f"Could not clone {owner}/{repo}: {e}")
+
+
 def main():
     setup_logging()
     ensure_defaults_yaml()
+    ensure_manifest_rocker_repo()  # Ensure manifest_rocker is present
     parser = argparse.ArgumentParser(
         description="Repository Environment Manager - seamlessly work in multiple repos using git worktrees and rocker containers",
         formatter_class=argparse.RawDescriptionHelpFormatter,
