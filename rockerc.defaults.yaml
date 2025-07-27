@@ -1,0 +1,16 @@
+args:
+  - user    # Enable user mapping for file permissions
+  - pull    # Enable automatic image pulling
+  - deps    # Enable dependency installation
+  - git
+  - git-clone
+  - ssh
+  - ssh-client
+  - nocleanup
+  - persist-image
+    #  - cwd     # Mount current working directory
+
+# Extensions that are disabled by default
+disable_args:
+  - nvidia  # Disable NVIDIA GPU support by default
+  - create-dockerfile
