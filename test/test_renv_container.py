@@ -41,7 +41,7 @@ class TestRenvContainerIntegration(unittest.TestCase):
             ("company", "app", "bugfix/critical-fix", "app-bugfix-critical-fix"),
         ]
 
-        for owner, repo, branch, expected_name in test_cases:
+        for owner, repo, branch, _expected_name in test_cases:
             with self.subTest(owner=owner, repo=repo, branch=branch):
                 # Mock container doesn't exist
                 mock_subprocess.return_value.stdout = ""
@@ -228,7 +228,7 @@ class TestRenvContainerIntegration(unittest.TestCase):
         """Test container attachment when container already exists and is running."""
 
         # Mock container exists and is running
-        def mock_subprocess_side_effect(*args, **kwargs):
+        def mock_subprocess_side_effect(*args, **_kwargs):
             cmd = args[0]
             if "ps -a" in " ".join(cmd):
                 # Container exists
