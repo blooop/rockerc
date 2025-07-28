@@ -1,14 +1,14 @@
 import subprocess
 import os
 
-SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "../scripts/run_renv.sh")
+WORKFLOW_PATH = os.path.join(os.path.dirname(__file__), "workflows/test_workflow_1_clone_and_work.sh")
 
 
 def test_run_renv_script():
-    # Ensure the script is executable
-    os.chmod(SCRIPT_PATH, 0o755)
+    # Ensure the workflow script is executable
+    os.chmod(WORKFLOW_PATH, 0o755)
     result = subprocess.run(
-        [SCRIPT_PATH], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+        [WORKFLOW_PATH], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
     )
     output = result.stdout.decode() + result.stderr.decode()
     # The test should pass only if the error is detected
