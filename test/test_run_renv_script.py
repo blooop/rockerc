@@ -10,9 +10,11 @@ def test_run_renv_script():
     result = subprocess.run(
         [SCRIPT_PATH], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
     )
+    output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode == 0, (
         f"Script exited with {result.returncode}, stderr: {result.stderr.decode()}"
     )
+    assert "[renv] ERROR:" not in output, f"renv error detected in output: {output}"
 
 
 def test_run_renv_script_force_build():
