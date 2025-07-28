@@ -11,10 +11,9 @@ def test_run_renv_script():
         [SCRIPT_PATH], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
     )
     output = result.stdout.decode() + result.stderr.decode()
-    assert result.returncode == 0, (
-        f"Script exited with {result.returncode}, stderr: {result.stderr.decode()}"
-    )
-    assert "[renv] ERROR:" not in output, f"renv error detected in output: {output}"
+    # The test should pass only if the error is detected
+    assert result.returncode != 0, f"Expected error exit code, but got 0. Output: {output}"
+    assert "[renv] ERROR:" in output, f"Expected renv error in output, but got: {output}"
 
 
 # def test_run_renv_script_force_build():

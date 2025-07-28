@@ -518,7 +518,15 @@ def run_rockerc_in_worktree(
         cmd += ["--force"]
     if nocache:
         cmd += ["--nocache"]
-    subprocess.run(cmd, check=True, cwd=worktree_dir)
+    result = subprocess.run(cmd, cwd=worktree_dir, capture_output=True, text=True, check=False)
+    output = result.stdout + result.stderr
+    if "no arguments found in rockerc.yaml" in output:
+        logging.error(
+            "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
+        )
+        sys.exit(1)
+    if result.returncode != 0:
+        sys.exit(result.returncode)
 
 
 def setup_repo_environment(owner: str, repo: str, branch: str) -> Path:
@@ -937,15 +945,25 @@ The tool will:
                 logging.info(f"Environment ready at {worktree_dir}")
                 logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
-            run_rockerc_in_worktree(
-                worktree_dir,
-                owner,
-                repo,
-                branch,
-                subfolder=subfolder,
-                force=args.force,
-                nocache=args.nocache,
-            )
+            try:
+                run_rockerc_in_worktree(
+                    worktree_dir,
+                    owner,
+                    repo,
+                    branch,
+                    subfolder=subfolder,
+                    force=args.force,
+                    nocache=args.nocache,
+                )
+            except Exception as e:
+                # Check for the specific error message in the exception or logs
+                msg = str(e)
+                if "no arguments found in rockerc.yaml" in msg:
+                    logging.error(
+                        "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
+                    )
+                    sys.exit(1)
+                raise
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")
         sys.exit(1)
@@ -956,6 +974,13 @@ The tool will:
         logging.info("Operation cancelled by user")
         sys.exit(1)
     except Exception as e:
+        # Check for the specific error message in the exception or logs
+        msg = str(e)
+        if "no arguments found in rockerc.yaml" in msg:
+            logging.error(
+                "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
+            )
+            sys.exit(1)
         logging.error(f"Unexpected error: {e}")
         sys.exit(1)
 
