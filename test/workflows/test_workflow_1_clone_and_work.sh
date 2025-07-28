@@ -3,5 +3,5 @@ set -e
 cd /tmp
 rm -rf /tmp/renv
 
-echo "Running: renv osrf/rocker@main"
-renv osrf/rocker@main 
+echo "Running: renv osrf/rocker"
+renv osrf/rocker sleep 1; echo "finished work!"
