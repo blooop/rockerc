@@ -213,14 +213,14 @@ def ensure_defaults_yaml():
     """
     import shutil
 
-    defaults_path = Path.home() / "renv" / "rockerc.defaults.yaml"
+    yaml_path = Path.home() / "renv" / "rockerc.yaml"
     template_path = Path(__file__).parent.parent / "rockerc.defaults.template.yaml"
-    if not defaults_path.exists():
+    if not yaml_path.exists():
         try:
-            defaults_path.parent.mkdir(parents=True, exist_ok=True)
+            yaml_path.parent.mkdir(parents=True, exist_ok=True)
             if template_path.exists() and template_path.stat().st_size > 0:
-                shutil.copy(template_path, defaults_path)
-                logging.info(f"Copied template defaults to {defaults_path}")
+                shutil.copy(template_path, yaml_path)
+                logging.info(f"Copied template defaults to {yaml_path}")
             else:
                 logging.warning(
                     f"Template file {template_path} does not exist or is empty. Skipping copy."

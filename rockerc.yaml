@@ -5,15 +5,23 @@
 # - image: Specifies the base image to pass to rocker
 # - args: Lists additional features or tools to be added to the docker image
 
+
 image: ubuntu:22.04
-# dockerfile: .devcontainer/Dockerfile
-# dockerfile: Dockerfile
+# This file is copied from rockerc.defaults.yaml to ensure rockerc.yaml always exists
+# You can customize this file as needed for your container setup
 args:
-  - nvidia
-  - x11 
-  - user 
-  - pull 
-  - deps
-  - git 
-  - pixi
+  - user    # Enable user mapping for file permissions
+  - pull    # Enable automatic image pulling
+  - deps    # Enable dependency installation
+  - git
+  - git-clone
+  - ssh
+  - ssh-client
+  - nocleanup
+  - persist-image
+    #  - cwd     # Mount current working directory
+
+# Extensions that are disabled by default
+extension-blacklist:
+  - nvidia  # Disable NVIDIA GPU support by default
   - create-dockerfile

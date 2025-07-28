@@ -1,3 +1,4 @@
+image: ubuntu:22.04
 # Default arguments enabled for container setup
 args:
   - user    # Enable user mapping for file permissions
