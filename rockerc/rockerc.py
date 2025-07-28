@@ -20,7 +20,8 @@ def yaml_dict_to_args(d: dict) -> str:
     cmd_str = ""
 
     image = d.pop("image", None)  # special value
-    # image = d.pop("create-dockerfile", None)  # special value
+    # Remove disable_args if present (should not be passed to rocker)
+    d.pop("disable_args", None)
 
     if "args" in d:
         args = d.pop("args")
@@ -281,15 +282,18 @@ def run_rockerc(path: str = "."):
     logging.basicConfig(level=logging.INFO)
     merged_dict = collect_arguments(path)
 
-    if not merged_dict:
-        logging.error(
-            "No rockerc.yaml found in the specified directory. Please create a rockerc.yaml file with rocker arguments. See 'rocker -h' for help."
-        )
-        sys.exit(1)
+    # Fix: If no local config, use hardcoded defaults
+    if not merged_dict or (not merged_dict.get("args") and not merged_dict.get("image")):
+        merged_dict = {
+            "image": "ubuntu:24.04",
+            "args": ["user", "pull", "deps", "git", "cwd"],
+            "disable_args": ["nvidia"],
+        }
+        print("No local rockerc.yaml found - using hardcoded defaults.")
 
     if "args" not in merged_dict:
         logging.error(
-            "No 'args' key found in rockerc.yaml. Please add an 'args' list with rocker arguments. See 'rocker -h' for help."
+            "No 'args' key found in rockerc.yaml or defaults. Please add an 'args' list with rocker arguments. See 'rocker -h' for help."
         )
         sys.exit(1)
 
