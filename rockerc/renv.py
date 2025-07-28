@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Tuple, List, Optional
 import toml
 from iterfzf import iterfzf
-import yaml  
+import yaml
 
 from .rockerc import run_rockerc
 
@@ -135,22 +135,20 @@ def colorize_repo_branch_combo(combo: str) -> str:
     Colorize owner/repo@branch combos for fzf display using custom palette: #F97300, #B13BFF, #00C4C4.
     """
     # 24-bit ANSI escape codes for true color
-    COLOR_OWNER = "\033[38;2;249;115;0m"    # #F97300 (orange)
-    COLOR_REPO = "\033[38;2;177;59;255m"    # #B13BFF (purple)
-    COLOR_BRANCH = "\033[38;2;0;196;196m"   # #00C4C4 (cyan)
+    COLOR_OWNER = "\033[38;2;249;115;0m"  # #F97300 (orange)
+    COLOR_REPO = "\033[38;2;177;59;255m"  # #B13BFF (purple)
+    COLOR_BRANCH = "\033[38;2;0;196;196m"  # #00C4C4 (cyan)
     COLOR_RESET = "\033[0m"
     if "@" in combo:
         owner_repo, branch = combo.split("@", 1)
         if "/" in owner_repo:
             owner, repo = owner_repo.split("/", 1)
             return f"{COLOR_OWNER}{owner}{COLOR_RESET}/{COLOR_REPO}{repo}{COLOR_RESET}@{COLOR_BRANCH}{branch}{COLOR_RESET}"
-        else:
-            return f"{COLOR_REPO}{owner_repo}{COLOR_RESET}@{COLOR_BRANCH}{branch}{COLOR_RESET}"
-    elif "/" in combo:
+        return f"{COLOR_REPO}{owner_repo}{COLOR_RESET}@{COLOR_BRANCH}{branch}{COLOR_RESET}"
+    if "/" in combo:
         owner, repo = combo.split("/", 1)
         return f"{COLOR_OWNER}{owner}{COLOR_RESET}/{COLOR_REPO}{repo}{COLOR_RESET}"
-    else:
-        return combo
+    return combo
 
 
 def fuzzy_select_repo_spec() -> Optional[str]:
@@ -176,8 +174,9 @@ def fuzzy_select_repo_spec() -> Optional[str]:
             return None
         # Remove ANSI codes from selected value to get the actual repo spec
         import re
-        ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
-        clean_selected = ansi_escape.sub('', selected)
+
+        ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+        clean_selected = ansi_escape.sub("", selected)
         return clean_selected
     except KeyboardInterrupt:
         return None
@@ -958,6 +957,7 @@ def ensure_manifest_rocker_repo():
             temp_dir = get_renv_base_dir() / owner / repo
             if temp_dir.exists():
                 import shutil
+
                 shutil.rmtree(temp_dir)
             clone_bare_repo(owner, repo)
             # Rename manifest_rocker to renv
