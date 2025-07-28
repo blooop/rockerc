@@ -7,3 +7,6 @@ rm -rf /tmp/renv
 echo "Running: renv bloop/manifest_rocker@renv_test and confirming the directory is manifest_rocker"
 renv blooop/manifest_rocker@renv_test pwd
 
+
+echo "Running: renv bloop/manifest_rocker@renv_test and confirming the directory is manifest_rocker"
+renv osrf/rocker@renv_test pwd
