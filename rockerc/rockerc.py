@@ -325,8 +325,22 @@ def run_rockerc(path: str = "."):
         merged_dict["args"].remove("create-dockerfile")
         create_dockerfile = True
 
+
     cmd_args = yaml_dict_to_args(merged_dict)
     cmd = ["rocker"] + cmd_args
+    # Forward any extra CLI arguments to the container
+    extra_args = sys.argv[1:]
+    # Remove any known options (e.g. -h, --help) and config file args
+    # Only forward arguments that are not part of the config
+    # If the first arg is a YAML file or repo spec, skip it
+    if extra_args:
+        # Remove repo spec or config file if present
+        if extra_args[0].endswith(".yaml") or "/" in extra_args[0]:
+            extra_args = extra_args[1:]
+        # Remove known options
+        filtered_args = [a for a in extra_args if not a.startswith("-")]
+        if filtered_args:
+            cmd += filtered_args
     logging.info(f"running cmd: {' '.join(cmd)}")
 
     if create_dockerfile:
