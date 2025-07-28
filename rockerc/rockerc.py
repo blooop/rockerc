@@ -240,6 +240,21 @@ def collect_arguments(path: str = ".") -> dict:
     # Start with defaults passed in as command line arguments (from renv)
     merged_dict = {"args": []}
 
+    # Always load and merge rockerc.defaults.template.yaml first
+    template_path = pathlib.Path(__file__).parent.parent / "rockerc.defaults.template.yaml"
+    if template_path.exists():
+        with open(template_path, "r", encoding="utf-8") as f:
+            template_config = yaml.safe_load(f) or {}
+            # Merge template config first
+            for key, value in template_config.items():
+                if key == "args":
+                    if isinstance(value, list):
+                        for arg in value:
+                            if arg not in merged_dict["args"]:
+                                merged_dict["args"].append(arg)
+                else:
+                    merged_dict[key] = value
+
     # Load and merge local rockerc.yaml files
     local_configs_found = False
     for p in search_path.glob("rockerc.yaml"):

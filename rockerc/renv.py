@@ -495,56 +495,30 @@ def run_rockerc_in_worktree(
         force: If True, force rebuild the container even if it already exists
         nocache: If True, rebuild the container with no cache
     """
-    # Always load and merge rockerc.defaults.template.yaml before running rockerc
-    import yaml
+    # Ensure the template config is present in the worktree root
+    import shutil
+
     template_path = Path(__file__).parent.parent / "rockerc.defaults.template.yaml"
-    merged_args = []
-    merged_image = None
-    merged_blacklist = []
-    # Load defaults from template
-    if template_path.exists():
-        with open(template_path, "r", encoding="utf-8") as f:
-            template_config = yaml.safe_load(f) or {}
-            if "args" in template_config and isinstance(template_config["args"], list):
-                merged_args.extend(template_config["args"])
-            if "image" in template_config:
-                merged_image = template_config["image"]
-            if "extension-blacklist" in template_config and isinstance(template_config["extension-blacklist"], list):
-                merged_blacklist.extend(template_config["extension-blacklist"])
-
-    # Load and merge local rockerc.yaml if present
     config_path = worktree_dir / "rockerc.yaml"
-    if config_path.exists():
-        with open(config_path, "r", encoding="utf-8") as f:
-            local_config = yaml.safe_load(f) or {}
-            if "args" in local_config and isinstance(local_config["args"], list):
-                for arg in local_config["args"]:
-                    if arg not in merged_args:
-                        merged_args.append(arg)
-            if "image" in local_config:
-                merged_image = local_config["image"]
-            if "extension-blacklist" in local_config and isinstance(local_config["extension-blacklist"], list):
-                for ext in local_config["extension-blacklist"]:
-                    if ext not in merged_blacklist:
-                        merged_blacklist.append(ext)
+    if not config_path.exists():
+        if template_path.exists() and template_path.stat().st_size > 0:
+            shutil.copy(template_path, config_path)
+            logging.info(f"Copied template defaults to {config_path}")
+        else:
+            logging.warning(
+                f"Template file {template_path} does not exist or is empty. Skipping copy."
+            )
 
-    cmd = ["rockerc", f"{_owner}/{repo}@{branch}"]
+    cmd = [
+        "rockerc",
+        f"{_owner}/{repo}@{branch}",
+    ]
     if subfolder:
         cmd += ["--subfolder", subfolder]
     if force:
         cmd += ["--force"]
     if nocache:
         cmd += ["--nocache"]
-    # Add merged args
-    for arg in merged_args:
-        cmd += [f"--{arg}"]
-    # Add image if present
-    if merged_image:
-        cmd += ["--image", merged_image]
-    # Add extension-blacklist if present
-    if merged_blacklist:
-        for ext in merged_blacklist:
-            cmd += ["--extension-blacklist", ext]
     if command:
         cmd += command
     result = subprocess.run(cmd, cwd=worktree_dir, check=False)
