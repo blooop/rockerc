@@ -4,4 +4,4 @@ cd /tmp
 rm -rf /tmp/renv
 
 echo "Running: renv osrf/rocker"
-renv osrf/rocker sleep 1; echo "finished work!"
+renv osrf/rocker echo "finished work!"
