@@ -570,14 +570,15 @@ def run_rockerc_in_worktree(
             "--volume", f"{worktree_dir}:{docker_worktree_mount}",
             f"--oyr-run-arg={docker_run_args_str}",
         ]
-        # Add any extensions from config (rockerc.yaml)
+        # Always include git-clone and ssh-client extensions
+        extensions = ["git-clone", "ssh-client"]
         config_path = worktree_dir / "rockerc.yaml"
-        extensions = []
         if config_path.exists():
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
                 if config:
-                    extensions = config.get("args", [])
+                    # Prepend config extensions after required ones
+                    extensions += [e for e in config.get("args", []) if e not in extensions]
                     image = config.get("image", image)
         for ext in extensions:
             rocker_args.append(f"--{ext}")
