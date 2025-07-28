@@ -240,21 +240,6 @@ def collect_arguments(path: str = ".") -> dict:
     # Start with defaults passed in as command line arguments (from renv)
     merged_dict = {"args": []}
 
-    # Always load and merge rockerc.defaults.template.yaml first
-    template_path = pathlib.Path(__file__).parent.parent / "rockerc.defaults.template.yaml"
-    if template_path.exists():
-        with open(template_path, "r", encoding="utf-8") as f:
-            template_config = yaml.safe_load(f) or {}
-            # Merge template config first
-            for key, value in template_config.items():
-                if key == "args":
-                    if isinstance(value, list):
-                        for arg in value:
-                            if arg not in merged_dict["args"]:
-                                merged_dict["args"].append(arg)
-                else:
-                    merged_dict[key] = value
-
     # Load and merge local rockerc.yaml files
     local_configs_found = False
     for p in search_path.glob("rockerc.yaml"):
@@ -264,17 +249,7 @@ def collect_arguments(path: str = ".") -> dict:
         with open(p.as_posix(), "r", encoding="utf-8") as f:
             local_config = yaml.safe_load(f) or {}
 
-            # Handle disable_args - remove these from the current args
-            if "disable_args" in local_config:
-                disabled_args = local_config["disable_args"]
-                if isinstance(disabled_args, list):
-                    for arg in disabled_args:
-                        if arg in merged_dict["args"]:
-                            merged_dict["args"].remove(arg)
-                    print(f"Local disabled extensions: {', '.join(disabled_args)}")
-
-                # Remove disable_args so it doesn't get passed to rocker
-                local_config.pop("disable_args")
+            # ...existing code...
 
             # Handle regular args - add these to existing args (avoiding duplicates)
             if "args" in local_config:
@@ -311,14 +286,10 @@ def run_rockerc(path: str = "."):
     logging.basicConfig(level=logging.INFO)
     merged_dict = collect_arguments(path)
 
-    # Fix: If no local config, use hardcoded defaults
+    # If no config found, error out
     if not merged_dict or (not merged_dict.get("args") and not merged_dict.get("image")):
-        merged_dict = {
-            "image": "ubuntu:24.04",
-            "args": ["user", "pull", "deps", "git", "cwd"],
-            "disable_args": ["nvidia"],
-        }
-        print("No local rockerc.yaml found - using hardcoded defaults.")
+        logging.error("No rockerc.yaml or config found. Please provide a valid configuration via renv or a local rockerc.yaml.")
+        sys.exit(1)
 
     if "args" not in merged_dict:
         logging.error(
