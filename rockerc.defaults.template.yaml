@@ -10,7 +10,7 @@ args:
   - nocleanup # Prevent cleanup after run
   - persist-image # Persist built image after run
 
-disable_args:
+extension-blacklist:
   - nvidia  # Disable NVIDIA GPU support by default
   - create-dockerfile # Overly verbose for 3rd party repos
   - cwd     # We have custom mounting logic

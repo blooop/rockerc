@@ -938,12 +938,8 @@ def load_defaults_config(path: str = ".") -> dict:
                 defaults_config = yaml.safe_load(f) or {"args": []}
         except Exception as e:
             logging.warning(f"Error reading newly created rockerc.defaults.yaml file: {e}")
-            # Fallback to hardcoded defaults
-            defaults_config = {
-                "image": "ubuntu:24.04",
-                "args": ["user", "pull", "deps", "git", "cwd"],
-                "disable_args": ["nvidia"],
-            }
+            # Fallback to empty config
+            defaults_config = {"args": []}
 
     return defaults_config
 
