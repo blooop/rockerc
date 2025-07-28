@@ -480,6 +480,7 @@ def run_rockerc_in_worktree(
     subfolder: str = "",
     force: bool = False,
     nocache: bool = False,
+    command: list = None,
 ) -> None:
     """
     Run rockerc in the specified worktree directory.
@@ -518,6 +519,8 @@ def run_rockerc_in_worktree(
         cmd += ["--force"]
     if nocache:
         cmd += ["--nocache"]
+    if command:
+        cmd += command
     result = subprocess.run(cmd, cwd=worktree_dir, check=False)
     if result.returncode != 0:
         sys.exit(result.returncode)
@@ -816,34 +819,30 @@ def ensure_manifest_rocker_repo():
 
 def main():
     setup_logging()
-    ensure_defaults_yaml()
-    ensure_manifest_rocker_repo()  # Ensure manifest_rocker is present
     parser = argparse.ArgumentParser(
         description="Repository Environment Manager - seamlessly work in multiple repos using git worktrees and rocker containers",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  renv blooop/bencher@main             # Clone blooop/bencher and switch to main branch
-  renv blooop/bencher@feature          # Switch to feature branch (creates worktree if needed)
-  renv blooop/bencher@main#scripts     # Work in the scripts subfolder of main branch
-  renv osrf/rocker                     # Clone osrf/rocker and switch to main branch (default)
-  renv --force blooop/bencher@main     # Force rebuild container even if it exists
-  renv --install                       # Install bash completion
-  renv --uninstall                     # Uninstall bash completion
-  
-The tool will:
-1. Clone the repository as a bare repo to ~/renv/owner/repo (if not already cloned)
-2. Create a worktree for the specified branch at ~/renv/owner/repo/worktree-{branch}
-3. Optionally change to a subfolder within the repository if specified with #subfolder
-4. If a container exists for this repo@branch, attach to it automatically
-5. If --force is used, remove existing container and rebuild from scratch
-6. Run rockerc in that directory to build and enter a container
-        """,
+        epilog=(
+            """
+            Usage:
+                renv [repo_name@branch]
+
+            Examples:
+                renv blooop/bencher@main
+                renv osrf/rocker
+                renv blooop/bencher@feature_branch
+            """
+        ),
     )
     parser.add_argument(
         "repo_spec",
         nargs="?",
         help="Repository specification in format 'owner/repo[@branch][#subfolder]'. If branch is omitted, 'main' is used.",
+    )
+    parser.add_argument(
+        "extra_args",
+        nargs=argparse.REMAINDER,
+        help="Command to run inside the container (e.g. git status, pwd)",
     )
     parser.add_argument(
         "--no-container",
@@ -893,36 +892,31 @@ The tool will:
             print("renv version: unknown")
         return
 
-    # Handle completion installation/uninstallation
-    if args.install:
-        install_completion()
-        return
-
     if args.uninstall:
         uninstall_completion()
         return
 
-    # Handle completion candidate listing
+    if args.install:
+        install_completion()
+        return
+
     if args.list_candidates is not None:
         candidates = generate_completion_candidates(args.list_candidates)
         for candidate in candidates:
             print(candidate)
         return
 
-    # If no arguments, prompt for input
     if args.repo_spec is None:
-        # Use fuzzy finder for interactive selection
         try:
             user_input = fuzzy_select_repo_spec()
-            if user_input is None:
-                print("\nExiting.")
-                sys.exit(0)
         except (KeyboardInterrupt, EOFError):
             print("\nExiting.")
             sys.exit(0)
-        if not user_input or not user_input.strip():
+        if user_input is None or not user_input.strip():
+            print("\nExiting.")
             sys.exit(0)
         args.repo_spec = user_input.strip()
+
     try:
         owner, repo, branch, subfolder = parse_repo_spec(args.repo_spec)
         if subfolder:
@@ -948,9 +942,9 @@ The tool will:
                     subfolder=subfolder,
                     force=args.force,
                     nocache=args.nocache,
+                    command=args.extra_args if args.extra_args else None,
                 )
             except Exception as e:
-                # Check for the specific error message in the exception or logs
                 msg = str(e)
                 if "no arguments found in rockerc.yaml" in msg:
                     logging.error(
@@ -968,7 +962,6 @@ The tool will:
         logging.info("Operation cancelled by user")
         sys.exit(1)
     except Exception as e:
-        # Check for the specific error message in the exception or logs
         msg = str(e)
         if "no arguments found in rockerc.yaml" in msg:
             logging.error(
