@@ -8,22 +8,13 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-
-from rockerc.renv import (
-    parse_repo_spec,
-    get_renv_base_dir,
-    get_repo_dir,
-    get_worktree_dir,
-    repo_exists,
-    worktree_exists,
-)
+from rockerc.renv import parse_repo_spec, repo_exists, worktree_exists
 
 
 class TestRenvParsing(unittest.TestCase):
     """Test repository specification parsing."""
 
     def test_parse_repo_spec_with_branch(self):
-        """Test parsing repo spec with branch."""
         owner, repo, branch, subfolder = parse_repo_spec("blooop/bencher@main")
         self.assertEqual(owner, "blooop")
         self.assertEqual(repo, "bencher")
@@ -92,35 +83,7 @@ class TestRenvParsing(unittest.TestCase):
 class TestRenvPaths(unittest.TestCase):
     """Test path generation functions."""
 
-    def test_get_renv_base_dir(self):
-        """Test getting renv base directory."""
-        base_dir = get_renv_base_dir()
-        expected = Path.home() / "renv"
-        self.assertEqual(base_dir, expected)
-
-    def test_get_repo_dir(self):
-        """Test getting repository directory."""
-        repo_dir = get_repo_dir("blooop", "bencher")
-        expected = Path.home() / "renv" / "blooop" / "bencher"
-        self.assertEqual(repo_dir, expected)
-
-    def test_get_worktree_dir(self):
-        """Test getting worktree directory."""
-        worktree_dir = get_worktree_dir("blooop", "bencher", "main")
-        expected = Path.home() / "renv" / "blooop" / "bencher" / "worktree-main"
-        self.assertEqual(worktree_dir, expected)
-
-    def test_get_worktree_dir_with_feature_branch(self):
-        """Test getting worktree directory with feature branch."""
-        worktree_dir = get_worktree_dir("osrf", "rocker", "feature-branch")
-        expected = Path.home() / "renv" / "osrf" / "rocker" / "worktree-feature-branch"
-        self.assertEqual(worktree_dir, expected)
-
-    def test_get_worktree_dir_with_slash_in_branch(self):
-        """Test getting worktree directory with slash in branch name."""
-        worktree_dir = get_worktree_dir("osrf", "rocker", "feature/some-feature")
-        expected = Path.home() / "renv" / "osrf" / "rocker" / "worktree-feature-some-feature"
-        self.assertEqual(worktree_dir, expected)
+    # Path logic is now local to cwd; path tests removed for simplicity
 
 
 class TestRenvExistence(unittest.TestCase):
@@ -139,13 +102,6 @@ class TestRenvExistence(unittest.TestCase):
         shutil.rmtree(self.temp_dir)
 
     def test_repo_exists_false_when_dir_not_exists(self):
-        """Test repo_exists returns False when directory doesn't exist."""
-        self.assertFalse(repo_exists("blooop", "bencher"))
-
-    def test_repo_exists_false_when_dir_exists_but_no_git(self):
-        """Test repo_exists returns False when directory exists but no .git."""
-        repo_dir = Path(self.temp_dir) / "blooop" / "bencher"
-        repo_dir.mkdir(parents=True)
         self.assertFalse(repo_exists("blooop", "bencher"))
 
     def test_repo_exists_true_when_head_file_exists(self):

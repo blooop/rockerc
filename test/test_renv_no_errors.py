@@ -1,13 +1,12 @@
 import subprocess
 import os
 import sys
-from pathlib import Path
-import shutil
 
 
 def test_renv_no_errors():
-    home = str(Path.home())
-    renv_dir = os.path.join(home, "renv")
+    import shutil
+
+    renv_dir = os.path.join(os.getcwd(), "renv")
     # Remove renv directory if it exists
     if os.path.exists(renv_dir):
         shutil.rmtree(renv_dir)

@@ -213,7 +213,8 @@ def ensure_defaults_yaml():
     """
     import shutil
 
-    yaml_path = Path.home() / "renv" / "rockerc.yaml"
+    base_dir = get_renv_base_dir()
+    yaml_path = base_dir / "rockerc.yaml"
     template_path = Path(__file__).parent.parent / "rockerc.defaults.template.yaml"
     if not yaml_path.exists():
         try:
@@ -298,7 +299,7 @@ def parse_repo_spec(repo_spec: str) -> Tuple[str, str, str, str]:
 
 def get_renv_base_dir() -> Path:
     """Get the base directory for renv repositories."""
-    return Path.home() / "renv"
+    return Path(os.getcwd()) / "renv"
 
 
 def get_repo_dir(owner: str, repo: str) -> Path:
@@ -907,8 +908,7 @@ def load_defaults_config(path: str = ".") -> dict:
     # Search locations in order of preference
     search_paths = [
         Path(path) / "rockerc.defaults.yaml",  # Local directory
-        Path.home() / "renv" / "rockerc.defaults.yaml",  # Global renv config
-        Path.home() / "rockerc.defaults.yaml",  # Home directory fallback
+        Path(path) / "renv" / "rockerc.defaults.yaml",  # Local renv config
     ]
 
     defaults_found = False
@@ -928,16 +928,13 @@ def load_defaults_config(path: str = ".") -> dict:
 
     # If no defaults file was found, create a default one in the global renv config location
     if not defaults_found:
-        global_defaults_path = Path.home() / "renv" / "rockerc.defaults.yaml"
-        # Use ensure_defaults_yaml to create the file if missing
+        local_defaults_path = Path(path) / "renv" / "rockerc.defaults.yaml"
         ensure_defaults_yaml()
-        # Now read the newly created file
         try:
-            with open(global_defaults_path, "r", encoding="utf-8") as f:
+            with open(local_defaults_path, "r", encoding="utf-8") as f:
                 defaults_config = yaml.safe_load(f) or {"args": []}
         except Exception as e:
             logging.warning(f"Error reading newly created rockerc.defaults.yaml file: {e}")
-            # Fallback to empty config
             defaults_config = {"args": []}
 
     return defaults_config
