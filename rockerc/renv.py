@@ -518,13 +518,7 @@ def run_rockerc_in_worktree(
         cmd += ["--force"]
     if nocache:
         cmd += ["--nocache"]
-    result = subprocess.run(cmd, cwd=worktree_dir, capture_output=True, text=True, check=False)
-    output = result.stdout + result.stderr
-    if "no arguments found in rockerc.yaml" in output:
-        logging.error(
-            "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
-        )
-        sys.exit(1)
+    result = subprocess.run(cmd, cwd=worktree_dir, check=False)
     if result.returncode != 0:
         sys.exit(result.returncode)
 
