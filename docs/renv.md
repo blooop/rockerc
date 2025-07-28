@@ -31,15 +31,15 @@ renv [owner/repo[@branch][#subfolder]] [options]
 
 #### 1. Clone and Work on a Repo
 ```bash
-renv blooop/bencher@main
+renv blooop/manifest_rocker@main
 ```
-- Clones as bare repo to `~/renv/blooop/bencher`
-- Creates worktree for `main` at `~/renv/blooop/bencher/worktree-main`
+- Clones as bare repo to `~/renv/blooop/manifest_rocker`
+- Creates worktree for `main` at `~/renv/blooop/manifest_rocker/worktree-main`
 - Launches a rocker container in that worktree
 
 #### 2. Switch Branches (Isolated Worktrees)
 ```bash
-renv blooop/bencher@feature/new-feature
+renv blooop/manifest_rocker@feature/new-feature
 ```
 - Creates new worktree for the branch
 - Launches container in the new worktree
@@ -47,7 +47,7 @@ renv blooop/bencher@feature/new-feature
 
 #### 3. Switch Back to Main
 ```bash
-renv blooop/bencher@main
+renv blooop/manifest_rocker@main
 ```
 - Re-attaches to the main branch worktree and container
 
@@ -59,13 +59,28 @@ renv osrf/rocker@main
 
 #### 5. Debug or Manual Management
 ```bash
-renv blooop/bencher@main --no-container
+renv blooop/manifest_rocker@main --no-container
 ```
 - Sets up worktree but does not launch container
 
-## Directory Structure
+#### 6. Run a Command Directly in the Container
+```bash
+renv osrf/rocker git status
 ```
-~/renv/
+
+#### 7. Force Rebuild Container
+```bash
+renv blooop/manifest_rocker@main -f
+```
+- Forces a rebuild of the container for `blooop/manifest_rocker@main`.
+
+#### 8. Rebuild Container With No Cache
+```bash
+renv blooop/manifest_rocker@main --nocache
+```
+- Rebuilds the container for `blooop/manifest_rocker@main` without using any cache.
+
+
 ├── blooop/
 │   └── bencher/
 │       ├── HEAD
