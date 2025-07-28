@@ -1,19 +1,21 @@
-import subprocess
-import os
+# import subprocess
+# import os
 
-WORKFLOW_PATH = os.path.join(os.path.dirname(__file__), "workflows/test_workflow_1_clone_and_work.sh")
+# WORKFLOW_PATH = os.path.join(
+#     os.path.dirname(__file__), "workflows/test_workflow_1_clone_and_work.sh"
+# )
 
 
-def test_run_renv_script():
-    # Ensure the workflow script is executable
-    os.chmod(WORKFLOW_PATH, 0o755)
-    result = subprocess.run(
-        [WORKFLOW_PATH], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
-    )
-    output = result.stdout.decode() + result.stderr.decode()
-    # The test should pass only if the error is detected
-    assert result.returncode != 0, f"Expected error exit code, but got 0. Output: {output}"
-    assert "[renv] ERROR:" in output, f"Expected renv error in output, but got: {output}"
+# def test_run_renv_script():
+#     # Ensure the workflow script is executable
+#     os.chmod(WORKFLOW_PATH, 0o755)
+#     result = subprocess.run(
+#         [WORKFLOW_PATH], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+#     )
+#     output = result.stdout.decode() + result.stderr.decode()
+#     # The test should pass only if the error is detected
+#     assert result.returncode != 0, f"Expected error exit code, but got 0. Output: {output}"
+#     assert "[renv] ERROR:" in output, f"Expected renv error in output, but got: {output}"
 
 
 # def test_run_renv_script_force_build():

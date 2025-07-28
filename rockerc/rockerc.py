@@ -325,7 +325,6 @@ def run_rockerc(path: str = "."):
         merged_dict["args"].remove("create-dockerfile")
         create_dockerfile = True
 
-
     cmd_args = yaml_dict_to_args(merged_dict)
     cmd = ["rocker"] + cmd_args
     # Forward any extra CLI arguments to the container
@@ -370,7 +369,6 @@ def run_rockerc(path: str = "."):
                     f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected."
                 )
             raise
-
 
 
 if __name__ == "__main__":
