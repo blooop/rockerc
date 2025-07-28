@@ -496,6 +496,7 @@ def run_rockerc_in_worktree(
     """
     # Ensure the template config is present in the worktree root
     import shutil
+
     template_path = Path(__file__).parent.parent / "rockerc.defaults.template.yaml"
     config_path = worktree_dir / "rockerc.yaml"
     if not config_path.exists():
@@ -503,7 +504,9 @@ def run_rockerc_in_worktree(
             shutil.copy(template_path, config_path)
             logging.info(f"Copied template defaults to {config_path}")
         else:
-            logging.warning(f"Template file {template_path} does not exist or is empty. Skipping copy.")
+            logging.warning(
+                f"Template file {template_path} does not exist or is empty. Skipping copy."
+            )
 
     cmd = [
         "rockerc",
