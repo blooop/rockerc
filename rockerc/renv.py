@@ -572,6 +572,7 @@ def run_rockerc_in_worktree(
         ]
         # Always include git-clone and ssh-client extensions
         extensions = ["git-clone", "ssh-client"]
+        extensions = ["git-clone"]
         config_path = worktree_dir / "rockerc.yaml"
         if config_path.exists():
             with open(config_path, "r") as f:
