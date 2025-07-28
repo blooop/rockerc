@@ -551,20 +551,49 @@ def run_rockerc_in_worktree(
         ]
         # Join with spaces, and ensure the whole string is passed as a single argument
         docker_run_args_str = " ".join(docker_run_args)
-        sys.argv = [
-            original_argv[0],
-            "--name",
-            container_name,
-            "--hostname",
-            container_name,
-            "--volume",
-            f"{bare_repo_dir}:{docker_bare_repo_mount}",
-            "--volume",
-            f"{worktree_dir}:{docker_worktree_mount}",
+        # Compose arguments so image is penultimate, command is last
+        image = "ubuntu:24.04"  # Default, will be replaced by config if present
+        # Try to get image from config
+        import yaml
+        config_path = worktree_dir / "rockerc.yaml"
+        if config_path.exists():
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f)
+                if config and "image" in config:
+                    image = config["image"]
+        # Build rocker command directly, using logic similar to rockerc
+        rocker_args = [
+            "rocker",
+            "--name", container_name,
+            "--hostname", container_name,
+            "--volume", f"{bare_repo_dir}:{docker_bare_repo_mount}",
+            "--volume", f"{worktree_dir}:{docker_worktree_mount}",
             f"--oyr-run-arg={docker_run_args_str}",
         ]
+        # Add any extensions from config (rockerc.yaml)
+        config_path = worktree_dir / "rockerc.yaml"
+        extensions = []
+        if config_path.exists():
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f)
+                if config:
+                    extensions = config.get("args", [])
+                    image = config.get("image", image)
+        for ext in extensions:
+            rocker_args.append(f"--{ext}")
+        # Add image as penultimate argument
+        rocker_args.append(image)
+        # Add command arguments if present
         if command:
-            sys.argv.extend(command)
+            filtered_command = [c for c in command if c != image]
+            rocker_args.extend(filtered_command)
+        # Run rocker directly
+        logging.info(f"Running rocker: {' '.join(rocker_args)}")
+        try:
+            subprocess.run(rocker_args, check=True)
+        except subprocess.CalledProcessError as e:
+            logging.error(f"rocker failed: {e}")
+            raise
 
         # --- Fix: Set working directory before calling run_rockerc ---
         # If subfolder is specified, chdir to worktree_dir/subfolder, else worktree_dir
@@ -1033,7 +1062,8 @@ The tool will:
         action="store_true",
         help="Rebuild the container with no cache (pass --no-cache to docker build)",
     )
-    args = parser.parse_args()
+    # Parse known args, leave extra for passing to rockerc/rocker
+    args, extra_args = parser.parse_known_args()
 
     # Handle version display
     if args.version:
@@ -1090,6 +1120,10 @@ The tool will:
                 logging.info(f"Environment ready at {worktree_dir}")
                 logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
+            # Only pass command arguments after repo_spec
+            command = extra_args.copy() if extra_args else None
+            if command and len(command) > 0 and command[0] == args.repo_spec:
+                command = command[1:]
             run_rockerc_in_worktree(
                 worktree_dir,
                 owner,
@@ -1098,6 +1132,7 @@ The tool will:
                 subfolder=subfolder,
                 force=args.force,
                 nocache=args.nocache,
+                command=command if command else None,
             )
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")

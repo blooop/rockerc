@@ -280,7 +280,11 @@ def run_rockerc(path: str = "."):
     """
 
     logging.basicConfig(level=logging.INFO)
-    merged_dict = collect_arguments(path)
+    # Accept a processed dictionary from renv, or collect arguments if called directly
+    if isinstance(path, dict):
+        merged_dict = path
+    else:
+        merged_dict = collect_arguments(path)
 
     # Fix: If no local config, use hardcoded defaults
     if not merged_dict or (not merged_dict.get("args") and not merged_dict.get("image")):
@@ -312,48 +316,45 @@ def run_rockerc(path: str = "."):
         create_dockerfile = True
 
     cmd_args = yaml_dict_to_args(merged_dict)
-    # Do not forcibly set --workdir /workspaces; let caller decide if needed
-    if len(cmd_args) > 0:
-        if len(sys.argv) > 1:
-            dockerfile_arg = "--create-dockerfile"
-            if dockerfile_arg in sys.argv:
-                sys.argv.remove(dockerfile_arg)
-                create_dockerfile = True
-            cmd_args += " " + " ".join(sys.argv[1:])
+    # Build the rocker command, ensuring image is only included once
+    rocker_cmd = f"rocker {cmd_args}"
+    # Only append extra command arguments (not image) from sys.argv[1:]
+    extra_args = [a for a in sys.argv[1:] if a != merged_dict.get("image")]
+    if extra_args:
+        rocker_cmd += " " + " ".join(extra_args)
 
-        cmd = f"rocker {cmd_args}"
-        logging.info(f"running cmd: {cmd}")
-        split_cmd = shlex.split(cmd)
+    logging.info(f"running cmd: {rocker_cmd}")
+    split_cmd = shlex.split(rocker_cmd)
 
-        if create_dockerfile:
-            save_rocker_cmd(split_cmd)
-        else:
-            container_name = extract_container_name_from_args(split_cmd)
-            if container_name and container_exists(container_name):
+    if create_dockerfile:
+        save_rocker_cmd(split_cmd)
+    else:
+        container_name = extract_container_name_from_args(split_cmd)
+        if container_name and container_exists(container_name):
+            logging.info(
+                f"Container '{container_name}' already exists. Attaching to it instead of creating a new one."
+            )
+            attach_to_container(container_name)
+            return
+
+        try:
+            subprocess.run(split_cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            error_output = str(e)
+            if container_name and (
+                "already in use" in error_output or "Conflict" in error_output
+            ):
                 logging.info(
-                    f"Container '{container_name}' already exists. Attaching to it instead of creating a new one."
+                    f"Container name conflict detected. Attempting to attach to existing container '{container_name}'..."
                 )
-                attach_to_container(container_name)
-                return
+                if container_exists(container_name):
+                    attach_to_container(container_name)
+                    return
 
-            try:
-                subprocess.run(split_cmd, check=True)
-            except subprocess.CalledProcessError as e:
-                error_output = str(e)
-                if container_name and (
-                    "already in use" in error_output or "Conflict" in error_output
-                ):
-                    logging.info(
-                        f"Container name conflict detected. Attempting to attach to existing container '{container_name}'..."
-                    )
-                    if container_exists(container_name):
-                        attach_to_container(container_name)
-                        return
-
-                    logging.error(
-                        f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected."
-                    )
-                raise
+                logging.error(
+                    f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected."
+                )
+            raise
 
      
 

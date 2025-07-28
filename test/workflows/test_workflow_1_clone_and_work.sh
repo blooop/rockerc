@@ -5,5 +5,5 @@ rm -rf /tmp/renv
 
 #rockerc is set up in this repo
 echo "Running: renv bloop/manifest_rocker@renv_test and confirming the directory is manifest_rocker"
-renv bloop/manifest_rocker@renv_test pwd
+renv blooop/manifest_rocker@renv_test pwd
 
