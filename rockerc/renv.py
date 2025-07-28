@@ -26,8 +26,6 @@ import toml
 from iterfzf import iterfzf
 import yaml
 
-from .rockerc import run_rockerc
-
 
 # --- Autocompletion logic ---
 def list_owners_and_repos() -> List[str]:
@@ -480,7 +478,6 @@ def run_rockerc_in_worktree(
     branch: str,
     *,
     subfolder: str = "",
-    command: list[str] | None = None,
     force: bool = False,
     nocache: bool = False,
 ) -> None:
@@ -497,181 +494,28 @@ def run_rockerc_in_worktree(
         force: If True, force rebuild the container even if it already exists
         nocache: If True, rebuild the container with no cache
     """
-    original_cwd = os.getcwd()
-    original_argv = sys.argv.copy()  # Save original argv
-
-    try:
-        # Always mount the worktree root to /workspaces
-        mount_dir = worktree_dir
-        # Check for .git or worktree metadata
-        if not ((mount_dir / ".git").exists() or (mount_dir / "HEAD").exists()):
-            raise RuntimeError(
-                f"The directory {mount_dir} is not a valid git repository or worktree. Aborting container launch."
-            )
-
-        # Determine mount directory for docker
-        docker_mount = str(mount_dir)
-        if subfolder:
-            target_dir = mount_dir / subfolder
-            if not target_dir.exists():
-                raise ValueError(f"Subfolder '{subfolder}' does not exist in {mount_dir}")
-            logging.info(
-                f"Will mount {docker_mount} to /workspaces and start in subfolder: /workspaces/{subfolder}"
-            )
+    # Ensure the template config is present in the worktree root
+    import shutil
+    template_path = Path(__file__).parent.parent / "rockerc.defaults.template.yaml"
+    config_path = worktree_dir / "rockerc.yaml"
+    if not config_path.exists():
+        if template_path.exists() and template_path.stat().st_size > 0:
+            shutil.copy(template_path, config_path)
+            logging.info(f"Copied template defaults to {config_path}")
         else:
-            logging.info(f"Will mount {docker_mount} to /workspaces and start in /workspaces")
+            logging.warning(f"Template file {template_path} does not exist or is empty. Skipping copy.")
 
-        # Generate container name from repo@branch format
-        safe_branch = branch.replace("/", "-")
-        container_name = f"{repo}-{safe_branch}"
-        if subfolder:
-            safe_subfolder = subfolder.replace("/", "-")
-            container_name = f"{repo}-{safe_branch}-{safe_subfolder}"
-
-        # Mount both the bare repo and the worktree for proper git operations
-        bare_repo_dir = get_repo_dir(_owner, repo)
-        # Use the actual repo name for the worktree mount and workdir
-        docker_bare_repo_mount = "/repo.git"
-        docker_worktree_mount = f"/{repo}"
-        if subfolder:
-            docker_workdir = f"{docker_worktree_mount}/{subfolder}"
-        else:
-            docker_workdir = docker_worktree_mount
-
-        # Set GIT_DIR and GIT_WORK_TREE env vars for git to work in the container
-        worktree_name = f"worktree-{safe_branch}"
-        git_dir_in_container = f"{docker_bare_repo_mount}/worktrees/{worktree_name}"
-        git_work_tree_in_container = docker_workdir
-
-        # Collect all docker run arguments into a single string, properly quoted
-        docker_run_args = [
-            f"--workdir={docker_workdir}",
-            f"--env=GIT_DIR={git_dir_in_container}",
-            f"--env=GIT_WORK_TREE={git_work_tree_in_container}",
-        ]
-        # Join with spaces, and ensure the whole string is passed as a single argument
-        docker_run_args_str = " ".join(docker_run_args)
-        sys.argv = [
-            original_argv[0],
-            "--name",
-            container_name,
-            "--hostname",
-            container_name,
-            "--volume",
-            f"{bare_repo_dir}:{docker_bare_repo_mount}",
-            "--volume",
-            f"{worktree_dir}:{docker_worktree_mount}",
-            f"--oyr-run-arg={docker_run_args_str}",
-        ]
-        if command:
-            sys.argv.extend(command)
-
-        # --- Fix: Set working directory before calling run_rockerc ---
-        # If subfolder is specified, chdir to worktree_dir/subfolder, else worktree_dir
-        if subfolder:
-            target_dir = worktree_dir / subfolder
-        else:
-            target_dir = worktree_dir
-
-        # Patch: Attach logic matches launch logic
-        attach_dir = docker_workdir
-        logging.info(f"Attach directory for container: {attach_dir}")
-
-        logging.info(
-            f"Running rockerc with volumes: {bare_repo_dir}:{docker_bare_repo_mount}, {worktree_dir}:{docker_worktree_mount} and workdir: {docker_workdir}"
-        )
-        logging.info(
-            f"Setting GIT_DIR={git_dir_in_container} and GIT_WORK_TREE={git_work_tree_in_container} in container"
-        )
-
-        # --- Attach to container if it exists, else launch ---
-        def container_exists(name):
-            result = subprocess.run(
-                ["docker", "ps", "-a", "--format", "{{.Names}}"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            return name in result.stdout.splitlines()
-
-        def container_running(name):
-            result = subprocess.run(
-                ["docker", "ps", "--format", "{{.Names}}"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            return name in result.stdout.splitlines()
-
-        def remove_container(name):
-            """Remove a container (stop first if running)."""
-            if container_running(name):
-                logging.info(f"Stopping running container '{name}'...")
-                subprocess.run(["docker", "stop", name], check=True)
-            logging.info(f"Removing container '{name}'...")
-            subprocess.run(["docker", "rm", name], check=True)
-
-        # Handle force rebuild
-        if (force or nocache) and container_exists(container_name):
-            if force:
-                logging.info(
-                    f"Force flag specified. Removing existing container '{container_name}' to rebuild..."
-                )
-            if nocache:
-                logging.info(
-                    f"No-cache flag specified. Removing existing container '{container_name}' to rebuild with no cache..."
-                )
-            remove_container(container_name)
-
-        if container_exists(container_name) and not (force or nocache):
-            logging.info(
-                f"Container '{container_name}' already exists. Attaching to it instead of creating a new one."
-            )
-            if not container_running(container_name):
-                logging.info(
-                    f"Container '{container_name}' exists but is not running. Starting it..."
-                )
-                subprocess.run(["docker", "start", container_name], check=True)
-            logging.info(f"Attaching to existing container '{container_name}'...")
-            try:
-                subprocess.run(
-                    ["docker", "exec", "-it", "-w", attach_dir, container_name, "/bin/bash"],
-                    check=True,
-                )
-            except subprocess.CalledProcessError as e:
-                logging.error(f"Failed to attach to container '{container_name}': {e}")
-                logging.error("You may need to remove the existing container:")
-                logging.error(f"  docker rm {container_name}")
-                logging.error("Or remove it forcefully if it's running:")
-                logging.error(f"  docker rm -f {container_name}")
-                logging.error("Alternatively, use the --force flag to automatically rebuild:")
-                logging.error(f"  renv --force {_owner}/{repo}@{branch}")
-                raise
-        else:
-            if force:
-                logging.info(
-                    f"Building new container '{container_name}' (force rebuild requested)..."
-                )
-            elif nocache:
-                logging.info(
-                    f"Building new container '{container_name}' (no-cache rebuild requested)..."
-                )
-            else:
-                logging.info(
-                    f"Container '{container_name}' does not exist. Building new container..."
-                )
-            os.chdir(target_dir)
-            if nocache:
-                os.environ["ROCKERC_NO_CACHE"] = "1"
-                logging.info("Rebuilding container with --nocache (ROCKERC_NO_CACHE=1)")
-                sys.argv.append("--nocache")
-            run_rockerc(str(worktree_dir))
-    except Exception as e:
-        logging.error(f"Failed to run rockerc: {e}")
-        raise
-    finally:
-        os.chdir(original_cwd)
-        sys.argv = original_argv  # Restore original argv
+    cmd = [
+        "rockerc",
+        f"{_owner}/{repo}@{branch}",
+    ]
+    if subfolder:
+        cmd += ["--subfolder", subfolder]
+    if force:
+        cmd += ["--force"]
+    if nocache:
+        cmd += ["--nocache"]
+    subprocess.run(cmd, check=True, cwd=worktree_dir)
 
 
 def setup_repo_environment(owner: str, repo: str, branch: str) -> Path:

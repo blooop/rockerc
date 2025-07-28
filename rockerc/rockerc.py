@@ -17,26 +17,41 @@ def yaml_dict_to_args(d: dict) -> str:
         str: rocker arguments string
     """
 
-    cmd_str = ""
+    cmd_parts = []
 
     image = d.pop("image", None)  # special value
-    # Remove disable_args if present (should not be passed to rocker)
     d.pop("disable_args", None)
 
+    # Add all --arg options
     if "args" in d:
         args = d.pop("args")
         for a in args:
-            cmd_str += f"--{a} "
+            cmd_parts.append(f"--{a}")
 
-    # the rest of the named arguments
+    # Track if we need to insert '--' before image
+    needs_double_dash = False
+
     for k, v in d.items():
-        cmd_str += f"--{k} {v} "
+        if k == "image":
+            continue  # skip image, will add as positional argument
 
-    # last argument is the image name
+        if isinstance(v, list):
+            cmd_parts.append(f"--{k}")
+            for item in v:
+                cmd_parts.append(str(item))
+            if k == "extension-blacklist" and v:
+                needs_double_dash = True
+        else:
+            cmd_parts.append(f"--{k}")
+            cmd_parts.append(str(v))
+
+    # Insert '--' before image if needed
     if image is not None:
-        cmd_str += image
+        if needs_double_dash:
+            cmd_parts.append("--")
+        cmd_parts.append(str(image))
 
-    return cmd_str
+    return cmd_parts
 
 
 # NOTE: collect_arguments is now imported from renv, which parses defaults and passes them as arguments.
@@ -312,53 +327,41 @@ def run_rockerc(path: str = "."):
         create_dockerfile = True
 
     cmd_args = yaml_dict_to_args(merged_dict)
-    # Do not forcibly set --workdir /workspaces; let caller decide if needed
-    if len(cmd_args) > 0:
-        if len(sys.argv) > 1:
-            dockerfile_arg = "--create-dockerfile"
-            if dockerfile_arg in sys.argv:
-                sys.argv.remove(dockerfile_arg)
-                create_dockerfile = True
-            cmd_args += " " + " ".join(sys.argv[1:])
+    cmd = ["rocker"] + cmd_args
+    logging.info(f"running cmd: {' '.join(cmd)}")
 
-        cmd = f"rocker {cmd_args}"
-        logging.info(f"running cmd: {cmd}")
-        split_cmd = shlex.split(cmd)
+    if create_dockerfile:
+        save_rocker_cmd(cmd)
+    else:
+        container_name = extract_container_name_from_args(cmd)
+        if container_name and container_exists(container_name):
+            logging.info(
+                f"Container '{container_name}' already exists. Attaching to it instead of creating a new one."
+            )
+            attach_to_container(container_name)
+            return
 
-        if create_dockerfile:
-            save_rocker_cmd(split_cmd)
-        else:
-            container_name = extract_container_name_from_args(split_cmd)
-            if container_name and container_exists(container_name):
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            error_output = str(e)
+            if container_name and ("already in use" in error_output or "Conflict" in error_output):
                 logging.info(
-                    f"Container '{container_name}' already exists. Attaching to it instead of creating a new one."
+                    f"Container name conflict detected. Attempting to attach to existing container '{container_name}'..."
                 )
-                attach_to_container(container_name)
-                return
+                if container_exists(container_name):
+                    attach_to_container(container_name)
+                    return
 
-            try:
-                subprocess.run(split_cmd, check=True)
-            except subprocess.CalledProcessError as e:
-                error_output = str(e)
-                if container_name and (
-                    "already in use" in error_output or "Conflict" in error_output
-                ):
-                    logging.info(
-                        f"Container name conflict detected. Attempting to attach to existing container '{container_name}'..."
-                    )
-                    if container_exists(container_name):
-                        attach_to_container(container_name)
-                        return
+                logging.error(
+                    f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected."
+                )
+            raise
 
-                    logging.error(
-                        f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected."
-                    )
-                raise
-
-        logging.error(
-            "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
-        )
-        subprocess.call("rocker -h", shell=True)
+    logging.error(
+        "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
+    )
+    subprocess.call("rocker -h", shell=True)
 
 
 if __name__ == "__main__":

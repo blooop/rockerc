@@ -5,14 +5,17 @@ import sys
 
 def test_renv_no_errors():
     import shutil
+    import tempfile
 
-    renv_dir = os.path.join(os.getcwd(), "renv")
+    tmp_dir = tempfile.mkdtemp(dir="/tmp")
+    renv_dir = os.path.join(tmp_dir, "renv")
     # Remove renv directory if it exists
     if os.path.exists(renv_dir):
         shutil.rmtree(renv_dir)
-    # Run renv command
+    # Run renv command in /tmp
     result = subprocess.run(
         [sys.executable, "-m", "rockerc.renv", "osrf/rocker"],
+        cwd=tmp_dir,
         capture_output=True,
         text=True,
         check=True,
