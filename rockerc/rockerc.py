@@ -355,10 +355,7 @@ def run_rockerc(path: str = "."):
                     )
                 raise
 
-        logging.error(
-            "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
-        )
-        subprocess.call("rocker -h", shell=True)
+     
 
 
 if __name__ == "__main__":
