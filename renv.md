@@ -4,8 +4,7 @@
   directly. rockerc expects there to be rockerc files, whereas renv shoudl work on any repo without a rockerc file and 
   defines its own require extension for basic development. I have included some tempalte workflows as bash scripts, you
    must implement rocker to meeting the all the specs in the markdown file and also the tests stubs I left in 
-  test/worksflows. use the pixi environment and pixi tasks to run tests and ci. you are working on the host machine 
-  where rocker is installed. aad an executable `renv` to the pyproject.toml.  write lots of tests and work step by test
+  test/worksflows. use the pixi environment and pixi tasks to run tests and ci. you are working on the host machine   where rocker is installed. aad an executable `renv` to the pyproject.toml.  write lots of tests and work step by test
    to implement the features and higher level goal
 
 
@@ -193,3 +192,18 @@ This makes switching between repos and branches fast and error-free, even in lar
 For more details, see the project README or run `renv --help`.
 
 
+this is an example of how to use oyr-run-arg to pass arguments to docker through rocker.
+
+```python
+  rocker_config = {
+            "image": "ubuntu:24.04",
+            "args": ["user", "pull", "deps", "git", "cwd"],
+            "name": container_name,
+            "hostname": container_name,
+            "volume": [
+                f"{bare_repo_dir}:{docker_bare_repo_mount}",
+                f"{worktree_dir}:{docker_worktree_mount}",
+            ],
+            "oyr-run-arg": f"--workdir={docker_workdir} --env=GIT_DIR={git_dir_in_container} --env=GIT_WORK_TREE={git_work_tree_in_container}",
+        }
+```
