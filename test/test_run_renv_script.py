@@ -8,7 +8,7 @@ def test_run_renv_script():
     # Ensure the script is executable
     os.chmod(SCRIPT_PATH, 0o755)
     result = subprocess.run(
-        [SCRIPT_PATH], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+        [SCRIPT_PATH], cwd="/tmp", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
     )
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode == 0, (

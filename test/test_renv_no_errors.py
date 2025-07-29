@@ -13,6 +13,7 @@ def test_renv_no_errors():
     # Run renv command
     result = subprocess.run(
         [sys.executable, "-m", "rockerc.renv", "osrf/rocker"],
+        cwd="/tmp",
         capture_output=True,
         text=True,
         check=True,
