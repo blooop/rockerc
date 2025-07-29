@@ -3,8 +3,8 @@ set -e
 cd /tmp
 rm -rf /tmp/renv
 
-echo "Running: renv blooop/manifest_rocker@main -f"
-renv blooop/manifest_rocker@main -f
+echo "Running: renv blooop/test_renv@main -f"
+renv blooop/test_renv@main -f
 
-echo "Running: renv blooop/manifest_rocker@main --nocache"
-renv blooop/manifest_rocker@main --nocache
+echo "Running: renv blooop/test_renv@main --nocache"
+renv blooop/test_renv@main --nocache

@@ -32,9 +32,7 @@ def test_workflow_1_cmd():
     output = result.stdout.decode() + result.stderr.decode()
     # Add custom asserts for this workflow as needed
     assert result.returncode in (0, 1), f"Workflow 1 cmd failed: {output}"
-    assert "On branch" in output, (
-        "Expected git status 'On branch' not found in workflow 1 output"
-    )
+    assert "On branch" in output, "Expected git status 'On branch' not found in workflow 1 output"
 
 
 def test_workflow_2_clone_and_work():
@@ -49,5 +47,3 @@ def test_workflow_2_clone_and_work():
     assert "On branch osrf_renv_test" in output, (
         "Expected 'On branch osrf_renv_test' not found in workflow 2 output"
     )
-
-

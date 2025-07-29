@@ -3,5 +3,5 @@ set -e
 cd /tmp
 rm -rf /tmp/renv
 
-echo "Running: renv blooop/manifest_rocker@main --no-container"
-renv blooop/manifest_rocker@main --no-container
+echo "Running: renv blooop/test_renv@main --no-container"
+renv blooop/test_renv@main --no-container

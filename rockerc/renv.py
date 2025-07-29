@@ -26,8 +26,6 @@ import toml
 from iterfzf import iterfzf
 import yaml
 
-from .rockerc import run_rockerc
-
 
 # --- Autocompletion logic ---
 def list_owners_and_repos() -> List[str]:
@@ -473,6 +471,177 @@ def fetch_repo(owner: str, repo: str) -> None:
         logging.warning(f"Failed to fetch changes: {e.stderr}")
 
 
+def yaml_dict_to_args(d: dict) -> str:
+    """Given a dictionary of arguments turn it into an argument string to pass to rocker
+
+    Args:
+        d (dict): rocker arguments dictionary
+
+    Returns:
+        str: rocker arguments string
+    """
+    cmd_str = ""
+    image = d.pop("image", None)  # special value
+    # Remove disable_args if present (should not be passed to rocker)
+    d.pop("disable_args", None)
+
+    if "args" in d:
+        args = d.pop("args")
+        for a in args:
+            cmd_str += f"--{a} "
+
+    # the rest of the named arguments
+    for k, v in d.items():
+        cmd_str += f"--{k} {v} "
+
+    # last argument is the image name
+    if image is not None:
+        cmd_str += image
+
+    return cmd_str
+
+
+def collect_arguments(path: str = ".") -> dict:
+    """Search for rockerc.yaml files and return a merged dictionary
+
+    Args:
+        path (str, optional): path to reach for files. Defaults to ".".
+
+    Returns:
+        dict: A dictionary of merged rockerc arguments
+    """
+    search_path = Path(path)
+
+    # Start with defaults
+    merged_dict = load_defaults_config(path)
+
+    # Load and merge local rockerc.yaml files
+    local_configs_found = False
+    for p in search_path.glob("rockerc.yaml"):
+        print(f"loading {p}")
+        local_configs_found = True
+
+        with open(p.as_posix(), "r", encoding="utf-8") as f:
+            local_config = yaml.safe_load(f) or {}
+
+            # Handle disable_args - remove these from the current args
+            if "disable_args" in local_config:
+                disabled_args = local_config["disable_args"]
+                if isinstance(disabled_args, list):
+                    for arg in disabled_args:
+                        if arg in merged_dict["args"]:
+                            merged_dict["args"].remove(arg)
+                    print(f"Local disabled extensions: {', '.join(disabled_args)}")
+
+                # Remove disable_args so it doesn't get passed to rocker
+                local_config.pop("disable_args")
+
+            # Handle regular args - add these to existing args (avoiding duplicates)
+            if "args" in local_config:
+                local_args = local_config["args"]
+                if isinstance(local_args, list):
+                    for arg in local_args:
+                        if arg not in merged_dict["args"]:
+                            merged_dict["args"].append(arg)
+                    print(f"Added extensions: {', '.join(local_args)}")
+
+                # Remove args from local_config since we handled it specially
+                local_config.pop("args")
+
+            # Merge other configuration options (image, dockerfile, etc.)
+            for key, value in local_config.items():
+                merged_dict[key] = value
+
+    # If no local config found, show what defaults are being used
+    if not local_configs_found:
+        if merged_dict["args"]:
+            print(f"Using default extensions: {', '.join(merged_dict['args'])}")
+        print("No local rockerc.yaml found - using defaults. Create rockerc.yaml to customize.")
+
+    return merged_dict
+
+
+def container_exists(container_name: str) -> bool:
+    """Check if a Docker container with the given name exists.
+
+    Args:
+        container_name: Name of the container to check
+
+    Returns:
+        bool: True if container exists, False otherwise
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                f"name=^/{container_name}$",
+                "--format",
+                "{{.Names}}",
+            ],
+            cwd="/tmp",
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return container_name in result.stdout.strip().split("\n")
+    except subprocess.CalledProcessError:
+        return False
+
+
+def container_is_running(container_name: str) -> bool:
+    """Check if a Docker container is currently running.
+
+    Args:
+        container_name: Name of the container to check
+
+    Returns:
+        bool: True if container is running, False otherwise
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--filter", f"name=^/{container_name}$", "--format", "{{.Names}}"],
+            cwd="/tmp",
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return container_name in result.stdout.strip().split("\n")
+    except subprocess.CalledProcessError:
+        return False
+
+
+def attach_to_container(container_name: str, workdir: str = "/workspaces") -> None:
+    """Attach to an existing Docker container.
+
+    Args:
+        container_name: Name of the container to attach to
+        workdir: Working directory to start in
+    """
+    try:
+        if not container_is_running(container_name):
+            logging.info(f"Container '{container_name}' exists but is not running. Starting it...")
+            subprocess.run(["docker", "start", container_name], cwd="/tmp", check=True)
+
+        logging.info(f"Attaching to existing container '{container_name}'...")
+        subprocess.run(
+            ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"],
+            cwd="/tmp",
+            check=True,
+        )
+
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to attach to container '{container_name}': {e}")
+        # If we can't attach, suggest removing the conflicting container
+        logging.error("You may need to remove the existing container:")
+        logging.error(f"  docker rm {container_name}")
+        logging.error("Or remove it forcefully if it's running:")
+        logging.error(f"  docker rm -f {container_name}")
+        raise
+
+
 def run_rockerc_in_worktree(
     worktree_dir: Path,
     _owner: str,
@@ -485,11 +654,11 @@ def run_rockerc_in_worktree(
     nocache: bool = False,
 ) -> None:
     """
-    Run rockerc in the specified worktree directory.
+    Run rocker directly in the specified worktree directory without using rockerc.
 
     Args:
         worktree_dir: Path to the worktree directory
-        owner: Repository owner
+        _owner: Repository owner (underscore prefix to avoid confusion)
         repo: Repository name
         branch: Branch name
         subfolder: Optional subfolder within the repository
@@ -498,28 +667,27 @@ def run_rockerc_in_worktree(
         nocache: If True, rebuild the container with no cache
     """
     original_cwd = os.getcwd()
-    original_argv = sys.argv.copy()  # Save original argv
 
     try:
-        # Always mount the worktree root to /workspaces
-        mount_dir = worktree_dir
         # Check for .git or worktree metadata
-        if not ((mount_dir / ".git").exists() or (mount_dir / "HEAD").exists()):
+        if not ((worktree_dir / ".git").exists() or (worktree_dir / "HEAD").exists()):
             raise RuntimeError(
-                f"The directory {mount_dir} is not a valid git repository or worktree. Aborting container launch."
+                f"The directory {worktree_dir} is not a valid git repository or worktree. Aborting container launch."
             )
 
-        # Determine mount directory for docker
-        docker_mount = str(mount_dir)
+        # Determine target directory and docker workdir
         if subfolder:
-            target_dir = mount_dir / subfolder
+            target_dir = worktree_dir / subfolder
             if not target_dir.exists():
-                raise ValueError(f"Subfolder '{subfolder}' does not exist in {mount_dir}")
+                raise ValueError(f"Subfolder '{subfolder}' does not exist in {worktree_dir}")
+            docker_workdir = f"/workspaces/{subfolder}"
             logging.info(
-                f"Will mount {docker_mount} to /workspaces and start in subfolder: /workspaces/{subfolder}"
+                f"Will mount {worktree_dir} to /workspaces and start in subfolder: /workspaces/{subfolder}"
             )
         else:
-            logging.info(f"Will mount {docker_mount} to /workspaces and start in /workspaces")
+            target_dir = worktree_dir
+            docker_workdir = "/workspaces"
+            logging.info(f"Will mount {worktree_dir} to /workspaces and start in /workspaces")
 
         # Generate container name from repo@branch format
         safe_branch = branch.replace("/", "-")
@@ -528,41 +696,34 @@ def run_rockerc_in_worktree(
             safe_subfolder = subfolder.replace("/", "-")
             container_name = f"{repo}-{safe_branch}-{safe_subfolder}"
 
-        # Mount both the bare repo and the worktree for proper git operations
+        # Get repo and worktree directories for volume mounts
         bare_repo_dir = get_repo_dir(_owner, repo)
-        # Use the actual repo name for the worktree mount and workdir
-        docker_bare_repo_mount = "/repo.git"
-        docker_worktree_mount = f"/{repo}"
-        if subfolder:
-            docker_workdir = f"{docker_worktree_mount}/{subfolder}"
-        else:
-            docker_workdir = docker_worktree_mount
-
-        # Set GIT_DIR and GIT_WORK_TREE env vars for git to work in the container
         worktree_name = f"worktree-{safe_branch}"
-        git_dir_in_container = f"{docker_bare_repo_mount}/worktrees/{worktree_name}"
-        git_work_tree_in_container = docker_workdir
+        git_dir_in_container = f"/repo.git/worktrees/{worktree_name}"
+        git_work_tree_in_container = "/workspaces"
 
-        # Collect all docker run arguments into a single string, properly quoted
-        docker_run_args = [
-            f"--workdir={docker_workdir}",
-            f"--env=GIT_DIR={git_dir_in_container}",
-            f"--env=GIT_WORK_TREE={git_work_tree_in_container}",
-        ]
-        # Join with spaces, and ensure the whole string is passed as a single argument
-        docker_run_args_str = " ".join(docker_run_args)
-        # Compose arguments so image is penultimate, command is last
-        image = "ubuntu:24.04"  # Default, will be replaced by config if present
-        # Try to get image from config
-        # yaml is already imported at the top of the file
+        # Change to target directory to read config
+        os.chdir(target_dir)
 
-        config_path = worktree_dir / "rockerc.yaml"
-        if config_path.exists():
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-                if config and "image" in config:
-                    image = config["image"]
-        # Build rocker command directly, using logic similar to rockerc
+        # Collect rockerc configuration
+        merged_dict = collect_arguments(str(target_dir))
+
+        # If no config found, use hardcoded defaults
+        if not merged_dict or (not merged_dict.get("args") and not merged_dict.get("image")):
+            merged_dict = {
+                "image": "ubuntu:24.04",
+                "args": ["user", "pull", "deps", "git", "cwd"],
+                "disable_args": ["nvidia"],
+            }
+            print("No local rockerc.yaml found - using hardcoded defaults.")
+
+        if "args" not in merged_dict:
+            logging.error(
+                "No 'args' key found in rockerc.yaml or defaults. Please add an 'args' list with rocker arguments. See 'rocker -h' for help."
+            )
+            raise ValueError("Missing 'args' configuration")
+
+        # Add required arguments for renv
         rocker_args = [
             "rocker",
             "--name",
@@ -570,84 +731,37 @@ def run_rockerc_in_worktree(
             "--hostname",
             container_name,
             "--volume",
-            f"{bare_repo_dir}:{docker_bare_repo_mount}",
+            f"{bare_repo_dir}:/repo.git",
             "--volume",
-            f"{worktree_dir}:{docker_worktree_mount}",
-            f"--oyr-run-arg={docker_run_args_str}",
+            f"{worktree_dir}:/workspaces",
+            "--oyr-run-arg",
+            f"--workdir={docker_workdir}",
+            "--env",
+            f"GIT_DIR={git_dir_in_container}",
+            "--env",
+            f"GIT_WORK_TREE={git_work_tree_in_container}",
         ]
-        # Always include git-clone and ssh-client extensions
-        extensions = ["git-clone", "ssh-client"]
-        extensions = ["git-clone"]
-        config_path = worktree_dir / "rockerc.yaml"
-        if config_path.exists():
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-                if config:
-                    # Prepend config extensions after required ones
-                    extensions += [e for e in config.get("args", []) if e not in extensions]
-                    image = config.get("image", image)
-        for ext in extensions:
-            rocker_args.append(f"--{ext}")
-        # Add image as penultimate argument
-        rocker_args.append(image)
-        # Defensive: Remove repo spec if present in command
+
+        # Add extensions from config
+        for arg in merged_dict["args"]:
+            rocker_args.append(f"--{arg}")
+
+        # Add other config options (except args and image)
+        for key, value in merged_dict.items():
+            if key not in ["args", "image", "disable_args"]:
+                rocker_args.extend([f"--{key}", str(value)])
+
+        # Add image as the final argument
+        rocker_args.append(merged_dict.get("image", "ubuntu:24.04"))
+
+        # Add any extra command arguments
         if command:
-            filtered_command = command.copy()
-            # Remove repo spec if present as first argument
-            repo_spec = f"{_owner}/{repo}@{branch}"
-            if filtered_command and filtered_command[0] == repo_spec:
-                filtered_command = filtered_command[1:]
-            # Remove image if present
-            filtered_command = [c for c in filtered_command if c != image]
+            filtered_command = [c for c in command if c != merged_dict.get("image")]
             rocker_args.extend(filtered_command)
-        # Run rocker directly
-        logging.info(f"Running rocker: {' '.join(rocker_args)}")
-        try:
-            subprocess.run(rocker_args, check=True)
-        except subprocess.CalledProcessError as e:
-            logging.error(f"rocker failed: {e}")
-            raise
-        # Prevent duplicate build/run: If a command is provided, do NOT run rockerc again
-        if command:
-            # Command was provided, so we already ran the container with rocker above
-            return
-        # --- Only run rockerc if no command was provided (interactive shell) ---
-        # If subfolder is specified, chdir to worktree_dir/subfolder, else worktree_dir
-        if subfolder:
-            target_dir = worktree_dir / subfolder
-        else:
-            target_dir = worktree_dir
-        attach_dir = docker_workdir
-        logging.info(f"Attach directory for container: {attach_dir}")
-        logging.info(
-            f"Running rockerc with volumes: {bare_repo_dir}:{docker_bare_repo_mount}, {worktree_dir}:{docker_worktree_mount} and workdir: {docker_workdir}"
-        )
-        logging.info(
-            f"Setting GIT_DIR={git_dir_in_container} and GIT_WORK_TREE={git_work_tree_in_container} in container"
-        )
-
-        # --- Attach to container if it exists, else launch ---
-        def container_exists(name):
-            result = subprocess.run(
-                ["docker", "ps", "-a", "--format", "{{.Names}}"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            return name in result.stdout.splitlines()
-
-        def container_running(name):
-            result = subprocess.run(
-                ["docker", "ps", "--format", "{{.Names}}"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            return name in result.stdout.splitlines()
 
         def remove_container(name):
             """Remove a container (stop first if running)."""
-            if container_running(name):
+            if container_is_running(name):
                 logging.info(f"Stopping running container '{name}'...")
                 subprocess.run(["docker", "stop", name], check=True)
             logging.info(f"Removing container '{name}'...")
@@ -664,55 +778,49 @@ def run_rockerc_in_worktree(
                     f"No-cache flag specified. Removing existing container '{container_name}' to rebuild with no cache..."
                 )
             remove_container(container_name)
+
+        # Check if container exists and attach if not forcing rebuild
         if container_exists(container_name) and not (force or nocache):
             logging.info(
                 f"Container '{container_name}' already exists. Attaching to it instead of creating a new one."
             )
-            if not container_running(container_name):
-                logging.info(
-                    f"Container '{container_name}' exists but is not running. Starting it..."
-                )
-                subprocess.run(["docker", "start", container_name], check=True)
-            logging.info(f"Attaching to existing container '{container_name}'...")
-            try:
-                subprocess.run(
-                    ["docker", "exec", "-it", "-w", attach_dir, container_name, "/bin/bash"],
-                    check=True,
-                )
-            except subprocess.CalledProcessError as e:
-                logging.error(f"Failed to attach to container '{container_name}': {e}")
-                logging.error("You may need to remove the existing container:")
-                logging.error(f"  docker rm {container_name}")
-                logging.error("Or remove it forcefully if it's running:")
-                logging.error(f"  docker rm -f {container_name}")
-                logging.error("Alternatively, use the --force flag to automatically rebuild:")
-                logging.error(f"  renv --force {_owner}/{repo}@{branch}")
-                raise
+            attach_to_container(container_name, docker_workdir)
+            return
+
+        # Run rocker to create new container
+        if force:
+            logging.info(f"Building new container '{container_name}' (force rebuild requested)...")
+        elif nocache:
+            logging.info(
+                f"Building new container '{container_name}' (no-cache rebuild requested)..."
+            )
         else:
-            if force:
+            logging.info(f"Container '{container_name}' does not exist. Building new container...")
+
+        logging.info(f"running cmd: rocker {' '.join(rocker_args[1:])}")
+
+        try:
+            subprocess.run(rocker_args, cwd="/tmp", check=True)
+        except subprocess.CalledProcessError as e:
+            error_output = str(e)
+            if container_name and ("already in use" in error_output or "Conflict" in error_output):
                 logging.info(
-                    f"Building new container '{container_name}' (force rebuild requested)..."
+                    f"Container name conflict detected. Attempting to attach to existing container '{container_name}'..."
                 )
-            elif nocache:
-                logging.info(
-                    f"Building new container '{container_name}' (no-cache rebuild requested)..."
+                if container_exists(container_name):
+                    attach_to_container(container_name, docker_workdir)
+                    return
+
+                logging.error(
+                    f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected."
                 )
-            else:
-                logging.info(
-                    f"Container '{container_name}' does not exist. Building new container..."
-                )
-            os.chdir(target_dir)
-            if nocache:
-                os.environ["ROCKERC_NO_CACHE"] = "1"
-                logging.info("Rebuilding container with --nocache (ROCKERC_NO_CACHE=1)")
-                sys.argv.append("--nocache")
-            run_rockerc(str(worktree_dir))
+            raise
+
     except Exception as e:
-        logging.error(f"Failed to run rockerc: {e}")
+        logging.error(f"Failed to run rocker: {e}")
         raise
     finally:
         os.chdir(original_cwd)
-        sys.argv = original_argv  # Restore original argv
 
 
 def setup_repo_environment(owner: str, repo: str, branch: str) -> Path:
