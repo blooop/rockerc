@@ -712,7 +712,7 @@ def run_rockerc_in_worktree(
         if not merged_dict or (not merged_dict.get("args") and not merged_dict.get("image")):
             merged_dict = {
                 "image": "ubuntu:24.04",
-                "args": ["user", "pull", "deps", "git", "cwd"],
+                "args": ["user", "pull", "deps", "git"],
                 "disable_args": ["nvidia"],
             }
             print("No local rockerc.yaml found - using hardcoded defaults.")
@@ -724,6 +724,7 @@ def run_rockerc_in_worktree(
             raise ValueError("Missing 'args' configuration")
 
         # Add required arguments for renv
+        docker_run_args = f"--workdir={docker_workdir} --env=GIT_DIR={git_dir_in_container} --env=GIT_WORK_TREE={git_work_tree_in_container}"
         rocker_args = [
             "rocker",
             "--name",
@@ -735,11 +736,7 @@ def run_rockerc_in_worktree(
             "--volume",
             f"{worktree_dir}:/workspaces",
             "--oyr-run-arg",
-            f"--workdir={docker_workdir}",
-            "--env",
-            f"GIT_DIR={git_dir_in_container}",
-            "--env",
-            f"GIT_WORK_TREE={git_work_tree_in_container}",
+            docker_run_args,
         ]
 
         # Add extensions from config
