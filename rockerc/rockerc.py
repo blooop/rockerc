@@ -30,7 +30,12 @@ def yaml_dict_to_args(d: dict) -> str:
 
     # the rest of the named arguments
     for k, v in d.items():
-        cmd_str += f"--{k} {v} "
+        if isinstance(v, list):
+            # Handle list values (like multiple volumes)
+            for item in v:
+                cmd_str += f"--{k} {shlex.quote(str(item))} "
+        else:
+            cmd_str += f"--{k} {shlex.quote(str(v))} "
 
     # last argument is the image name
     if image is not None:
@@ -334,7 +339,29 @@ def run_rockerc(path: str = "."):
         save_rocker_cmd(split_cmd)
     else:
         container_name = extract_container_name_from_args(split_cmd)
-        if container_name and container_exists(container_name):
+
+        # Handle force rebuild flag - remove existing container
+        force_rebuild = os.environ.get("ROCKERC_FORCE") == "1" or "--force" in sys.argv
+        nocache = os.environ.get("ROCKERC_NO_CACHE") == "1" or "--nocache" in sys.argv
+
+        if container_name and container_exists(container_name) and (force_rebuild or nocache):
+            if force_rebuild:
+                logging.info(
+                    f"Force flag specified. Removing existing container '{container_name}' to rebuild..."
+                )
+            if nocache:
+                logging.info(
+                    f"No-cache flag specified. Removing existing container '{container_name}' to rebuild with no cache..."
+                )
+
+            # Stop and remove the existing container
+            if container_is_running(container_name):
+                logging.info(f"Stopping running container '{container_name}'...")
+                subprocess.run(["docker", "stop", container_name], check=True)
+            logging.info(f"Removing container '{container_name}'...")
+            subprocess.run(["docker", "rm", container_name], check=True)
+
+        elif container_name and container_exists(container_name):
             logging.info(
                 f"Container '{container_name}' already exists. Attaching to it instead of creating a new one."
             )
