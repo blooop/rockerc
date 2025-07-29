@@ -10,9 +10,9 @@ echo "Cleaning up existing containers..."
 docker rm -f rocker-main 2>/dev/null || true
 
 # First build - should build from scratch
-echo "First build: renv osrf/rocker@main (should build image)"
+echo "First build: renv blooop/test_renv@main (should build image)"
 start_time=$(date +%s)
-timeout 120 renv osrf/rocker@main /bin/true 2>&1 | head -50 || true
+timeout 120 renv blooop/test_renv@main /bin/true 2>&1 | head -50 || true
 first_build_time=$(($(date +%s) - start_time))
 echo "First build complete"
 echo "First build took: ${first_build_time} seconds"
@@ -26,13 +26,13 @@ fi
 
 # Leave the container running for attachment test
 echo "Starting container in background for attachment test..."
-timeout 120 bash -c 'renv osrf/rocker@main sleep 30 &' 2>&1 | head -20 || true
+timeout 120 bash -c 'renv blooop/test_renv@main sleep 30 &' 2>&1 | head -20 || true
 sleep 2
 
 # Third run - should attach to existing running container
-echo "Third run: renv osrf/rocker@main (should attach to running container)"
+echo "Third run: renv blooop/test_renv@main (should attach to running container)"
 start_time=$(date +%s)
-timeout 10 renv osrf/rocker@main /bin/true 2>&1 | head -50 || true
+timeout 10 renv blooop/test_renv@main /bin/true 2>&1 | head -50 || true
 attach_time=$(($(date +%s) - start_time))
 echo "Container attachment complete"
 echo "Container attachment took: ${attach_time} seconds"
@@ -42,9 +42,9 @@ echo "Cleaning up container to test image reuse..."
 docker rm -f rocker-main 2>/dev/null || true
 
 # Second build - should use cached image
-echo "Second build: renv osrf/rocker@main (should use cached image)"
+echo "Second build: renv blooop/test_renv@main (should use cached image)"
 start_time=$(date +%s)
-timeout 120 renv osrf/rocker@main /bin/true 2>&1 | head -50 || true
+timeout 120 renv blooop/test_renv@main /bin/true 2>&1 | head -50 || true
 second_build_time=$(($(date +%s) - start_time))
 echo "Second build complete"
 echo "Second build took: ${second_build_time} seconds"

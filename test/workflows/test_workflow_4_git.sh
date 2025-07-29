@@ -8,4 +8,4 @@ renv blooop/test_renv@renv_test git status
 
 
 echo "Running: renv bloop/manifest_rocker@renv_test and confirming the directory is manifest_rocker"
-renv osrf/rocker@renv_test git status
+renv blooop/test_renv@renv_test git status
