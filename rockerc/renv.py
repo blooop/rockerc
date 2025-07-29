@@ -574,6 +574,8 @@ def run_rockerc_in_worktree(
             "--volume",
             f"{worktree_dir}:{docker_worktree_mount}",
             f"--oyr-run-arg={docker_run_args_str}",
+            "--persist-image",
+            "--nocleanup",
         ]
         # Always include git-clone and ssh-client extensions
         extensions = ["git-clone", "ssh-client"]
