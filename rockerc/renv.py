@@ -574,8 +574,6 @@ def run_rockerc_in_worktree(
             "--volume",
             f"{worktree_dir}:{docker_worktree_mount}",
             f"--oyr-run-arg={docker_run_args_str}",
-            "--persist-image",
-            "--nocleanup",
         ]
         # Always include git-clone and ssh-client extensions
         extensions = ["git-clone", "ssh-client"]
@@ -602,6 +600,32 @@ def run_rockerc_in_worktree(
             # Remove image if present
             filtered_command = [c for c in filtered_command if c != image]
             rocker_args.extend(filtered_command)
+        # Run rocker directly
+        logging.info(f"Running rocker: {' '.join(rocker_args)}")
+        try:
+            subprocess.run(rocker_args, check=True)
+        except subprocess.CalledProcessError as e:
+            logging.error(f"rocker failed: {e}")
+            raise
+        # Prevent duplicate build/run: If a command is provided, do NOT run rockerc again
+        if command:
+            # Command was provided, so we already ran the container with rocker above
+            return
+        # --- Only run rockerc if no command was provided (interactive shell) ---
+        # If subfolder is specified, chdir to worktree_dir/subfolder, else worktree_dir
+        if subfolder:
+            target_dir = worktree_dir / subfolder
+        else:
+            target_dir = worktree_dir
+        attach_dir = docker_workdir
+        logging.info(f"Attach directory for container: {attach_dir}")
+        logging.info(
+            f"Running rockerc with volumes: {bare_repo_dir}:{docker_bare_repo_mount}, {worktree_dir}:{docker_worktree_mount} and workdir: {docker_workdir}"
+        )
+        logging.info(
+            f"Setting GIT_DIR={git_dir_in_container} and GIT_WORK_TREE={git_work_tree_in_container} in container"
+        )
+
         # --- Attach to container if it exists, else launch ---
         def container_exists(name):
             result = subprocess.run(
@@ -629,53 +653,60 @@ def run_rockerc_in_worktree(
             logging.info(f"Removing container '{name}'...")
             subprocess.run(["docker", "rm", name], check=True)
 
-        # If force/nocache, remove container first
+        # Handle force rebuild
         if (force or nocache) and container_exists(container_name):
             if force:
-                logging.info(f"Force flag specified. Removing existing container '{container_name}' to rebuild...")
+                logging.info(
+                    f"Force flag specified. Removing existing container '{container_name}' to rebuild..."
+                )
             if nocache:
-                logging.info(f"No-cache flag specified. Removing existing container '{container_name}' to rebuild with no cache...")
+                logging.info(
+                    f"No-cache flag specified. Removing existing container '{container_name}' to rebuild with no cache..."
+                )
             remove_container(container_name)
-
-        # Attach/start if container exists
-        if container_exists(container_name):
-            if container_running(container_name):
-                logging.info(f"Container '{container_name}' is already running. Attaching...")
-                try:
-                    subprocess.run(["docker", "exec", "-it", "-w", docker_workdir, container_name, "/bin/bash"], check=True)
-                except subprocess.CalledProcessError as e:
-                    logging.error(f"Failed to attach to running container '{container_name}': {e}")
-                    logging.error(f"Try: docker rm -f {container_name} or renv --force {_owner}/{repo}@{branch}")
-                    raise
-            else:
-                logging.info(f"Container '{container_name}' exists but is not running. Starting and attaching...")
-                try:
-                    subprocess.run(["docker", "start", container_name], check=True)
-                    subprocess.run(["docker", "exec", "-it", "-w", docker_workdir, container_name, "/bin/bash"], check=True)
-                except subprocess.CalledProcessError as e:
-                    logging.error(f"Failed to start/attach to container '{container_name}': {e}")
-                    logging.error(f"Try: docker rm -f {container_name} or renv --force {_owner}/{repo}@{branch}")
-                    raise
-            return
-
-        # Otherwise, build and run rocker
-        if force:
-            logging.info(f"Building new container '{container_name}' (force rebuild requested)...")
-        elif nocache:
-            logging.info(f"Building new container '{container_name}' (no-cache rebuild requested)...")
+        if container_exists(container_name) and not (force or nocache):
+            logging.info(
+                f"Container '{container_name}' already exists. Attaching to it instead of creating a new one."
+            )
+            if not container_running(container_name):
+                logging.info(
+                    f"Container '{container_name}' exists but is not running. Starting it..."
+                )
+                subprocess.run(["docker", "start", container_name], check=True)
+            logging.info(f"Attaching to existing container '{container_name}'...")
+            try:
+                subprocess.run(
+                    ["docker", "exec", "-it", "-w", attach_dir, container_name, "/bin/bash"],
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Failed to attach to container '{container_name}': {e}")
+                logging.error("You may need to remove the existing container:")
+                logging.error(f"  docker rm {container_name}")
+                logging.error("Or remove it forcefully if it's running:")
+                logging.error(f"  docker rm -f {container_name}")
+                logging.error("Alternatively, use the --force flag to automatically rebuild:")
+                logging.error(f"  renv --force {_owner}/{repo}@{branch}")
+                raise
         else:
-            logging.info(f"Container '{container_name}' does not exist. Building new container...")
-        os.chdir(target_dir)
-        if nocache:
-            os.environ["ROCKERC_NO_CACHE"] = "1"
-            logging.info("Rebuilding container with --nocache (ROCKERC_NO_CACHE=1)")
-            sys.argv.append("--nocache")
-        logging.info(f"Running rocker: {' '.join(rocker_args)}")
-        try:
-            subprocess.run(rocker_args, check=True)
-        except subprocess.CalledProcessError as e:
-            logging.error(f"rocker failed: {e}")
-            raise
+            if force:
+                logging.info(
+                    f"Building new container '{container_name}' (force rebuild requested)..."
+                )
+            elif nocache:
+                logging.info(
+                    f"Building new container '{container_name}' (no-cache rebuild requested)..."
+                )
+            else:
+                logging.info(
+                    f"Container '{container_name}' does not exist. Building new container..."
+                )
+            os.chdir(target_dir)
+            if nocache:
+                os.environ["ROCKERC_NO_CACHE"] = "1"
+                logging.info("Rebuilding container with --nocache (ROCKERC_NO_CACHE=1)")
+                sys.argv.append("--nocache")
+            run_rockerc(str(worktree_dir))
     except Exception as e:
         logging.error(f"Failed to run rockerc: {e}")
         raise
@@ -1101,10 +1132,6 @@ The tool will:
                 logging.info(f"Environment ready at {worktree_dir}")
                 logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
-            # Automatically change to the correct worktree/subfolder before running rockerc
-            import os
-            target_dir = worktree_dir / subfolder if subfolder else worktree_dir
-            os.chdir(target_dir)
             # Only pass command arguments after repo_spec
             command = extra_args.copy() if extra_args else None
             if command and len(command) > 0 and command[0] == args.repo_spec:

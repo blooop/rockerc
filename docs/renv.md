@@ -21,11 +21,12 @@ source ~/.bashrc  # or restart your terminal
 
 ### Basic Syntax
 ```bash
-renv [owner/repo[@branch][#subfolder]] [options]
+renv [owner/repo[@branch][#subfolder]] [command]
 ```
 - `owner/repo`: GitHub repository (e.g., `blooop/bencher`, `osrf/rocker`)
 - `@branch`: Branch name (defaults to `main`)
 - `#subfolder`: Optional subfolder to start in
+- `command`: Option bash command to execute in the container
 
 ### Major Workflows
 
@@ -49,13 +50,21 @@ renv blooop/bencher@feature/new-feature
 ```bash
 renv blooop/bencher@main
 ```
-- Re-attaches to the main branch worktree and container
+- Re-attaches to the main branch worktree and container.
 
 #### 4. Work on Multiple Repos
 ```bash
 renv osrf/rocker@main
 ```
-- Sets up and launches a container for another repo in parallel
+- Sets up and launches a container for another repo while retaining access to existing repos and branches
+
+#### 5. Run a command in a container
+
+```bash
+renv osrf/rocker@main git status
+```
+
+- Runs git status 
 
 #### 5. Debug or Manual Management
 ```bash
