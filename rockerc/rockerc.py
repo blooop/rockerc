@@ -59,7 +59,7 @@ def build_docker(dockerfile_path: str = ".") -> str:
 def save_rocker_cmd(split_cmd: str):
     dry_run = split_cmd + ["--mode", "dry-run"]
     try:
-        s = subprocess.run(dry_run, capture_output=True, text=True, check=True)
+        s = subprocess.run(dry_run, cwd="/tmp", capture_output=True, text=True, check=True)
         output = s.stdout
         # Split by "vvvvvv" to discard the top section
         _, after_vvvvvv = output.split("vvvvvv", 1)
@@ -135,6 +135,7 @@ def container_exists(container_name: str) -> bool:
                 "--format",
                 "{{.Names}}",
             ],
+            cwd="/tmp",
             capture_output=True,
             text=True,
             check=True,
@@ -156,6 +157,7 @@ def container_is_running(container_name: str) -> bool:
     try:
         result = subprocess.run(
             ["docker", "ps", "--filter", f"name=^/{container_name}$", "--format", "{{.Names}}"],
+            cwd="/tmp",
             capture_output=True,
             text=True,
             check=True,
@@ -174,13 +176,15 @@ def attach_to_container(container_name: str) -> None:
     try:
         if not container_is_running(container_name):
             logging.info(f"Container '{container_name}' exists but is not running. Starting it...")
-            subprocess.run(["docker", "start", container_name], check=True)
+            subprocess.run(["docker", "start", container_name], cwd="/tmp", check=True)
 
         logging.info(f"Attaching to existing container '{container_name}'...")
         # Always start in /workspaces (where the repo is mounted)
         workdir = "/workspaces"
         subprocess.run(
-            ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"], check=True
+            ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"],
+            cwd="/tmp",
+            check=True,
         )
 
     except subprocess.CalledProcessError as e:
@@ -317,7 +321,7 @@ def run_rockerc(path: str = "."):
 
     cmd_args = yaml_dict_to_args(merged_dict)
     # Build the rocker command, ensuring image is only included once
-    rocker_cmd = f"rocker {cmd_args}"
+    rocker_cmd = f"rocker {cmd_args}"  # noqa: E701
     # Only append extra command arguments (not image) from sys.argv[1:]
     extra_args = [a for a in sys.argv[1:] if a != merged_dict.get("image")]
     if extra_args:
@@ -338,12 +342,10 @@ def run_rockerc(path: str = "."):
             return
 
         try:
-            subprocess.run(split_cmd, check=True)
+            subprocess.run(split_cmd, cwd="/tmp", check=True)
         except subprocess.CalledProcessError as e:
             error_output = str(e)
-            if container_name and (
-                "already in use" in error_output or "Conflict" in error_output
-            ):
+            if container_name and ("already in use" in error_output or "Conflict" in error_output):
                 logging.info(
                     f"Container name conflict detected. Attempting to attach to existing container '{container_name}'..."
                 )
@@ -355,8 +357,6 @@ def run_rockerc(path: str = "."):
                     f"Container '{container_name}' was reported as conflicting but doesn't exist. This is unexpected."
                 )
             raise
-
-     
 
 
 if __name__ == "__main__":

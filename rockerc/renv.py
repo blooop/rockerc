@@ -554,20 +554,25 @@ def run_rockerc_in_worktree(
         # Compose arguments so image is penultimate, command is last
         image = "ubuntu:24.04"  # Default, will be replaced by config if present
         # Try to get image from config
-        import yaml
+        # yaml is already imported at the top of the file
+
         config_path = worktree_dir / "rockerc.yaml"
         if config_path.exists():
-            with open(config_path, "r") as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
                 if config and "image" in config:
                     image = config["image"]
         # Build rocker command directly, using logic similar to rockerc
         rocker_args = [
             "rocker",
-            "--name", container_name,
-            "--hostname", container_name,
-            "--volume", f"{bare_repo_dir}:{docker_bare_repo_mount}",
-            "--volume", f"{worktree_dir}:{docker_worktree_mount}",
+            "--name",
+            container_name,
+            "--hostname",
+            container_name,
+            "--volume",
+            f"{bare_repo_dir}:{docker_bare_repo_mount}",
+            "--volume",
+            f"{worktree_dir}:{docker_worktree_mount}",
             f"--oyr-run-arg={docker_run_args_str}",
         ]
         # Always include git-clone and ssh-client extensions
@@ -575,7 +580,7 @@ def run_rockerc_in_worktree(
         extensions = ["git-clone"]
         config_path = worktree_dir / "rockerc.yaml"
         if config_path.exists():
-            with open(config_path, "r") as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
                 if config:
                     # Prepend config extensions after required ones
@@ -620,6 +625,7 @@ def run_rockerc_in_worktree(
         logging.info(
             f"Setting GIT_DIR={git_dir_in_container} and GIT_WORK_TREE={git_work_tree_in_container} in container"
         )
+
         # --- Attach to container if it exists, else launch ---
         def container_exists(name):
             result = subprocess.run(
@@ -629,6 +635,7 @@ def run_rockerc_in_worktree(
                 check=False,
             )
             return name in result.stdout.splitlines()
+
         def container_running(name):
             result = subprocess.run(
                 ["docker", "ps", "--format", "{{.Names}}"],
@@ -637,6 +644,7 @@ def run_rockerc_in_worktree(
                 check=False,
             )
             return name in result.stdout.splitlines()
+
         def remove_container(name):
             """Remove a container (stop first if running)."""
             if container_running(name):
@@ -644,6 +652,7 @@ def run_rockerc_in_worktree(
                 subprocess.run(["docker", "stop", name], check=True)
             logging.info(f"Removing container '{name}'...")
             subprocess.run(["docker", "rm", name], check=True)
+
         # Handle force rebuild
         if (force or nocache) and container_exists(container_name):
             if force:
