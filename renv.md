@@ -1,3 +1,14 @@
+
+ I am adding a new tool to complement rockerc.  its called renv and uses rocker to create a development container. You
+   can use rockerc as inspiration for how to manage rocker, but create renv as a separate tool that calls rocker 
+  directly. rockerc expects there to be rockerc files, whereas renv shoudl work on any repo without a rockerc file and 
+  defines its own require extension for basic development. I have included some tempalte workflows as bash scripts, you
+   must implement rocker to meeting the all the specs in the markdown file and also the tests stubs I left in 
+  test/worksflows. use the pixi environment and pixi tasks to run tests and ci. you are working on the host machine 
+  where rocker is installed. aad an executable `renv` to the pyproject.toml.  write lots of tests and work step by test
+   to implement the features and higher level goal
+
+
 # renv - Rocker Environment Manager
 
 ## Overview
