@@ -11,8 +11,12 @@ def test_workflow_1_clone_and_work():
     output = result.stdout.decode() + result.stderr.decode()
     # Add custom asserts for this workflow as needed
     assert result.returncode in (0, 1), f"Workflow 1 failed: {output}"
-    assert "Running: renv osrf/rocker" in output, "Expected message not found in workflow 1 output"
-    assert "finished work!" in output, "Expected 'finished work!' not found in workflow 1 output"
+    assert "On branch renv_test" in output, (
+        "Expected 'On branch renv_test' not found in workflow 1 output"
+    )
+    assert "On branch osrf_renv_test" in output, (
+        "Expected 'On branch osrf_renv_test' not found in workflow 1 output"
+    )
 
 
 # def test_workflow_2_switch_branch():
