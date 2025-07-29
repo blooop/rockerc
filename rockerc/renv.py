@@ -1134,6 +1134,10 @@ The tool will:
                 logging.info(f"Environment ready at {worktree_dir}")
                 logging.info(f"To manually run rockerc: cd {worktree_dir} && rockerc")
         else:
+            # Automatically change to the correct worktree/subfolder before running rockerc
+            import os
+            target_dir = worktree_dir / subfolder if subfolder else worktree_dir
+            os.chdir(target_dir)
             # Only pass command arguments after repo_spec
             command = extra_args.copy() if extra_args else None
             if command and len(command) > 0 and command[0] == args.repo_spec:
