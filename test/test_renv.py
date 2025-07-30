@@ -85,14 +85,14 @@ class TestRockerConfig:
         assert "git-clone" in config["args"]
         assert config["name"] == "test_renv-main"
         assert config["hostname"] == "test_renv-main"
-        assert "/tmp/test_renv.git" in config["volume"]
-        assert "/tmp/test_renv" in config["volume"]
-        assert "--workdir=/tmp/test_renv" in config["oyr-run-arg"]
+        assert "/workspace/test_renv.git" in config["volume"]
+        assert "/workspace/test_renv" in config["volume"]
+        assert "--workdir=/workspace/test_renv" in config["oyr-run-arg"]
 
     def test_build_rocker_config_with_subfolder(self):
         spec = RepoSpec("blooop", "test_renv", "main", "src")
         config = build_rocker_config(spec)
-        assert "--workdir=/tmp/test_renv/src" in config["oyr-run-arg"]
+        assert "--workdir=/workspace/test_renv/src" in config["oyr-run-arg"]
 
     def test_build_rocker_config_with_force(self):
         # Force rebuild is handled by container removal, not rocker extensions

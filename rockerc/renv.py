@@ -109,8 +109,8 @@ def build_rocker_config(
     worktree_dir = get_worktree_dir(repo_spec)
 
     # Docker mount points
-    docker_bare_repo_mount = f"/tmp/{repo_spec.repo}.git"
-    docker_worktree_mount = f"/tmp/{repo_spec.repo}"
+    docker_bare_repo_mount = f"/workspace/{repo_spec.repo}.git"
+    docker_worktree_mount = f"/workspace/{repo_spec.repo}"
     docker_workdir = docker_worktree_mount
 
     if repo_spec.subfolder:

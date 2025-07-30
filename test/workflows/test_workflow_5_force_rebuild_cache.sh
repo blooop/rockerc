@@ -5,7 +5,7 @@ rm -rf /tmp/renv
 
 # First create a container so we can test force rebuild
 echo "Creating initial container to test force rebuild"
-renv blooop/test_renv date > /dev/null 2>&1
+renv blooop/test_renv date
 
 echo "Running: renv --force blooop/test_renv date to force a rebuild"
 renv --force blooop/test_renv date
