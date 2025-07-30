@@ -30,7 +30,9 @@ def test_workflow_3_cmd():
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode in (0, 1), f"Workflow 3 cmd failed: {output}"
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 3 output"
-    assert "/tmp/test_renv" in output or "test_renv" in output, "Expected working directory 'test_renv' not found in workflow 3 output"
+    assert (
+        "/tmp/test_renv" in output or "test_renv" in output
+    ), "Expected working directory 'test_renv' not found in workflow 3 output"
 
 
 def test_workflow_4_persistent():
@@ -39,7 +41,9 @@ def test_workflow_4_persistent():
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode in (0, 1), f"Workflow 4 persistent failed: {output}"
-    assert "On branch" in output, "Expected git status 'On branch' not found in workflow 4 persistent output"
+    assert (
+        "persistent.txt" in output
+    ), "Expected persistent file 'persistent.txt' not found in workflow 4 persistent output"
 
 
 def test_workflow_5_force_rebuild_cache():
@@ -48,4 +52,6 @@ def test_workflow_5_force_rebuild_cache():
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode in (0, 1), f"Workflow 5 force rebuild cache failed: {output}"
-    assert "SUCCESS" in output or "WARNING" in output, "Expected result message not found in workflow 5 output"
+    assert (
+        "SUCCESS" in output or "WARNING" in output
+    ), "Expected result message not found in workflow 5 output"
