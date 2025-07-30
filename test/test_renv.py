@@ -169,7 +169,7 @@ class TestGitOperations:
         assert "git" in clone_call[0][0]
         assert "clone" in clone_call[0][0]
         assert "--bare" in clone_call[0][0]
-        assert "https://github.com/blooop/test_renv.git" in clone_call[0][0]
+        assert "git@github.com:blooop/test_renv.git" in clone_call[0][0]
 
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")

@@ -45,6 +45,156 @@ def get_renv_root() -> pathlib.Path:
     return pathlib.Path.home() / "renv"
 
 
+def get_available_users() -> List[str]:
+    """Get list of available users from renv directory"""
+    renv_root = get_renv_root()
+    if not renv_root.exists():
+        return []
+    return [d.name for d in renv_root.iterdir() if d.is_dir()]
+
+
+def get_available_repos(user: str) -> List[str]:
+    """Get list of available repositories for a user"""
+    user_dir = get_renv_root() / user
+    if not user_dir.exists():
+        return []
+    return [d.name for d in user_dir.iterdir() if d.is_dir()]
+
+
+def get_available_branches(repo_spec: RepoSpec) -> List[str]:
+    """Get list of available branches for a repository"""
+    repo_dir = get_repo_dir(repo_spec)
+    if not repo_dir.exists():
+        return []
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_dir), "branch", "-r"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        branches = []
+        for line in result.stdout.strip().split("\n"):
+            if line.strip() and not line.strip().startswith("origin/HEAD"):
+                branch = line.strip().replace("origin/", "")
+                if branch:
+                    branches.append(branch)
+        return sorted(set(branches))
+    except subprocess.CalledProcessError:
+        return []
+
+
+def get_all_repo_branch_combinations() -> List[str]:
+    """Get all available repo@branch combinations for fuzzy finder"""
+    combinations = []
+    for user in get_available_users():
+        for repo in get_available_repos(user):
+            repo_spec = RepoSpec(user, repo, "main")
+            branches = get_available_branches(repo_spec)
+            if branches:
+                for branch in branches:
+                    combinations.append(f"{user}/{repo}@{branch}")
+            else:
+                # If no branches found, still add with main
+                combinations.append(f"{user}/{repo}@main")
+    return sorted(combinations)
+
+
+def fuzzy_select_repo() -> Optional[str]:
+    """Interactive fuzzy finder for repo selection"""
+    try:
+        from iterfzf import iterfzf
+    except ImportError:
+        logging.error("iterfzf not available. Install with: pip install iterfzf")
+        return None
+
+    combinations = get_all_repo_branch_combinations()
+    if not combinations:
+        logging.info("No repositories found in ~/renv/. Clone some repos first!")
+        return None
+
+    print("Select repo@branch (type 'bl tes ma' for blooop/test_renv@main):")
+    selected = iterfzf(combinations, multi=False)
+    return selected
+
+
+def install_shell_completion() -> int:
+    """Install shell autocompletion for renv"""
+    bash_completion = """# renv completion
+_renv_completion() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Basic options
+    opts="--help --install --force --nocache --no-container"
+    
+    if [[ ${cur} == -* ]]; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+    
+    # Complete repository specifications
+    if [[ ${COMP_CWORD} -eq 1 ]]; then
+        local renv_root="$HOME/renv"
+        if [[ -d "$renv_root" ]]; then
+            local users=$(find "$renv_root" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^renv$")
+            local repos=""
+            for user in $users; do
+                if [[ -d "$renv_root/$user" ]]; then
+                    local user_repos=$(find "$renv_root/$user" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^$user$")
+                    for repo in $user_repos; do
+                        repos="$repos $user/$repo"
+                        # Add branches if @ is present
+                        if [[ "$cur" == *"@"* ]]; then
+                            local repo_dir="$renv_root/$user/$repo"
+                            if [[ -d "$repo_dir" ]]; then
+                                local branches=$(git -C "$repo_dir" branch -r 2>/dev/null | sed 's/origin\\///' | grep -v HEAD | xargs)
+                                for branch in $branches; do
+                                    repos="$repos $user/$repo@$branch"
+                                done
+                            fi
+                        fi
+                    done
+                fi
+            done
+            COMPREPLY=( $(compgen -W "${repos}" -- ${cur}) )
+        fi
+    fi
+    
+    return 0
+}
+
+complete -F _renv_completion renv
+"""
+
+    # Install to .bashrc
+    bashrc_path = pathlib.Path.home() / ".bashrc"
+
+    try:
+        # Check if already installed
+        if bashrc_path.exists():
+            with open(bashrc_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                if "# renv completion" in content:
+                    logging.info("renv completion already installed in ~/.bashrc")
+                    return 0
+
+        # Append completion to .bashrc
+        with open(bashrc_path, "a", encoding="utf-8") as f:
+            f.write("\n" + bash_completion + "\n")
+
+        logging.info("Shell completion installed to ~/.bashrc")
+        logging.info("Run 'source ~/.bashrc' or restart your terminal to enable completion")
+        return 0
+
+    except Exception as e:
+        logging.error(f"Failed to install shell completion: {e}")
+        return 1
+
+
 def get_repo_dir(repo_spec: RepoSpec) -> pathlib.Path:
     """Get the directory path for a repository"""
     return get_renv_root() / repo_spec.owner / repo_spec.repo
@@ -65,7 +215,7 @@ def get_container_name(repo_spec: RepoSpec) -> str:
 def setup_bare_repo(repo_spec: RepoSpec) -> pathlib.Path:
     """Clone or update bare repository"""
     repo_dir = get_repo_dir(repo_spec)
-    repo_url = f"https://github.com/{repo_spec.owner}/{repo_spec.repo}.git"
+    repo_url = f"git@github.com:{repo_spec.owner}/{repo_spec.repo}.git"
 
     if not repo_dir.exists():
         logging.info(f"Cloning bare repository: {repo_url}")
@@ -378,13 +528,16 @@ def run_renv(args: Optional[List[str]] = None) -> int:
     parsed_args = parser.parse_args(args)
 
     if parsed_args.install:
-        logging.info("Shell autocompletion installation not yet implemented")
-        return 0
+        return install_shell_completion()
 
+    # Interactive fuzzy finder if no repo_spec provided
     if not parsed_args.repo_spec:
-        logging.error("Repository specification required. Usage: renv owner/repo[@branch]")
-        parser.print_help()
-        return 1
+        selected = fuzzy_select_repo()
+        if not selected:
+            logging.error("No repository selected. Usage: renv owner/repo[@branch]")
+            parser.print_help()
+            return 1
+        parsed_args.repo_spec = selected
 
     try:
         repo_spec = RepoSpec.parse(parsed_args.repo_spec)
