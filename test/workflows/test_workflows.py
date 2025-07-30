@@ -52,6 +52,7 @@ def test_workflow_5_force_rebuild_cache():
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode in (0, 1), f"Workflow 5 force rebuild cache failed: {output}"
+    # Check that date commands executed successfully and reconnect logic works
     assert (
-        "SUCCESS" in output or "WARNING" in output
-    ), "Expected result message not found in workflow 5 output"
+        "UTC 202" in output and "Force rebuild: removing existing container" in output
+    ), "Expected force rebuild and date output not found in workflow 5 output"

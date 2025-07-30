@@ -120,7 +120,7 @@ def build_rocker_config(
     # Create config using spec from renv.md
     config = {
         "image": "ubuntu:22.04",
-        "args": ["user", "pull", "git-clone", "git", "cwd"],
+        "args": ["user", "pull", "git-clone", "git", "cwd", "nocleanup"],
         "name": container_name,
         "hostname": container_name,
         "oyr-run-arg": f"--workdir={docker_workdir} --env=GIT_DIR={git_dir_in_container} --env=GIT_WORK_TREE={git_work_tree_in_container}",
@@ -163,7 +163,55 @@ def container_running(container_name: str) -> bool:
         return False
 
 
-def run_rocker_command(config: Dict[str, Any], command: Optional[List[str]] = None) -> int:
+def attach_to_container(container_name: str, command: Optional[List[str]] = None) -> int:
+    """Attach to an existing running container"""
+    if command:
+        # Execute command in running container (non-interactive for commands)
+        # Check if we have a single argument that looks like a shell command
+        if len(command) == 1:
+            cmd_str = command[0]
+            # If it starts with "bash -c" or contains shell constructs, pass it to bash -c
+            if cmd_str.startswith("bash -c ") or any(char in cmd_str for char in [';', '&&', '||', '|', '>', '<']):
+                # Extract the actual command from "bash -c 'command'" format
+                if cmd_str.startswith("bash -c "):
+                    actual_cmd = cmd_str[8:].strip()
+                    # Remove surrounding quotes if present
+                    if (actual_cmd.startswith("'") and actual_cmd.endswith("'")) or \
+                       (actual_cmd.startswith('"') and actual_cmd.endswith('"')):
+                        actual_cmd = actual_cmd[1:-1]
+                    cmd_parts = ["docker", "exec", container_name, "/bin/bash", "-c", actual_cmd]
+                else:
+                    # For other shell constructs, wrap the whole thing
+                    cmd_parts = ["docker", "exec", container_name, "/bin/bash", "-c", cmd_str]
+            else:
+                # Simple command, execute directly
+                cmd_parts = ["docker", "exec", container_name] + command
+        else:
+            # Multiple arguments, execute directly
+            cmd_parts = ["docker", "exec", container_name] + command
+    else:
+        # Attach to running container for interactive session
+        cmd_parts = ["docker", "exec", "-it", container_name, "/bin/bash"]
+    
+    logging.info(f"Attaching to container: {' '.join(cmd_parts)}")
+    return subprocess.run(cmd_parts).returncode
+
+
+def start_and_attach_container(container_name: str, command: Optional[List[str]] = None) -> int:
+    """Start a stopped container and attach to it"""
+    # Start the container
+    start_result = subprocess.run(["docker", "start", container_name], capture_output=True, text=True)
+    if start_result.returncode != 0:
+        logging.error(f"Failed to start container {container_name}: {start_result.stderr}")
+        return start_result.returncode
+    
+    logging.info(f"Started container {container_name}")
+    
+    # Now attach to it
+    return attach_to_container(container_name, command)
+
+
+def run_rocker_command(config: Dict[str, Any], command: Optional[List[str]] = None, detached: bool = False) -> int:
     """Execute rocker command by building command parts directly"""
     # Start with the base rocker command
     cmd_parts = ["rocker"]
@@ -212,7 +260,12 @@ def run_rocker_command(config: Dict[str, Any], command: Optional[List[str]] = No
     logging.info(f"Running rocker: {cmd_str}")
     logging.info(f"Final command parts: {cmd_parts}")
 
-    return subprocess.run(cmd_parts).returncode
+    if detached:
+        # Run in background and return immediately
+        subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return 0
+    else:
+        return subprocess.run(cmd_parts).returncode
 
 
 def manage_container(
@@ -238,11 +291,59 @@ def manage_container(
         logging.info(f"Force rebuild: removing existing container {container_name}")
         subprocess.run(["docker", "rm", "-f", container_name], check=True)
 
-    # Build rocker configuration
-    config = build_rocker_config(repo_spec, force=force, nocache=nocache)
-
-    # Execute rocker
-    return run_rocker_command(config, command)
+    # Implement reconnect logic as per spec:
+    # 1. If container is running -> attach to it
+    # 2. If container exists but not running -> start and attach  
+    # 3. If container doesn't exist -> create persistent container
+    
+    if container_exists(container_name) and not force:
+        if container_running(container_name):
+            logging.info(f"Container {container_name} is running, attaching to it")
+            return attach_to_container(container_name, command)
+        else:
+            logging.info(f"Container {container_name} exists but is stopped, starting it")
+            return start_and_attach_container(container_name, command)
+    else:
+        logging.info(f"Creating new persistent container {container_name}")
+        # Build rocker configuration
+        config = build_rocker_config(repo_spec, force=force, nocache=nocache)
+        
+        if command:
+            # For commands, create persistent container first, then run command
+            create_result = run_rocker_command(config, ["tail", "-f", "/dev/null"], detached=True)
+            if create_result != 0:
+                return create_result
+            # Wait for container to be running before attaching
+            import time
+            max_wait = 30  # Maximum wait time in seconds
+            wait_time = 0
+            while wait_time < max_wait:
+                if container_running(container_name):
+                    break
+                time.sleep(1)
+                wait_time += 1
+            else:
+                logging.error(f"Container {container_name} failed to start after {max_wait} seconds")
+                return 1
+            return attach_to_container(container_name, command)
+        else:
+            # For interactive sessions, create persistent container and attach
+            create_result = run_rocker_command(config, ["tail", "-f", "/dev/null"], detached=True)
+            if create_result != 0:
+                return create_result
+            # Wait for container to be running before attaching
+            import time
+            max_wait = 30  # Maximum wait time in seconds
+            wait_time = 0
+            while wait_time < max_wait:
+                if container_running(container_name):
+                    break
+                time.sleep(1)
+                wait_time += 1
+            else:
+                logging.error(f"Container {container_name} failed to start after {max_wait} seconds")
+                return 1
+            return attach_to_container(container_name, None)  # Attach interactively
 
 
 def run_renv(args: Optional[List[str]] = None) -> int:

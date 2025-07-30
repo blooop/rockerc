@@ -290,29 +290,48 @@ class TestManageContainer:
         assert result == 0
         mock_setup_worktree.assert_called_once_with(spec)
 
+    @patch("rockerc.renv.attach_to_container")
+    @patch("rockerc.renv.container_running")
+    @patch("rockerc.renv.container_exists")
     @patch("rockerc.renv.run_rocker_command")
     @patch("rockerc.renv.setup_worktree")
-    def test_manage_container_normal(self, mock_setup_worktree, mock_run_rocker):
+    def test_manage_container_normal(self, mock_setup_worktree, mock_run_rocker, mock_container_exists, mock_container_running, mock_attach):
+        # Set up mocks for new container creation path
+        mock_container_exists.return_value = False
+        # Mock container_running to return True after container creation
+        mock_container_running.return_value = True
         mock_run_rocker.return_value = 0
+        mock_attach.return_value = 0
         spec = RepoSpec("blooop", "test_renv", "main")
 
         result = manage_container(spec)
 
         assert result == 0
         mock_setup_worktree.assert_called_once_with(spec)
-        mock_run_rocker.assert_called_once()
+        # Should call run_rocker_command for container creation
+        assert mock_run_rocker.call_count >= 1
 
+    @patch("rockerc.renv.attach_to_container")
+    @patch("rockerc.renv.container_running")
+    @patch("rockerc.renv.container_exists")
     @patch("rockerc.renv.run_rocker_command")
     @patch("rockerc.renv.setup_worktree")
-    def test_manage_container_with_command(self, mock_setup_worktree, mock_run_rocker):
+    def test_manage_container_with_command(self, mock_setup_worktree, mock_run_rocker, mock_container_exists, mock_container_running, mock_attach):
+        # Set up mocks for new container creation path
+        mock_container_exists.return_value = False
+        # Mock container_running to return True after container creation
+        mock_container_running.return_value = True
         mock_run_rocker.return_value = 0
+        mock_attach.return_value = 0
         spec = RepoSpec("blooop", "test_renv", "main")
 
         result = manage_container(spec, command=["git", "status"])
 
         assert result == 0
 
-        # Check that command was passed to rocker
-        mock_run_rocker.assert_called_once()
-        # The command should be passed as the second argument to run_rocker_command
-        assert mock_run_rocker.call_args[0][1] == ["git", "status"]
+        # Check that run_rocker_command was called for container creation
+        assert mock_run_rocker.call_count >= 1
+        # The first call should be for creating the persistent container with tail -f /dev/null
+        first_call = mock_run_rocker.call_args_list[0]
+        assert first_call[0][1] == ["tail", "-f", "/dev/null"]  # Command argument
+        assert first_call[1]["detached"] == True  # Detached mode
