@@ -104,16 +104,16 @@ class TestRockerConfig:
     def test_build_rocker_config_with_force(self):
         # Force rebuild is handled by container removal, not rocker extensions
         spec = RepoSpec("blooop", "test_renv", "main")
-        config = build_rocker_config(spec, force=True)
-        # Config should be the same regardless of force flag
+        config = build_rocker_config(spec)
+        # Config should be the same regardless of force flag (force handled elsewhere)
         assert config["image"] == "ubuntu:22.04"
         assert "user" in config["args"]
 
     def test_build_rocker_config_with_nocache(self):
         # Nocache is handled at container level, not rocker extensions
         spec = RepoSpec("blooop", "test_renv", "main")
-        config = build_rocker_config(spec, nocache=True)
-        # Config should be the same regardless of nocache flag
+        config = build_rocker_config(spec)
+        # Config should be the same regardless of nocache flag (nocache handled elsewhere)
         assert config["image"] == "ubuntu:22.04"
         assert "user" in config["args"]
 
@@ -340,7 +340,7 @@ class TestManageContainer:
         mock_container_running.return_value = True
         mock_run_rocker.return_value = 0
         mock_attach.return_value = 0
-        mock_wait.return_value = 0
+        mock_wait.return_value = True
         spec = RepoSpec("blooop", "test_renv", "main")
 
         result = manage_container(spec)
@@ -372,16 +372,18 @@ class TestManageContainer:
         mock_container_running.return_value = True
         mock_run_rocker.return_value = 0
         mock_attach.return_value = 0
-        mock_wait.return_value = 0
+        mock_wait.return_value = True
         spec = RepoSpec("blooop", "test_renv", "main")
 
         result = manage_container(spec, command=["git", "status"])
 
         assert result == 0
 
-        # Check that run_rocker_command was called for container creation
-        assert mock_run_rocker.call_count >= 1
-        # The first call should be for creating the persistent container with tail -f /dev/null
+        # Check that run_rocker_command was called to create persistent container, then attach
+        assert mock_run_rocker.call_count == 1
         first_call = mock_run_rocker.call_args_list[0]
-        assert first_call[0][1] == ["tail", "-f", "/dev/null"]  # Command argument
-        assert first_call[1]["detached"]  # Detached mode
+        assert first_call[0][1] == ["tail", "-f", "/dev/null"]  # Persistent container command
+        assert first_call[1].get("detached", False)  # Detached mode
+
+        # Check that attach was called with the actual command
+        mock_attach.assert_called_once_with("test_renv-main", ["git", "status"])

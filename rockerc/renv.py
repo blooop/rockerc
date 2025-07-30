@@ -254,11 +254,7 @@ def setup_worktree(repo_spec: RepoSpec) -> pathlib.Path:
     return worktree_dir
 
 
-def build_rocker_config(
-    repo_spec: RepoSpec,
-    force: bool = False,  # pylint: disable=unused-argument
-    nocache: bool = False,  # pylint: disable=unused-argument
-) -> Dict[str, Any]:
+def build_rocker_config(repo_spec: RepoSpec) -> Dict[str, Any]:
     """Build rocker configuration with default extensions"""
     container_name = get_container_name(repo_spec)
     repo_dir = get_repo_dir(repo_spec)
@@ -278,10 +274,10 @@ def build_rocker_config(
         f"/workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}"
     )
 
-    # Create config using spec from renv.md
+    # Create config matching renv.md spec - use rocker's default extensions
     config = {
         "image": "ubuntu:22.04",
-        "args": ["user", "pull", "git-clone", "git", "nocleanup"],
+        "args": ["user", "pull", "git", "git-clone", "nocleanup"],
         "name": container_name,
         "hostname": container_name,
         "volume": [
@@ -291,9 +287,6 @@ def build_rocker_config(
         ],
         "oyr-run-arg": f"--workdir={docker_workdir} --env=REPO_NAME={repo_spec.repo} --env=BRANCH_NAME={repo_spec.branch.replace('/', '-')}",
     }
-
-    # Note: force rebuild is handled by removing existing containers, not by rocker extensions
-    # nocache is not implemented as rocker extension - it should be handled during container management
 
     return config
 
@@ -329,41 +322,33 @@ def container_running(container_name: str) -> bool:
 def attach_to_container(container_name: str, command: Optional[List[str]] = None) -> int:
     """Attach to an existing running container"""
     if command:
-        # Execute command in running container (non-interactive for commands)
-        # Check if we have a single argument that looks like a shell command
-        if len(command) == 1:
+        # Execute command in running container - handle shell commands properly
+        if len(command) == 1 and (
+            " " in command[0]
+            or any(char in command[0] for char in [";", "&&", "||", "|", ">", "<"])
+        ):
+            # Complex shell command - need to parse it properly
             cmd_str = command[0]
-            # If it starts with "bash -c" or contains shell constructs or spaces, pass it to bash -c
-            if (
-                cmd_str.startswith("bash -c ")
-                or any(char in cmd_str for char in [";", "&&", "||", "|", ">", "<"])
-                or " " in cmd_str
-            ):
-                # Extract the actual command from "bash -c 'command'" format
-                if cmd_str.startswith("bash -c "):
-                    actual_cmd = cmd_str[8:].strip()
-                    # Remove surrounding quotes if present
-                    if (actual_cmd.startswith("'") and actual_cmd.endswith("'")) or (
-                        actual_cmd.startswith('"') and actual_cmd.endswith('"')
-                    ):
-                        actual_cmd = actual_cmd[1:-1]
-                    cmd_parts = ["docker", "exec", container_name, "/bin/bash", "-c", actual_cmd]
-                else:
-                    # For other shell constructs, wrap the whole thing
-                    cmd_parts = ["docker", "exec", container_name, "/bin/bash", "-c", cmd_str]
+            if cmd_str.startswith("bash -c "):
+                # Extract the command part from "bash -c 'command'"
+                actual_cmd = cmd_str[8:].strip()
+                # Remove surrounding quotes if present
+                if (actual_cmd.startswith("'") and actual_cmd.endswith("'")) or (
+                    actual_cmd.startswith('"') and actual_cmd.endswith('"')
+                ):
+                    actual_cmd = actual_cmd[1:-1]
+                cmd_parts = ["docker", "exec", container_name, "/bin/bash", "-c", actual_cmd]
             else:
-                # Simple command, execute directly
-                cmd_parts = ["docker", "exec", container_name] + command
+                # Other complex command - wrap in bash -c
+                cmd_parts = ["docker", "exec", container_name, "/bin/bash", "-c", cmd_str]
         else:
-            # Multiple arguments, execute directly
+            # Simple command or multiple arguments
             cmd_parts = ["docker", "exec", container_name] + command
     else:
-        # Attach to running container for interactive session
-        # Check if we have a TTY available
+        # Interactive session - use TTY detection like rocker does
         if sys.stdin.isatty() and sys.stdout.isatty():
             cmd_parts = ["docker", "exec", "-it", container_name, "/bin/bash"]
         else:
-            # No TTY available, run non-interactively
             cmd_parts = ["docker", "exec", container_name, "/bin/bash"]
 
     logging.info(f"Attaching to container: {' '.join(cmd_parts)}")
@@ -382,6 +367,11 @@ def start_and_attach_container(container_name: str, command: Optional[List[str]]
 
     logging.info(f"Started container {container_name}")
 
+    # Wait a moment for container to be fully started
+    if not _wait_for_container_running(container_name, max_wait=10):
+        logging.error(f"Container {container_name} failed to fully start")
+        return 1
+
     # Now attach to it
     return attach_to_container(container_name, command)
 
@@ -389,63 +379,46 @@ def start_and_attach_container(container_name: str, command: Optional[List[str]]
 def run_rocker_command(
     config: Dict[str, Any], command: Optional[List[str]] = None, detached: bool = False
 ) -> int:
-    """Execute rocker command by building command parts directly"""
-    # Start with the base rocker command
+    """Execute rocker command - simplified to match rocker CLI patterns"""
     cmd_parts = ["rocker"]
 
-    # Extract special values that need separate handling
-    image = config.get("image", "")
-    volumes = []
-    if "volume" in config:
-        volume_config = config["volume"]
-        if isinstance(volume_config, list):
-            volumes = volume_config
-        else:
-            volumes = volume_config.split()
-
-    oyr_run_arg = config.get("oyr-run-arg", "")
-
-    # Add basic extensions from args
+    # Add extensions from args
     if "args" in config:
         for arg in config["args"]:
             cmd_parts.append(f"--{arg}")
 
-    # Add named parameters (but skip special ones we handle separately)
-    for key, value in config.items():
-        if key not in ["image", "args", "volume", "oyr-run-arg"]:
-            cmd_parts.extend([f"--{key}", str(value)])
-
-    # Add oyr-run-arg if present
-    if oyr_run_arg:
-        cmd_parts.extend(["--oyr-run-arg", oyr_run_arg])
+    # Add container name and hostname
+    if "name" in config:
+        cmd_parts.extend(["--name", config["name"]])
+    if "hostname" in config:
+        cmd_parts.extend(["--hostname", config["hostname"]])
 
     # Add volumes
-    for volume in volumes:
-        cmd_parts.extend(["--volume", volume])
+    if "volume" in config:
+        volumes = config["volume"] if isinstance(config["volume"], list) else [config["volume"]]
+        for volume in volumes:
+            cmd_parts.extend(["--volume", volume])
 
-    # Add -- separator if volumes are present (required by rocker)
-    if volumes:
+    # Add oyr-run-arg for custom docker arguments
+    if "oyr-run-arg" in config:
+        cmd_parts.extend(["--oyr-run-arg", config["oyr-run-arg"]])
+
+    # Add -- separator before image when we have volumes (required by rocker)
+    if "volume" in config:
         cmd_parts.append("--")
 
     # Add image
-    if image:
-        cmd_parts.append(image)
+    cmd_parts.append(config.get("image", "ubuntu:22.04"))
 
     # Add command if provided
     if command:
         cmd_parts.extend(command)
 
-    # Log the full command for debugging
-    cmd_str = " ".join(cmd_parts)
-    logging.info(f"Running rocker: {cmd_str}")
-    logging.info(f"Final command parts: {cmd_parts}")
+    logging.info(f"Running rocker: {' '.join(cmd_parts)}")
 
     if detached:
-        # Run in background and return immediately
-        # pylint: disable=consider-using-with
         subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        # Give it a moment to start
-        time.sleep(2)
+        time.sleep(2)  # Let container start
         return 0
     return subprocess.run(cmd_parts, check=False).returncode
 
@@ -457,79 +430,87 @@ def manage_container(
     nocache: bool = False,
     no_container: bool = False,
 ) -> int:
-    """Manage container lifecycle and execution"""
+    """Manage container lifecycle and execution - simplified logic matching rocker patterns"""
     if no_container:
         setup_worktree(repo_spec)
         logging.info(f"Worktree set up at: {get_worktree_dir(repo_spec)}")
         return 0
 
-    # Set up worktree
     setup_worktree(repo_spec)
-
     container_name = get_container_name(repo_spec)
 
-    # Handle force rebuild by removing existing container
+    # Force rebuild: remove existing container
     if force and container_exists(container_name):
         logging.info(f"Force rebuild: removing existing container {container_name}")
         subprocess.run(["docker", "rm", "-f", container_name], check=True)
 
-    # Implement reconnect logic as per spec:
-    # 1. If container is running -> attach to it
-    # 2. If container exists but not running -> start and attach
-    # 3. If container doesn't exist -> create persistent container
+    # Nocache: remove cached images to force rebuild
+    if nocache:
+        logging.info("No-cache rebuild: removing cached rocker images")
+        # Remove intermediate rocker images
+        subprocess.run(["docker", "image", "prune", "-f"], capture_output=True, check=False)
+        # Remove specific image tags that rocker might have cached
+        image_name = f"rocker_{container_name}"
+        subprocess.run(["docker", "rmi", "-f", image_name], capture_output=True, check=False)
 
+    # Simple 3-state logic:
+    # 1. Container running -> attach
+    # 2. Container exists -> start and attach
+    # 3. No container -> create and attach
     if container_exists(container_name) and not force:
         if container_running(container_name):
-            logging.info(f"Container {container_name} is running, attaching to it")
+            logging.info(f"Attaching to running container {container_name}")
             return attach_to_container(container_name, command)
 
-        logging.info(f"Container {container_name} exists but is stopped, starting it")
+        logging.info(f"Starting stopped container {container_name}")
         return start_and_attach_container(container_name, command)
 
+    # Create new persistent container using rocker - always persistent for renv workflow
     logging.info(f"Creating new persistent container {container_name}")
-    # Build rocker configuration
-    config = build_rocker_config(repo_spec, force=force, nocache=nocache)
+    config = build_rocker_config(repo_spec)
 
-    # Create persistent container first
+    # Always create persistent container first
     create_result = run_rocker_command(config, ["tail", "-f", "/dev/null"], detached=True)
     if create_result != 0:
         return create_result
 
-    # Wait for container to be running before attaching
-    wait_result = _wait_for_container_running(container_name, max_wait=60)
-    if wait_result != 0:
-        return wait_result
+    # Wait for container to start
+    if not _wait_for_container_running(container_name, max_wait=30):
+        logging.error(f"Container {container_name} failed to start")
+        return 1
 
-    # Fix the .git file to point to container paths for git worktree
-    fix_git_cmd = [
-        "/bin/bash",
-        "-c",
-        f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}' > /workspace/{repo_spec.repo}/.git",
-    ]
-    fix_result = subprocess.run(
-        ["docker", "exec", container_name] + fix_git_cmd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if fix_result.returncode != 0:
-        logging.warning(f"Failed to fix git file: {fix_result.stderr}")
+    # Fix git worktree reference
+    _fix_git_worktree(container_name, repo_spec)
 
-    # Attach to the container
+    # Now attach to container (interactive or with command)
     return attach_to_container(container_name, command)
 
 
-def _wait_for_container_running(container_name: str, max_wait: int = 30) -> int:
-    """Wait for container to be running, return 0 on success, 1 on timeout"""
+def _wait_for_container_running(container_name: str, max_wait: int = 30) -> bool:
+    """Wait for container to be running, return True on success, False on timeout"""
     wait_time = 0
     while wait_time < max_wait:
         if container_running(container_name):
-            return 0
+            return True
         time.sleep(1)
         wait_time += 1
 
-    logging.error(f"Container {container_name} failed to start after {max_wait} seconds")
-    return 1
+    return False
+
+
+def _fix_git_worktree(container_name: str, repo_spec: RepoSpec) -> None:
+    """Fix git worktree reference inside container"""
+    safe_branch = repo_spec.branch.replace("/", "-")
+    fix_git_cmd = [
+        "/bin/bash",
+        "-c",
+        f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{safe_branch}' > /workspace/{repo_spec.repo}/.git",
+    ]
+    subprocess.run(
+        ["docker", "exec", container_name] + fix_git_cmd,
+        capture_output=True,
+        check=False,
+    )
 
 
 def run_renv(args: Optional[List[str]] = None) -> int:
