@@ -326,7 +326,7 @@ def manage_container(
         return create_result
 
     # Wait for container to be running before attaching
-    wait_result = _wait_for_container_running(container_name, max_wait=30)
+    wait_result = _wait_for_container_running(container_name, max_wait=60)
     if wait_result != 0:
         return wait_result
 
