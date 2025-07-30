@@ -242,6 +242,12 @@ def setup_worktree(repo_spec: RepoSpec) -> pathlib.Path:
             ["git", "-C", str(repo_dir), "worktree", "add", str(worktree_dir), repo_spec.branch],
             check=True,
         )
+        # Ensure worktree is fully populated before returning
+        git_file = worktree_dir / ".git"
+        if not git_file.exists():
+            time.sleep(0.5)  # Wait for filesystem to sync
+        # Additional check to ensure directory is fully ready
+        time.sleep(0.1)
     else:
         logging.info(f"Worktree already exists: {worktree_dir}")
 
@@ -266,21 +272,25 @@ def build_rocker_config(
     if repo_spec.subfolder:
         docker_workdir = f"{docker_worktree_mount}/{repo_spec.subfolder}"
 
-    # Git environment for worktree
-    git_dir_in_container = docker_bare_repo_mount
-    git_work_tree_in_container = docker_worktree_mount
+    # For git worktrees, we need to mount the worktree git directory as well
+    worktree_git_dir = repo_dir / "worktrees" / f"worktree-{repo_spec.branch.replace('/', '-')}"
+    docker_worktree_git_mount = (
+        f"/workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}"
+    )
 
     # Create config using spec from renv.md
     config = {
         "image": "ubuntu:22.04",
-        "args": ["user", "pull", "git-clone", "git", "cwd", "nocleanup"],
+        "args": ["user", "pull", "git-clone", "git", "nocleanup"],
         "name": container_name,
         "hostname": container_name,
-        "oyr-run-arg": f"--workdir={docker_workdir} --env=GIT_DIR={git_dir_in_container} --env=GIT_WORK_TREE={git_work_tree_in_container}",
+        "volume": [
+            f"{repo_dir}:{docker_bare_repo_mount}",
+            f"{worktree_dir}:{docker_worktree_mount}",
+            f"{worktree_git_dir}:{docker_worktree_git_mount}",
+        ],
+        "oyr-run-arg": f"--workdir={docker_workdir} --env=REPO_NAME={repo_spec.repo} --env=BRANCH_NAME={repo_spec.branch.replace('/', '-')}",
     }
-
-    # Add volumes as separate entries since rockerc doesn't handle volume lists properly
-    config["volume"] = f"{repo_dir}:{docker_bare_repo_mount} {worktree_dir}:{docker_worktree_mount}"
 
     # Note: force rebuild is handled by removing existing containers, not by rocker extensions
     # nocache is not implemented as rocker extension - it should be handled during container management
@@ -323,9 +333,11 @@ def attach_to_container(container_name: str, command: Optional[List[str]] = None
         # Check if we have a single argument that looks like a shell command
         if len(command) == 1:
             cmd_str = command[0]
-            # If it starts with "bash -c" or contains shell constructs, pass it to bash -c
-            if cmd_str.startswith("bash -c ") or any(
-                char in cmd_str for char in [";", "&&", "||", "|", ">", "<"]
+            # If it starts with "bash -c" or contains shell constructs or spaces, pass it to bash -c
+            if (
+                cmd_str.startswith("bash -c ")
+                or any(char in cmd_str for char in [";", "&&", "||", "|", ">", "<"])
+                or " " in cmd_str
             ):
                 # Extract the actual command from "bash -c 'command'" format
                 if cmd_str.startswith("bash -c "):
@@ -347,7 +359,12 @@ def attach_to_container(container_name: str, command: Optional[List[str]] = None
             cmd_parts = ["docker", "exec", container_name] + command
     else:
         # Attach to running container for interactive session
-        cmd_parts = ["docker", "exec", "-it", container_name, "/bin/bash"]
+        # Check if we have a TTY available
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            cmd_parts = ["docker", "exec", "-it", container_name, "/bin/bash"]
+        else:
+            # No TTY available, run non-interactively
+            cmd_parts = ["docker", "exec", container_name, "/bin/bash"]
 
     logging.info(f"Attaching to container: {' '.join(cmd_parts)}")
     return subprocess.run(cmd_parts, check=False).returncode
@@ -380,8 +397,11 @@ def run_rocker_command(
     image = config.get("image", "")
     volumes = []
     if "volume" in config:
-        volume_str = config["volume"]
-        volumes = volume_str.split()
+        volume_config = config["volume"]
+        if isinstance(volume_config, list):
+            volumes = volume_config
+        else:
+            volumes = volume_config.split()
 
     oyr_run_arg = config.get("oyr-run-arg", "")
 
@@ -479,6 +499,21 @@ def manage_container(
     wait_result = _wait_for_container_running(container_name, max_wait=60)
     if wait_result != 0:
         return wait_result
+
+    # Fix the .git file to point to container paths for git worktree
+    fix_git_cmd = [
+        "/bin/bash",
+        "-c",
+        f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}' > /workspace/{repo_spec.repo}/.git",
+    ]
+    fix_result = subprocess.run(
+        ["docker", "exec", container_name] + fix_git_cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if fix_result.returncode != 0:
+        logging.warning(f"Failed to fix git file: {fix_result.stderr}")
 
     # Attach to the container
     return attach_to_container(container_name, command)

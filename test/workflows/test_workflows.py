@@ -103,3 +103,11 @@ def test_workflow_5_force_rebuild_cache():
     print(
         f"Cache test performance: initial={initial_time}s, force={force_time}s, nocache={nocache_time}s, reuse={reuse_time}s"
     )
+
+
+def test_workflow_6_clean_git():
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_6_clean_git.sh")
+    os.chmod(script, 0o755)
+    result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    output = result.stdout.decode() + result.stderr.decode()
+    assert result.returncode == 0, f"Workflow 6 clean git failed: {output}"

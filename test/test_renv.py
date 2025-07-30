@@ -83,11 +83,18 @@ class TestRockerConfig:
         assert "pull" in config["args"]
         assert "git" in config["args"]
         assert "git-clone" in config["args"]
+        assert "nocleanup" in config["args"]
+        assert "cwd" not in config["args"]  # Should be removed per spec
         assert config["name"] == "test_renv-main"
         assert config["hostname"] == "test_renv-main"
-        assert "/workspace/test_renv.git" in config["volume"]
-        assert "/workspace/test_renv" in config["volume"]
+        assert isinstance(config["volume"], list)
+        assert any("/workspace/test_renv.git" in vol for vol in config["volume"])
+        assert any("/workspace/test_renv" in vol for vol in config["volume"])
+        assert len(config["volume"]) == 3  # bare repo, worktree, and worktree git directory
         assert "--workdir=/workspace/test_renv" in config["oyr-run-arg"]
+        assert "--user=" not in config["oyr-run-arg"]  # User extension handles this
+        assert "REPO_NAME=test_renv" in config["oyr-run-arg"]
+        assert "BRANCH_NAME=main" in config["oyr-run-arg"]
 
     def test_build_rocker_config_with_subfolder(self):
         spec = RepoSpec("blooop", "test_renv", "main", "src")
@@ -271,9 +278,30 @@ class TestMainFunction:
         assert call_args[1]["force"] is True
         assert call_args[1]["nocache"] is True
 
-    def test_run_renv_no_args(self):
+    @patch("rockerc.renv.fuzzy_select_repo")
+    def test_run_renv_no_args(self, mock_fuzzy_select):
+        mock_fuzzy_select.return_value = None
         result = run_renv([])
         assert result == 1
+
+    @patch("rockerc.renv.manage_container")
+    @patch("rockerc.renv.fuzzy_select_repo")
+    def test_run_renv_with_fuzzy_selection(self, mock_fuzzy_select, mock_manage):
+        mock_fuzzy_select.return_value = "blooop/test_renv@main"
+        mock_manage.return_value = 0
+
+        result = run_renv([])
+
+        assert result == 0
+        mock_fuzzy_select.assert_called_once()
+        mock_manage.assert_called_once()
+
+        # Check the repo_spec passed to manage_container
+        call_args = mock_manage.call_args
+        repo_spec = call_args[1]["repo_spec"]
+        assert repo_spec.owner == "blooop"
+        assert repo_spec.repo == "test_renv"
+        assert repo_spec.branch == "main"
 
     def test_run_renv_invalid_spec(self):
         result = run_renv(["invalid-spec"])
