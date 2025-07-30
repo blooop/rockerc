@@ -272,8 +272,10 @@ def run_rocker_command(
 
     if detached:
         # Run in background and return immediately
-        with subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL):
-            pass
+        # pylint: disable=consider-using-with
+        subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Give it a moment to start
+        time.sleep(2)
         return 0
     return subprocess.run(cmd_parts, check=False).returncode
 
