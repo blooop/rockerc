@@ -370,7 +370,9 @@ def attach_to_container(container_name: str, command: Optional[List[str]] = None
     return subprocess.run(cmd_parts, check=False).returncode
 
 
-def start_and_attach_container(container_name: str, command: Optional[List[str]] = None) -> int:
+def start_and_attach_container(
+    container_name: str, command: Optional[List[str]] = None, repo_spec: Optional[RepoSpec] = None
+) -> int:
     """Start a stopped container and attach to it"""
     # Start the container
     start_result = subprocess.run(
@@ -381,6 +383,15 @@ def start_and_attach_container(container_name: str, command: Optional[List[str]]
         return start_result.returncode
 
     logging.info(f"Started container {container_name}")
+
+    # If repo_spec is provided, ensure worktree is set up and git is properly configured
+    # This handles the case where the host renv directory was deleted but the container still exists
+    if repo_spec:
+        worktree_dir = get_worktree_dir(repo_spec)
+        if not worktree_dir.exists():
+            logging.info("Worktree missing, re-setting up worktree and git configuration")
+            setup_worktree(repo_spec)
+            return _fix_container_git_config(repo_spec, container_name, command)
 
     # Now attach to it
     return attach_to_container(container_name, command)
@@ -450,6 +461,52 @@ def run_rocker_command(
     return subprocess.run(cmd_parts, check=False).returncode
 
 
+def _handle_container_corruption(
+    repo_spec: RepoSpec, container_name: str, command: Optional[List[str]]
+) -> int:
+    """Handle container corruption by stopping and rebuilding"""
+    logging.info(
+        "Container appears corrupted (possible breakout detection), stopping container to force rebuild"
+    )
+    subprocess.run(["docker", "stop", container_name], check=False)
+    subprocess.run(["docker", "rm", "-f", container_name], check=False)
+    # Restart the manage_container process to create a new container
+    return manage_container(repo_spec, command, force=True, nocache=False, no_container=False)
+
+
+def _fix_container_git_config(
+    repo_spec: RepoSpec, container_name: str, command: Optional[List[str]]
+) -> int:
+    """Fix git configuration in container and handle corruption if needed"""
+    # Always fix the git configuration in the container (in case it was lost)
+    fix_git_cmd = [
+        "/bin/bash",
+        "-c",
+        f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}' > /workspace/{repo_spec.repo}/.git",
+    ]
+    fix_result = subprocess.run(
+        ["docker", "exec", "--user", "root", container_name] + fix_git_cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if fix_result.returncode != 0:
+        logging.warning(f"Failed to fix git file: {fix_result.stderr}")
+
+        # If git fix failed, try to test if container is still functional
+        test_result = subprocess.run(
+            ["docker", "exec", container_name, "pwd"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if test_result.returncode != 0 or "container breakout" in test_result.stderr.lower():
+            return _handle_container_corruption(repo_spec, container_name, command)
+
+    return attach_to_container(container_name, command)
+
+
 def manage_container(
     repo_spec: RepoSpec,
     command: Optional[List[str]] = None,
@@ -481,10 +538,12 @@ def manage_container(
     if container_exists(container_name) and not force:
         if container_running(container_name):
             logging.info(f"Container {container_name} is running, attaching to it")
-            return attach_to_container(container_name, command)
+            # Always ensure worktree is properly set up (in case host directory was deleted)
+            setup_worktree(repo_spec)
+            return _fix_container_git_config(repo_spec, container_name, command)
 
         logging.info(f"Container {container_name} exists but is stopped, starting it")
-        return start_and_attach_container(container_name, command)
+        return start_and_attach_container(container_name, command, repo_spec)
 
     logging.info(f"Creating new persistent container {container_name}")
     # Build rocker configuration
@@ -507,7 +566,7 @@ def manage_container(
         f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}' > /workspace/{repo_spec.repo}/.git",
     ]
     fix_result = subprocess.run(
-        ["docker", "exec", container_name] + fix_git_cmd,
+        ["docker", "exec", "--user", "root", container_name] + fix_git_cmd,
         capture_output=True,
         text=True,
         check=False,
