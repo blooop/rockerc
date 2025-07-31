@@ -194,16 +194,3 @@ For more details, see the project README or run `renv --help`.
 
 this is an example of how to use oyr-run-arg to pass arguments to docker through rocker.
 
-```python
-  rocker_config = {
-            "image": "ubuntu:24.04",
-            "args": ["user", "pull", "deps", "git", "cwd"],
-            "name": container_name,
-            "hostname": container_name,
-            "volume": [
-                f"{bare_repo_dir}:{docker_bare_repo_mount}",
-                f"{worktree_dir}:{docker_worktree_mount}",
-            ],
-            "oyr-run-arg": f"--workdir={docker_workdir} --env=GIT_DIR={git_dir_in_container} --env=GIT_WORK_TREE={git_work_tree_in_container}",
-        }
-```
