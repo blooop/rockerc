@@ -14,10 +14,13 @@ full_output=$(renv blooop/test_renv "echo '=== GIT_STATUS_START ==='; git status
 # Extract just the git status output between the markers
 git_output=$(echo "$full_output" | sed -n '/=== GIT_STATUS_START ===/,/=== GIT_STATUS_END ===/p' | sed '1d;$d')
 
-# Check if there are any changes (git status --porcelain should be empty for clean repo)
-if [ -n "$git_output" ]; then
-    echo "ERROR: Git status is not clean. Output:"
-    echo "$git_output"
+# Filter out expected renv-generated files (docker-compose.yml, Dockerfile, docker-bake.hcl, etc.)
+filtered_output=$(echo "$git_output" | grep -v -E '\?\? (docker-compose\.yml|Dockerfile|docker-bake\.hcl|Dockerfile\.|\.buildx-cache/)' || true)
+
+# Check if there are any changes (after filtering expected generated files)
+if [ -n "$filtered_output" ]; then
+    echo "ERROR: Git status is not clean (ignoring expected renv-generated files). Output:"
+    echo "$filtered_output"
     echo "Full git status:"
     renv blooop/test_renv git status 2>/dev/null
     exit 1

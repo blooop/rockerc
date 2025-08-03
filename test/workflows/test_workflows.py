@@ -111,3 +111,23 @@ def test_workflow_6_clean_git():
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode == 0, f"Workflow 6 clean git failed: {output}"
+
+
+def test_workflow_7_renv_recreation():
+    """Test that renv works correctly after deleting .renv folder"""
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_7_renv_recreation.sh")
+    os.chmod(script, 0o755)
+    result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    output = result.stdout.decode() + result.stderr.decode()
+    assert result.returncode == 0, f"Workflow 7 renv recreation failed: {output}"
+
+    # Check that all test steps completed successfully
+    assert "=== STEP 1: Normal renv operation ===" in output, "Step 1 not found"
+    assert "=== STEP 2: Deleting .renv folder ===" in output, "Step 2 not found"
+    assert "=== STEP 3: Testing renv recreation ===" in output, "Step 3 not found"
+    assert "=== STEP 4: Testing subsequent operations ===" in output, "Step 4 not found"
+    assert "=== ALL TESTS PASSED ===" in output, "Final success message not found"
+
+    # Check that no container breakout errors occurred
+    assert "container breakout detected" not in output, "Container breakout error detected"
+    assert "OCI runtime exec failed" not in output, "OCI runtime exec failure detected"

@@ -408,6 +408,10 @@ class ComposeConfig:
 
 def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
     """Generate docker-compose.yml for the environment."""
+    # For git worktrees, we need to mount the worktree git metadata directory as well
+    safe_branch = config.repo_spec.branch.replace("/", "-")
+    worktree_git_dir = config.repo_dir / "worktrees" / f"worktree-{safe_branch}"
+
     # Start with base service
     service = {
         "image": config.image_name,
@@ -417,6 +421,7 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         "volumes": [
             f"{config.worktree_dir}:/workspace/{config.repo_spec.repo}",
             f"{config.repo_dir}:/workspace/{config.repo_spec.repo}.git",
+            f"{worktree_git_dir}:/workspace/{config.repo_spec.repo}.git/worktrees/worktree-{safe_branch}",
         ],
         "environment": {
             "REPO_NAME": config.repo_spec.repo,
@@ -464,7 +469,7 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
     if any(ext.compose_fragment.get("build", {}).get("args") for ext in config.extensions):
         service["build"] = service.get("build", {"context": ".", "dockerfile": "Dockerfile"})
 
-    compose_config = {"version": "3.8", "services": {"dev": service}}
+    compose_config = {"services": {"dev": service}}
 
     # Write compose file
     compose_path = config.work_dir / "docker-compose.yml"
@@ -481,6 +486,9 @@ def generate_bake_file(
     # Create targets for each extension layer
     targets = []
 
+    # Convert platforms list to proper HCL array syntax
+    platforms_hcl = "[" + ", ".join(f'"{platform}"' for platform in platforms) + "]"
+
     current_image = base_image
     for ext in extensions:
         if not ext.dockerfile_content.strip():
@@ -492,7 +500,7 @@ target "{target_name}" {{
     context = "."
     dockerfile = "Dockerfile.{ext.name}"
     tags = ["renv/{ext.name}:{ext.hash}"]
-    platforms = {platforms}
+    platforms = {platforms_hcl}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
 }}"""
@@ -511,7 +519,7 @@ target "final" {{
     context = "."
     dockerfile = "Dockerfile"
     tags = ["renv/final:{'-'.join(ext.hash for ext in extensions)}"]
-    platforms = {platforms}
+    platforms = {platforms_hcl}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
 }}"""
@@ -565,6 +573,27 @@ def build_image_with_bake(
         return False
 
 
+def cleanup_stale_container(repo_spec: RepoSpec) -> None:
+    """Clean up stale containers that may have invalid mount points."""
+    container_name = repo_spec.compose_project_name
+    try:
+        # Check if container exists
+        result = subprocess.run(
+            ["docker", "inspect", container_name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if result.returncode == 0:
+            logging.info(f"Removing stale container: {container_name}")
+            # Stop and remove the container
+            subprocess.run(["docker", "stop", container_name], check=False, capture_output=True)
+            subprocess.run(["docker", "rm", container_name], check=False, capture_output=True)
+    except subprocess.CalledProcessError:
+        pass  # Container doesn't exist or already removed
+
+
 def run_compose_service(
     work_dir: Path, repo_spec: RepoSpec, command: Optional[List[str]] = None
 ) -> int:
@@ -575,8 +604,25 @@ def run_compose_service(
     env["GROUP_ID"] = str(os.getgid())
 
     try:
+        # Clean up any stale containers that might have invalid mount points
+        cleanup_stale_container(repo_spec)
+
         # Start the service
         subprocess.run(["docker", "compose", "up", "-d"], cwd=work_dir, env=env, check=True)
+
+        # Fix git worktree configuration in the container
+        safe_branch = repo_spec.branch.replace("/", "-")
+        fix_git_cmd = [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "dev",
+            "bash",
+            "-c",
+            f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{safe_branch}' > /workspace/{repo_spec.repo}/.git",
+        ]
+        subprocess.run(fix_git_cmd, cwd=work_dir, env=env, check=False)
 
         if command:
             # Execute command in running container
@@ -749,6 +795,7 @@ def cmd_launch(args) -> int:
 
 def cmd_list(args) -> int:  # pylint: disable=unused-argument
     """List active environments."""
+    del args  # Unused parameter
     containers = list_active_containers()
     if not containers:
         print("No active environments found.")
@@ -769,6 +816,7 @@ def cmd_destroy(args) -> int:
 
 def cmd_prune(args) -> int:  # pylint: disable=unused-argument
     """Prune unused containers and images."""
+    del args  # Unused parameter
     try:
         # Remove stopped containers
         subprocess.run(["docker", "container", "prune", "-f"], check=True)
@@ -801,6 +849,7 @@ def cmd_ext(args) -> int:
 
 def cmd_doctor(args) -> int:  # pylint: disable=unused-argument
     """Run environment diagnostics."""
+    del args  # Unused parameter
     checks = [
         (
             "Docker",
@@ -895,14 +944,53 @@ Examples:
         help="Set log level",
     )
 
-    # If no command specified, treat first argument as repo_spec for launch
+    # Handle backward compatibility and convert old flags to new format
     args = sys.argv[1:]
-    if (
-        args
-        and not args[0].startswith("-")
-        and args[0] not in ["list", "destroy", "prune", "ext", "doctor", "help"]
-    ):
-        args = ["launch"] + args
+
+    # Check if this looks like the old format: [flags] repo_spec [command]
+    if args and args[0] not in ["launch", "list", "destroy", "prune", "ext", "doctor", "help"]:
+        # Extract global flags that should be moved to launch subcommand
+        launch_flags = []
+        remaining_args = []
+
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg in ["--force", "--rebuild"]:
+                launch_flags.append("--rebuild")  # Convert --force to --rebuild
+            elif arg in ["--nocache"]:
+                launch_flags.append("--rebuild")  # For now, treat --nocache as --rebuild
+            elif arg in ["--no-gui", "--no-gpu"]:
+                launch_flags.append(arg)
+            elif arg.startswith("--builder"):
+                if "=" in arg:
+                    launch_flags.append(arg)
+                else:
+                    launch_flags.extend([arg, args[i + 1]])
+                    i += 1
+            elif arg.startswith("--platforms"):
+                if "=" in arg:
+                    launch_flags.append(arg)
+                else:
+                    launch_flags.extend([arg, args[i + 1]])
+                    i += 1
+            elif arg.startswith("--log-level"):
+                if "=" in arg:
+                    remaining_args.append(arg)
+                else:
+                    remaining_args.extend([arg, args[i + 1]])
+                    i += 1
+            else:
+                remaining_args.extend(args[i:])
+                break
+            i += 1
+
+        # Rebuild args in new format: [global_flags] launch [launch_flags] repo_spec [command]
+        global_flags = [arg for arg in remaining_args if arg.startswith("--log-level")]
+        other_args = [arg for arg in remaining_args if not arg.startswith("--log-level")]
+
+        if other_args:
+            args = global_flags + ["launch"] + launch_flags + other_args
 
     parsed_args = parser.parse_args(args)
 

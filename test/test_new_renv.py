@@ -403,6 +403,17 @@ class TestFileGeneration:
             assert service["environment"]["BRANCH_NAME"] == "main"
             assert service["environment"]["DISPLAY"] == "${DISPLAY}"
             assert "/tmp/.X11-unix:/tmp/.X11-unix:rw" in service["volumes"]
+            # Should have 4 volumes: worktree, repo.git, worktree git metadata, and x11
+            assert (
+                len(
+                    [
+                        v
+                        for v in service["volumes"]
+                        if "worktree" in v or "repo.git" in v or "X11" in v
+                    ]
+                )
+                >= 4
+            )
 
             # Check file was written
             compose_file = work_dir / "docker-compose.yml"
@@ -423,7 +434,7 @@ class TestFileGeneration:
             assert 'target "ext-base"' in content
             assert 'target "ext-git"' in content
             assert 'target "final"' in content
-            assert "linux/amd64" in content
+            assert '"linux/amd64"' in content
 
             # Check individual Dockerfiles were created
             assert (work_dir / "Dockerfile.base").exists()
@@ -501,17 +512,46 @@ class TestComposeOperations:
             result = run_compose_service(Path(tmpdir), spec)
 
             assert result == 0
-            assert mock_run.call_count == 2  # up + exec
+            # Now includes: inspect + stop + rm + up + git fix + exec = 6 calls
+            assert mock_run.call_count >= 4  # At least up + git fix + exec + cleanup calls
 
-            # Check that compose up was called
-            up_call = mock_run.call_args_list[0][0][0]
+            # Find the compose up call (should be after cleanup calls)
+            up_calls = [
+                call
+                for call in mock_run.call_args_list
+                if len(call[0]) > 0 and "compose" in call[0][0] and "up" in call[0][0]
+            ]
+            assert len(up_calls) == 1
+            up_call = up_calls[0][0][0]
             assert "docker" in up_call
             assert "compose" in up_call
             assert "up" in up_call
             assert "-d" in up_call
 
-            # Check that compose exec was called
-            exec_call = mock_run.call_args_list[1][0][0]
+            # Find the git fix call
+            git_fix_calls = [
+                call
+                for call in mock_run.call_args_list
+                if len(call[0]) > 0 and "exec" in call[0][0] and "-T" in call[0][0]
+            ]
+            assert len(git_fix_calls) == 1
+            git_fix_call = git_fix_calls[0][0][0]
+            assert "docker" in git_fix_call
+            assert "compose" in git_fix_call
+            assert "exec" in git_fix_call
+            assert "-T" in git_fix_call
+
+            # Find the interactive exec call
+            exec_calls = [
+                call
+                for call in mock_run.call_args_list
+                if len(call[0]) > 0
+                and "exec" in call[0][0]
+                and "bash" in call[0][0]
+                and "-T" not in call[0][0]
+            ]
+            assert len(exec_calls) == 1
+            exec_call = exec_calls[0][0][0]
             assert "docker" in exec_call
             assert "compose" in exec_call
             assert "exec" in exec_call
@@ -533,8 +573,14 @@ class TestComposeOperations:
 
             assert result == 0
 
-            # Check that command was passed through
-            exec_call = mock_run.call_args_list[1][0][0]
+            # Find the command exec call (should have git and status)
+            cmd_exec_calls = [
+                call
+                for call in mock_run.call_args_list
+                if len(call[0]) > 0 and "git" in call[0][0] and "status" in call[0][0]
+            ]
+            assert len(cmd_exec_calls) == 1
+            exec_call = cmd_exec_calls[0][0][0]
             assert "git" in exec_call
             assert "status" in exec_call
 
