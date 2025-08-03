@@ -174,8 +174,8 @@ def test_workflow_8_prune():
         "✓ Worktree correctly removed by selective prune" in output
     ), "Selective prune did not remove worktree"
     assert (
-        "✓ All containers correctly removed by full prune" in output
-    ), "Full prune did not remove all containers"
+        "✓ All renv containers correctly removed by full prune" in output
+    ), "Full prune did not remove all renv containers"
     assert (
         "✓ .renv directory correctly removed by full prune" in output
     ), "Full prune did not remove .renv directory"

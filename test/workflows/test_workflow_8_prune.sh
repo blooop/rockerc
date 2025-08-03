@@ -52,12 +52,12 @@ echo "=== TEST 4: FULL PRUNE TEST ==="
 renv prune
 echo "✓ Full prune completed"
 
-# Verify everything is gone (check for any renv containers)
+# Verify renv-related containers are gone
 if docker ps --format "table {{.Names}}" | grep -E "(test_renv|renv-)"; then
     echo "✗ No renv containers should exist after full prune"
     exit 1
 else
-    echo "✓ All containers correctly removed by full prune"
+    echo "✓ All renv containers correctly removed by full prune"
 fi
 
 if [ -d ~/.renv ]; then

@@ -835,10 +835,12 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
         worktree_dir = get_worktree_dir(repo_spec)
 
         # Stop and remove container
+        print(f"Removing container: {container_name}")
         subprocess.run(["docker", "stop", container_name], check=False, capture_output=True)
         subprocess.run(["docker", "rm", container_name], check=False, capture_output=True)
 
         # Remove associated images (renv images for this repo)
+        removed_images = []
         try:
             result = subprocess.run(
                 ["docker", "images", "--filter", f"reference=renv/{repo_spec.repo}*", "-q"],
@@ -848,14 +850,28 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
             )
             if result.stdout.strip():
                 image_ids = result.stdout.strip().split("\n")
+                # Get image names before removing
+                for image_id in image_ids:
+                    name_result = subprocess.run(
+                        ["docker", "inspect", "--format", "{{.RepoTags}}", image_id],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    if name_result.stdout.strip():
+                        removed_images.append(name_result.stdout.strip())
+
                 subprocess.run(
                     ["docker", "rmi", "-f"] + image_ids, check=False, capture_output=True
                 )
+                for image in removed_images:
+                    print(f"Removed image: {image}")
         except subprocess.CalledProcessError:
             pass
 
         # Remove worktree and its compose files
         if worktree_dir.exists():
+            print(f"Removing worktree: {worktree_dir}")
             env = os.environ.copy()
             env["COMPOSE_PROJECT_NAME"] = repo_spec.compose_project_name
             # Clean up compose volumes first
@@ -889,50 +905,95 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
 
 
 def prune_all() -> int:
-    """Prune all containers, images, volumes, and renv folders."""
+    """Prune all renv-related containers, images, and folders."""
     try:
-        # Get all container IDs and remove them
+        removed_containers = []
+        removed_images = []
+
+        # Get all renv-related containers and remove them
         try:
+            # Find containers with renv-related project names
             result = subprocess.run(
-                ["docker", "ps", "-aq"], capture_output=True, text=True, check=False
+                ["docker", "ps", "-aq", "--filter", "label=com.docker.compose.project"],
+                capture_output=True,
+                text=True,
+                check=False,
             )
             if result.stdout.strip():
                 container_ids = result.stdout.strip().split("\n")
-                subprocess.run(
-                    ["docker", "rm", "-f"] + container_ids, check=False, capture_output=True
-                )
+                for container_id in container_ids:
+                    # Check if container name matches renv patterns
+                    inspect_result = subprocess.run(
+                        ["docker", "inspect", "--format", "{{.Name}}", container_id],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    if inspect_result.stdout.strip():
+                        container_name = inspect_result.stdout.strip().lstrip("/")
+                        # Remove containers that match renv naming patterns
+                        if any(pattern in container_name for pattern in ["renv-", "-main", "-dev"]):
+                            print(f"Removing container: {container_name}")
+                            subprocess.run(
+                                ["docker", "stop", container_id], check=False, capture_output=True
+                            )
+                            subprocess.run(
+                                ["docker", "rm", "-f", container_id],
+                                check=False,
+                                capture_output=True,
+                            )
+                            removed_containers.append(container_name)
         except subprocess.CalledProcessError:
             pass
 
-        # Get all image IDs and remove them
+        # Get renv-related images and remove them
         try:
+            # Remove images with renv prefix
             result = subprocess.run(
-                ["docker", "images", "-q"], capture_output=True, text=True, check=False
+                ["docker", "images", "--filter", "reference=renv/*", "-q"],
+                capture_output=True,
+                text=True,
+                check=False,
             )
             if result.stdout.strip():
                 image_ids = result.stdout.strip().split("\n")
+                # Get image names before removing
+                for image_id in image_ids:
+                    name_result = subprocess.run(
+                        ["docker", "inspect", "--format", "{{.RepoTags}}", image_id],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    if name_result.stdout.strip():
+                        image_name = name_result.stdout.strip()
+                        print(f"Removing image: {image_name}")
+                        removed_images.append(image_name)
+
                 subprocess.run(
                     ["docker", "rmi", "-f"] + image_ids, check=False, capture_output=True
                 )
         except subprocess.CalledProcessError:
             pass
 
-        # Remove all volumes
-        subprocess.run(["docker", "volume", "prune", "-f"], check=False, capture_output=True)
-        # Remove build cache
-        subprocess.run(["docker", "buildx", "prune", "-f"], check=False, capture_output=True)
-
         # Remove renv cache and workspaces folders
         cache_dir = str(get_cache_dir())
         workspaces_dir = str(get_workspaces_dir())
         for folder in [cache_dir, workspaces_dir]:
             if os.path.exists(folder):
+                print(f"Removing directory: {folder}")
                 subprocess.run(["rm", "-rf", folder], check=False)
 
-        logging.info("Pruned all Docker containers, images, volumes, and renv folders")
+        # Print summary
+        if removed_containers or removed_images:
+            print(f"Pruned {len(removed_containers)} containers and {len(removed_images)} images")
+        else:
+            print("No renv resources found to prune")
+
+        logging.info("Pruned all renv-related containers, images, and folders")
         return 0
     except Exception as e:
-        logging.error(f"Failed to prune all: {e}")
+        logging.error(f"Failed to prune all renv resources: {e}")
         return 1
 
 
