@@ -586,13 +586,15 @@ def should_rebuild_image(
 
 
 def build_image_with_bake(
-    build_dir: Path, builder_name: str = "renv_builder", load: bool = True
+    build_dir: Path, builder_name: str = "renv_builder", load: bool = True, nocache: bool = False
 ) -> bool:
     """Build images using docker buildx bake."""
     try:
         cmd = ["docker", "buildx", "bake", "--builder", builder_name]
         if load:
             cmd.append("--load")
+        if nocache:
+            cmd.append("--no-cache")
         cmd.append("final")
 
         logging.info(f"Building with bake: {' '.join(cmd)}")
@@ -774,6 +776,7 @@ class LaunchConfig:
     extensions: List[str]
     command: Optional[List[str]] = None
     rebuild: bool = False
+    nocache: bool = False
     no_gui: bool = False
     no_gpu: bool = False
     platforms: Optional[List[str]] = None
@@ -836,7 +839,7 @@ def launch_environment(config: LaunchConfig) -> int:
         generate_bake_file(loaded_extensions, base_image, platforms, build_dir)
 
         # Build image
-        if not build_image_with_bake(build_dir, config.builder_name):
+        if not build_image_with_bake(build_dir, config.builder_name, nocache=config.nocache):
             return 1
 
         logging.info(f"Built image: {image_name}")
@@ -868,6 +871,7 @@ def cmd_launch(args) -> int:
         extensions=args.extensions or [],
         command=args.command if args.command else None,
         rebuild=args.rebuild,
+        nocache=args.nocache,
         no_gui=args.no_gui,
         no_gpu=args.no_gpu,
         platforms=args.platforms.split(",") if args.platforms else None,
@@ -890,10 +894,154 @@ def cmd_list(args) -> int:  # pylint: disable=unused-argument
     return 0
 
 
-def cmd_destroy(args) -> int:
-    """Destroy environment command."""
-    repo_spec = RepoSpec.parse(args.repo_spec)
-    success = destroy_environment(repo_spec)
+def cmd_install(args) -> int:  # pylint: disable=unused-argument
+    """Install shell completion scripts."""
+    import os  # pylint: disable=reimported,redefined-outer-name
+    
+    # Bash completion script
+    bash_completion = '''# renv bash completion
+_renv_complete() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Complete commands
+    if [[ ${COMP_CWORD} == 1 ]]; then
+        COMPREPLY=($(compgen -W "launch list prune help" -- ${cur}))
+        return 0
+    fi
+    
+    # Complete repo specs from existing workspaces
+    if [[ -d ~/.renv/workspaces ]]; then
+        local repos=$(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+                     sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
+        local branches=$(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+                        sed 's|.*worktree-||' | sort -u)
+        COMPREPLY=($(compgen -W "${repos} ${branches}" -- ${cur}))
+    fi
+}
+complete -F _renv_complete renv
+'''
+    
+    # Zsh completion script  
+    zsh_completion = '''#compdef renv
+_renv() {
+    local context state line
+    typeset -A opt_args
+    
+    _arguments \\
+        '1: :->commands' \\
+        '*: :->args'
+        
+    case $state in
+        commands)
+            _alternative \\
+                'commands:commands:(launch list prune help)' \\
+                'repos:repositories:_renv_repos'
+            ;;
+        args)
+            _renv_repos
+            ;;
+    esac
+}
+
+_renv_repos() {
+    if [[ -d ~/.renv/workspaces ]]; then
+        local repos branches
+        repos=($(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+                sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u))
+        branches=($(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+                   sed 's|.*worktree-||' | sort -u))
+        _describe 'repositories' repos
+        _describe 'branches' branches  
+    fi
+}
+
+_renv "$@"
+'''
+
+    # Fish completion script
+    fish_completion = '''# renv fish completion
+complete -c renv -f
+
+# Commands
+complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "launch" -d "Launch container for repo and branch"
+complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "list" -d "Show active worktrees and containers"  
+complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "prune" -d "Remove unused containers and images"
+complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "help" -d "Show help message"
+
+# Options
+complete -c renv -l install -d "Install shell auto-completion"
+complete -c renv -l rebuild -d "Force rebuild of container"
+complete -c renv -l nocache -d "Disable Buildx cache"
+complete -c renv -l no-gui -d "Disable X11/GUI support"
+complete -c renv -l no-gpu -d "Disable GPU passthrough"
+complete -c renv -l log-level -d "Set log level" -xa "debug info warn error"
+
+# Dynamic repo completion
+if test -d ~/.renv/workspaces
+    for repo in (find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
+        complete -c renv -a "$repo" -d "Repository"
+    end
+end
+'''
+
+    # Detect shell and install appropriate completion
+    shell = os.environ.get('SHELL', '').split('/')[-1]
+    home = os.path.expanduser('~')
+    
+    success = False
+    
+    if shell == 'bash':
+        # Install bash completion
+        bash_completion_dir = f"{home}/.bash_completion.d"
+        os.makedirs(bash_completion_dir, exist_ok=True)
+        completion_file = f"{bash_completion_dir}/renv"
+        
+        with open(completion_file, 'w', encoding='utf-8') as f:
+            f.write(bash_completion)
+        
+        print(f"✓ Bash completion installed to {completion_file}")
+        print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
+        success = True
+        
+    elif shell == 'zsh':
+        # Install zsh completion
+        zsh_completion_dir = f"{home}/.zsh/completions"
+        os.makedirs(zsh_completion_dir, exist_ok=True)
+        completion_file = f"{zsh_completion_dir}/_renv"
+        
+        with open(completion_file, 'w', encoding='utf-8') as f:
+            f.write(zsh_completion)
+            
+        print(f"✓ Zsh completion installed to {completion_file}")
+        print("Add 'fpath=(~/.zsh/completions $fpath)' to your ~/.zshrc if not already present")
+        print("Run 'autoload -U compinit && compinit' or restart your terminal")
+        success = True
+        
+    elif shell == 'fish':
+        # Install fish completion
+        fish_completion_dir = f"{home}/.config/fish/completions"
+        os.makedirs(fish_completion_dir, exist_ok=True)
+        completion_file = f"{fish_completion_dir}/renv.fish"
+        
+        with open(completion_file, 'w', encoding='utf-8') as f:
+            f.write(fish_completion)
+            
+        print(f"✓ Fish completion installed to {completion_file}")
+        print("Restart your fish shell to enable completion")
+        success = True
+        
+    else:
+        print(f"✗ Unknown shell: {shell}")
+        print("Supported shells: bash, zsh, fish")
+        print("You can manually install completion scripts:")
+        print("\nBash completion script:")
+        print(bash_completion)
+        print("\nZsh completion script:")
+        print(zsh_completion)
+        print("\nFish completion script:")
+        print(fish_completion)
+    
     return 0 if success else 1
 
 
@@ -1140,45 +1288,69 @@ def cmd_doctor(args) -> int:  # pylint: disable=unused-argument
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="A development environment launcher using Docker, Git worktrees, and Buildx/Bake",
+        prog="renv",
+        usage="renv [OPTIONS] <owner>/<repo>[@<branch>][#<subfolder>] [-- <command>...]",
+        description="""A development environment launcher using Docker, Git worktrees, and Buildx/Bake.
+
+Clones and manages repositories in isolated git worktrees, builds cached container environments using Docker Buildx + Bake, and launches fully configured shells or commands inside each branch-specific container workspace.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
+        epilog="""Examples:
   renv blooop/test_renv@main
   renv blooop/test_renv@feature/foo
   renv blooop/test_renv@main#src
   renv blooop/test_renv git status
   renv blooop/test_renv@dev "bash -c 'git pull && make test'"
+
+Commands:
+  launch       Launch container for the given repo and branch (default behavior)
+  list         Show active worktrees and running containers
+  prune        Remove unused containers and cached images
+  help         Show this help message
+
+Arguments:
+  <owner>/<repo>[@<branch>][#<subfolder>]
+                   GitHub repository specifier:
+                   - owner/repo (default branch = main)
+                   - @branch    (e.g. main, feature/foo)
+                   - #subfolder (working directory after container start)
+  [-- <command>...] Any command string to run inside the container (e.g. bash -c ...)
+
+Environment:
+  RENV_CACHE_DIR            Set custom cache directory (default: ~/.renv/)
+  RENV_BASE_IMAGE           Override base image used for environments
+  RENV_CACHE_REGISTRY       Push/pull extension build cache to a registry
+
+Notes:
+  - Worktrees are stored under ~/.renv/workspaces/<owner>/<repo>/worktree-<branch>
+  - Extensions can be configured via .renv.yml in the repo
+  - Extension images are hashed and reused across repos/branches automatically
+  - Supports Docker socket sharing (DOOD) and Docker-in-Docker (DinD) setups
 """,
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Launch command (default)
-    launch_parser = subparsers.add_parser("launch", help="Launch container environment")
+    launch_parser = subparsers.add_parser("launch", help="Launch container for the given repo and branch (default behavior)")
     launch_parser.add_argument(
         "repo_spec", help="Repository specification: owner/repo[@branch][#subfolder]"
     )
     launch_parser.add_argument("command", nargs="*", help="Command to execute")
     launch_parser.add_argument("--extensions", "-e", nargs="*", help="Extensions to enable")
-    launch_parser.add_argument("--rebuild", action="store_true", help="Force rebuild")
-    launch_parser.add_argument("--no-gui", action="store_true", help="Disable GUI support")
-    launch_parser.add_argument("--no-gpu", action="store_true", help="Disable GPU support")
-    launch_parser.add_argument("--builder", default="renv_builder", help="Buildx builder name")
-    launch_parser.add_argument("--platforms", help="Target platforms (comma-separated)")
+    launch_parser.add_argument("--rebuild", action="store_true", help="Force rebuild of container and extensions, even if cached")
+    launch_parser.add_argument("--nocache", action="store_true", help="Disable use of Buildx cache (useful for clean debugging)")
+    launch_parser.add_argument("--no-gui", action="store_true", help="Disable X11 socket mounting and GUI support")
+    launch_parser.add_argument("--no-gpu", action="store_true", help="Disable GPU passthrough and NVIDIA runtime")
+    launch_parser.add_argument("--builder", default="renv_builder", help="Use a custom Buildx builder name (default: renv_builder)")
+    launch_parser.add_argument("--platforms", help="Target platforms for Buildx (e.g. linux/amd64,linux/arm64)")
     launch_parser.set_defaults(func=cmd_launch)
 
     # List command
-    list_parser = subparsers.add_parser("list", help="List active environments")
+    list_parser = subparsers.add_parser("list", help="Show active worktrees and running containers")
     list_parser.set_defaults(func=cmd_list)
 
-    # Destroy command
-    destroy_parser = subparsers.add_parser("destroy", help="Destroy environment")
-    destroy_parser.add_argument("repo_spec", help="Repository specification")
-    destroy_parser.set_defaults(func=cmd_destroy)
-
     # Prune command
-    prune_parser = subparsers.add_parser("prune", help="Prune unused resources")
+    prune_parser = subparsers.add_parser("prune", help="Remove unused containers and cached images")
     prune_parser.add_argument(
         "repo_spec",
         nargs="?",
@@ -1196,19 +1368,57 @@ Examples:
     doctor_parser = subparsers.add_parser("doctor", help="Run diagnostics")
     doctor_parser.set_defaults(func=cmd_doctor)
 
+    # Help command
+    help_parser = subparsers.add_parser("help", help="Show this help message")
+    help_parser.set_defaults(func=lambda args: parser.print_help() or 0)
+
     # Global options
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Install shell auto-completion script (bash/zsh/fish)"
+    )
+    parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Force rebuild of container and extensions, even if cached"
+    )
+    parser.add_argument(
+        "--nocache",
+        action="store_true",
+        help="Disable use of Buildx cache (useful for clean debugging)"
+    )
+    parser.add_argument(
+        "--no-gui",
+        action="store_true",
+        help="Disable X11 socket mounting and GUI support"
+    )
+    parser.add_argument(
+        "--no-gpu",
+        action="store_true",
+        help="Disable GPU passthrough and NVIDIA runtime"
+    )
+    parser.add_argument(
+        "--builder",
+        default="renv_builder",
+        help="Use a custom Buildx builder name (default: renv_builder)"
+    )
+    parser.add_argument(
+        "--platforms",
+        help="Target platforms for Buildx (e.g. linux/amd64,linux/arm64)"
+    )
     parser.add_argument(
         "--log-level",
         choices=["debug", "info", "warn", "error"],
         default="info",
-        help="Set log level",
+        help="Set log verbosity: debug, info, warn, error (default: info)",
     )
 
     # Handle backward compatibility and convert old flags to new format
     args = sys.argv[1:]
 
     # Check if this looks like the old format: [flags] repo_spec [command]
-    if args and args[0] not in ["launch", "list", "destroy", "prune", "ext", "doctor", "help"]:
+    if args and args[0] not in ["launch", "list", "prune", "ext", "doctor", "help"]:
         # Extract global flags that should be moved to launch subcommand
         launch_flags = []
         remaining_args = []
@@ -1219,7 +1429,7 @@ Examples:
             if arg in ["--force", "--rebuild"]:
                 launch_flags.append("--rebuild")  # Convert --force to --rebuild
             elif arg in ["--nocache"]:
-                launch_flags.append("--rebuild")  # For now, treat --nocache as --rebuild
+                launch_flags.append("--nocache")
             elif arg in ["--no-gui", "--no-gpu"]:
                 launch_flags.append(arg)
             elif arg.startswith("--builder"):
@@ -1240,17 +1450,23 @@ Examples:
                 else:
                     remaining_args.extend([arg, args[i + 1]])
                     i += 1
+            elif arg in ["--install"]:
+                remaining_args.append(arg)
             else:
                 remaining_args.extend(args[i:])
                 break
             i += 1
 
         # Rebuild args in new format: [global_flags] launch [launch_flags] repo_spec [command]
-        global_flags = [arg for arg in remaining_args if arg.startswith("--log-level")]
-        other_args = [arg for arg in remaining_args if not arg.startswith("--log-level")]
+        global_flags = [arg for arg in remaining_args if arg.startswith("--log-level") or arg == "--install"]
+        other_args = [arg for arg in remaining_args if not arg.startswith("--log-level") and arg != "--install"]
 
         if other_args:
             args = global_flags + ["launch"] + launch_flags + other_args
+
+    # Handle --install flag specially
+    if "--install" in args:
+        return cmd_install(argparse.Namespace())
 
     parsed_args = parser.parse_args(args)
 

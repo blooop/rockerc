@@ -31,7 +31,6 @@ from rockerc.renv import (
     launch_environment,
     cmd_launch,
     cmd_list,
-    cmd_destroy,
     cmd_prune,
     cmd_ext,
     cmd_doctor,
@@ -653,17 +652,6 @@ class TestCommands:
 
         args = Mock()
         result = cmd_list(args)
-        assert result == 0
-
-    @patch("rockerc.renv.destroy_environment")
-    def test_cmd_destroy(self, mock_destroy):
-        """Test destroy command."""
-        mock_destroy.return_value = True
-
-        args = Mock()
-        args.repo_spec = "owner/repo@main"
-
-        result = cmd_destroy(args)
         assert result == 0
 
     @patch("rockerc.renv.prune_all")

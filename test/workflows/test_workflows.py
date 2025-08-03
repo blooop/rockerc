@@ -277,3 +277,54 @@ def test_workflow_10_new_branch():
     # Check that git status shows expected output
     assert "On branch new_branch" in output, "Git status doesn't show correct branch"
     assert "nothing to commit, working tree clean" in output, "Git status doesn't show clean workspace"
+
+
+def test_workflow_11_install_completion():
+    """Test renv --install shell completion feature"""
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_11_install_completion.sh")
+    os.chmod(script, 0o755)
+    result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    output = result.stdout.decode() + result.stderr.decode()
+    assert result.returncode == 0, f"Workflow 11 install completion failed: {output}"
+
+    # Check that the test completed successfully
+    assert "=== TEST: SHELL COMPLETION INSTALLATION ===" in output, "Test start not found"
+    assert "=== SHELL COMPLETION INSTALLATION TEST PASSED ===" in output, "Test completion not found"
+
+    # Check that bash completion was created and validated
+    assert "✓ Bash completion file created successfully" in output, "Bash completion creation not confirmed"
+    assert "✓ Bash completion contains expected function" in output, "Bash completion function not confirmed"
+    assert "✓ Bash completion contains correct commands (no destroy)" in output, "Bash completion commands not confirmed"
+    assert "✓ Bash completion script syntax is valid" in output, "Bash completion syntax not confirmed"
+
+    # Check that help shows install option
+    assert "✓ Help shows --install option" in output, "Help install option not confirmed"
+
+    # Check that unsupported shell is handled gracefully
+    assert "✓ Handles unsupported shell gracefully" in output, "Unsupported shell handling not confirmed"
+
+
+def test_workflow_12_nocache():
+    """Test renv --nocache feature for disabling build cache"""
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_12_nocache.sh")
+    os.chmod(script, 0o755)
+    result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    output = result.stdout.decode() + result.stderr.decode()
+    assert result.returncode == 0, f"Workflow 12 nocache failed: {output}"
+
+    # Check that the test completed successfully
+    assert "=== TEST: NOCACHE FEATURE ===" in output, "Test start not found"
+    assert "=== NOCACHE FEATURE TEST PASSED ===" in output, "Test completion not found"
+
+    # Check that nocache appears in help
+    assert "✓ --nocache option appears in help" in output, "Nocache option in help not confirmed"
+
+    # Check that --no-cache flag is passed to buildx
+    assert "✓ --no-cache flag passed to buildx bake command" in output, "Nocache flag usage not confirmed"
+
+    # Check that environment still works with nocache
+    assert "✓ Environment works correctly with --nocache" in output, "Environment functionality not confirmed"
+    assert "✓ Git status shows clean workspace" in output, "Clean workspace not confirmed"
+
+    # Check backward compatibility
+    assert "✓ Global --nocache flag works" in output, "Global nocache flag not confirmed"

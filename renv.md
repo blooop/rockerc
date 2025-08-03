@@ -30,14 +30,57 @@ source ~/.bashrc  # or restart your terminal
 
 ## Usage
 
-### Basic Syntax
-```bash
-renv [owner/repo[@branch][#subfolder]] [command]
 ```
-- `owner/repo`: GitHub repository (e.g., `blooop/test_renv`, `osrf/rocker`)
-- `@branch`: Branch name (defaults to `main`)
-- `#subfolder`: Optional subfolder to start in
-- `command`: Option bash command to execute in the container
+Usage: renv [OPTIONS] <owner>/<repo>[@<branch>][#<subfolder>] [-- <command>...]
+
+A development environment launcher using Docker, Git worktrees, and Buildx/Bake.
+
+Clones and manages repositories in isolated git worktrees, builds cached container environments using Docker Buildx + Bake, and launches fully configured shells or commands inside each branch-specific container workspace.
+
+Examples:
+  renv blooop/test_renv@main
+  renv blooop/test_renv@feature/foo
+  renv blooop/test_renv@main#src
+  renv blooop/test_renv git status
+  renv blooop/test_renv@dev "bash -c 'git pull && make test'"
+
+Commands:
+  launch       Launch container for the given repo and branch (default behavior)
+  list         Show active worktrees and running containers
+  destroy      Stop and remove container for a repo/branch
+  prune        Remove unused containers and cached images
+  help         Show this help message
+
+Options:
+  --install         Install shell auto-completion script (bash/zsh/fish)
+  --rebuild         Force rebuild of container and extensions, even if cached
+  --nocache         Disable use of Buildx cache (useful for clean debugging)
+  --no-gui          Disable X11 socket mounting and GUI support
+  --no-gpu          Disable GPU passthrough and NVIDIA runtime
+  --builder NAME    Use a custom Buildx builder name (default: renv_builder)
+  --platforms LIST  Target platforms for Buildx (e.g. linux/amd64,linux/arm64)
+  --log-level LEVEL Set log verbosity: debug, info, warn, error (default: info)
+  -h, --help        Show this help message and exit
+
+Arguments:
+  <owner>/<repo>[@<branch>][#<subfolder>]
+                   GitHub repository specifier:
+                   - owner/repo (default branch = main)
+                   - @branch    (e.g. main, feature/foo)
+                   - #subfolder (working directory after container start)
+  [-- <command>...] Any command string to run inside the container (e.g. bash -c ...)
+
+Environment:
+  RENV_CACHE_DIR            Set custom cache directory (default: ~/.renv/)
+  RENV_BASE_IMAGE           Override base image used for environments
+  RENV_CACHE_REGISTRY       Push/pull extension build cache to a registry
+
+Notes:
+  - Worktrees are stored under ~/.renv/workspaces/<owner>/<repo>/worktree-<branch>
+  - Extensions can be configured via .renv.yml in the repo
+  - Extension images are hashed and reused across repos/branches automatically
+  - Supports Docker socket sharing (DOOD) and Docker-in-Docker (DinD) setups
+```
 
 ### Major Workflows
 
@@ -145,10 +188,27 @@ extension-blacklist:
 
 
 
-## Options
-- `--no-container`: Set up worktree only
-- `--force`: Force rebuild container
-- `--nocache`: Rebuild container with no cache
+## Additional Commands
+
+### List Active Environments
+```bash
+renv list
+```
+Shows all active worktrees and running containers.
+
+### Cleanup Commands
+```bash
+renv prune                    # Remove all unused containers and images
+renv prune blooop/test_renv   # Remove specific repo's resources
+```
+
+### Advanced Options
+```bash
+renv blooop/test_renv --rebuild    # Force rebuild even if cached
+renv blooop/test_renv --nocache    # Disable Buildx cache for debugging
+renv blooop/test_renv --no-gui     # Disable X11/GUI support
+renv blooop/test_renv --no-gpu     # Disable GPU passthrough
+```
 
 ## Intelligent Autocompletion & Fuzzy Finder
 
