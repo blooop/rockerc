@@ -721,7 +721,7 @@ class TestMainFunction:
         assert result == 0
         mock_cmd_launch.assert_called_once()
 
-    @patch("sys.argv", ["renv", "list"])
+    @patch("sys.argv", ["renv", "--list"])
     @patch("rockerc.renv.cmd_list")
     def test_main_list_command(self, mock_cmd_list):
         """Test main function with list command."""

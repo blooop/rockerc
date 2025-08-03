@@ -22,7 +22,7 @@ echo "✓ Container is running"
 
 # Test 2: Selective prune - should remove only blooop/test_renv environment
 echo "=== TEST 2: SELECTIVE PRUNE TEST ==="
-renv prune blooop/test_renv
+renv --prune blooop/test_renv
 echo "✓ Selective prune completed"
 
 # Verify specific container is gone (check exact name)
@@ -49,7 +49,7 @@ echo "✓ Multiple environments created"
 
 # Test 4: Full prune - should remove everything
 echo "=== TEST 4: FULL PRUNE TEST ==="
-renv prune
+renv --prune
 echo "✓ Full prune completed"
 
 # Verify renv-related containers are gone

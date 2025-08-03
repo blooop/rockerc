@@ -9,7 +9,7 @@ set -e
 cleanup() {
     echo "Cleaning up test environment..."
     # Use renv prune to clean up properly
-    renv prune 2>/dev/null || true
+    renv --prune 2>/dev/null || true
     # Fallback cleanup in case prune fails
     docker container prune -f --filter "label=renv" 2>/dev/null || true
     rm -rf ~/.renv 2>/dev/null || true
@@ -22,12 +22,12 @@ echo "=== TEST: UV EXTENSION ==="
 
 # Initial cleanup to ensure clean state
 echo "=== STEP 1: INITIAL CLEANUP ==="
-renv prune 2>/dev/null || true
+renv --prune 2>/dev/null || true
 echo "✓ Initial cleanup completed"
 
 # Test that uv extension appears in extension list
 echo "=== STEP 2: TEST UV EXTENSION IN LIST ==="
-EXT_LIST_OUTPUT=$(renv ext list 2>&1)
+EXT_LIST_OUTPUT=$(renv --ext-list 2>&1)
 
 if echo "$EXT_LIST_OUTPUT" | grep -q "uv"; then
     echo "✓ uv extension appears in extension list"
@@ -42,7 +42,7 @@ echo "=== STEP 3: TEST UV EXTENSION LOADING ==="
 echo "Testing uv extension loading with test repository..."
 
 # Capture output to check if uv extension is loaded
-LOAD_OUTPUT=$(timeout 60 renv launch blooop/test_renv@main --rebuild --extensions uv echo "uv extension test" 2>&1 || true)
+LOAD_OUTPUT=$(timeout 60 renv --rebuild -e uv blooop/test_renv@main echo "uv extension test" 2>&1 || true)
 
 # Check if uv extension was loaded
 if echo "$LOAD_OUTPUT" | grep -q "✓ Loaded extension: uv"; then
@@ -66,7 +66,7 @@ fi
 
 # Test that uv is available in the container
 echo "=== STEP 4: TEST UV AVAILABILITY IN CONTAINER ==="
-UV_TEST_OUTPUT=$(timeout 60 renv launch blooop/test_renv@main --extensions uv which uv 2>&1 || true)
+UV_TEST_OUTPUT=$(timeout 60 renv -e uv blooop/test_renv@main which uv 2>&1 || true)
 
 if echo "$UV_TEST_OUTPUT" | grep -q "uv"; then
     echo "✓ uv is available in container and shows version"
@@ -79,7 +79,7 @@ fi
 
 # Test basic uv functionality
 echo "=== STEP 5: TEST UV BASIC FUNCTIONALITY ==="
-UV_FUNC_OUTPUT=$(timeout 60 renv launch blooop/test_renv@main --extensions uv uv --help 2>&1 || true)
+UV_FUNC_OUTPUT=$(timeout 60 renv -e uv blooop/test_renv@main uv --help 2>&1 || true)
 
 if echo "$UV_FUNC_OUTPUT" | grep -q "usage"; then
     echo "✓ uv help command works correctly"
@@ -92,7 +92,7 @@ fi
 
 echo "=== STEP 6: TEST UV WITH OTHER EXTENSIONS ==="
 # Test that uv works with other common extensions
-MULTI_EXT_OUTPUT=$(timeout 60 renv launch blooop/test_renv@main --extensions git uv echo "multi-extension test" 2>&1 || true)
+MULTI_EXT_OUTPUT=$(timeout 60 renv -e git -e uv blooop/test_renv@main echo "multi-extension test" 2>&1 || true)
 
 if echo "$MULTI_EXT_OUTPUT" | grep -q "✓ Loaded extension: git" && echo "$MULTI_EXT_OUTPUT" | grep -q "✓ Loaded extension: uv"; then
     echo "✓ uv extension works with other extensions"

@@ -10,7 +10,7 @@ set -e
 cleanup() {
     echo "Cleaning up test environment..."
     # Use renv prune to clean up properly
-    renv prune 2>/dev/null || true
+    renv --prune 2>/dev/null || true
     # Fallback cleanup in case prune fails
     docker container prune -f --filter "label=renv" 2>/dev/null || true
     rm -rf ~/.renv 2>/dev/null || true
@@ -23,7 +23,7 @@ echo "=== TEST: NEW BRANCH WORKFLOW WITH PRUNE ==="
 
 # Initial cleanup to ensure clean state
 echo "=== STEP 1: INITIAL CLEANUP ==="
-renv prune 2>/dev/null || true
+renv --prune 2>/dev/null || true
 echo "✓ Initial cleanup completed"
 
 # Test creating a worktree for a new branch that doesn't exist
@@ -72,7 +72,7 @@ fi
 
 # Test selective prune - should remove only the new branch environment
 echo "=== STEP 5: TEST SELECTIVE PRUNE ==="
-renv prune blooop/test_renv@new_branch
+renv --prune blooop/test_renv@new_branch
 echo "✓ Selective prune completed"
 
 # Verify specific container is gone
@@ -99,7 +99,7 @@ echo "✓ Environment recreated"
 
 # Test full prune - should remove everything
 echo "=== STEP 7: TEST FULL PRUNE ==="
-renv prune
+renv --prune
 echo "✓ Full prune completed"
 
 # Verify all renv containers are gone

@@ -1319,17 +1319,17 @@ def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         prog="renv",
-        usage="renv [OPTIONS] <owner>/<repo>[@<branch>][#<subfolder>] [-- <command>...]",
+        usage="renv [OPTIONS] [-e ext1 ext2 ...] <owner>/<repo>[@<branch>][#<subfolder>] [command...]",
         description="""A development environment launcher using Docker, Git worktrees, and Buildx/Bake.
 
 Clones and manages repositories in isolated git worktrees, builds cached container environments using Docker Buildx + Bake, and launches fully configured shells or commands inside each branch-specific container workspace.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   renv blooop/test_renv@main
-  renv blooop/test_renv@feature/foo
-  renv blooop/test_renv@main#src
+  renv -e uv blooop/test_renv@feature/foo
+  renv -e git uv blooop/test_renv@main#src
   renv blooop/test_renv git status
-  renv blooop/test_renv@dev "bash -c 'git pull && make test'"
+  renv -e pixi blooop/test_renv@dev "bash -c 'git pull && make test'"
 
 Commands:
   launch       Launch container for the given repo and branch (default behavior)
@@ -1338,12 +1338,14 @@ Commands:
   help         Show this help message
 
 Arguments:
+  -e, --extensions EXT [EXT ...]
+                   Extensions to enable (e.g. git, uv, pixi, nvidia, x11)
   <owner>/<repo>[@<branch>][#<subfolder>]
                    GitHub repository specifier:
                    - owner/repo (default branch = main)
                    - @branch    (e.g. main, feature/foo)
                    - #subfolder (working directory after container start)
-  [-- <command>...] Any command string to run inside the container (e.g. bash -c ...)
+  [command ...]    Command to run inside the container
 
 Environment:
   RENV_CACHE_DIR            Set custom cache directory (default: ~/.renv/)
@@ -1358,71 +1360,34 @@ Notes:
 """,
     )
 
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    # Add extensions as a global option that comes before repo_spec
+    parser.add_argument(
+        "--extensions",
+        "-e",
+        action="append",
+        help="Extensions to enable (e.g. git, uv, pixi, nvidia, x11). Can be used multiple times.",
+    )
 
-    # Launch command (default)
-    launch_parser = subparsers.add_parser(
-        "launch", help="Launch container for the given repo and branch (default behavior)"
+    # Add special command flags
+    parser.add_argument(
+        "--list", action="store_true", help="Show active worktrees and running containers"
     )
-    launch_parser.add_argument(
-        "repo_spec", help="Repository specification: owner/repo[@branch][#subfolder]"
-    )
-    launch_parser.add_argument("command", nargs="*", help="Command to execute")
-    launch_parser.add_argument("--extensions", "-e", nargs="*", help="Extensions to enable")
-    launch_parser.add_argument(
-        "--rebuild",
-        action="store_true",
-        help="Force rebuild of container and extensions, even if cached",
-    )
-    launch_parser.add_argument(
-        "--nocache",
-        action="store_true",
-        help="Disable use of Buildx cache (useful for clean debugging)",
-    )
-    launch_parser.add_argument(
-        "--no-gui", action="store_true", help="Disable X11 socket mounting and GUI support"
-    )
-    launch_parser.add_argument(
-        "--no-gpu", action="store_true", help="Disable GPU passthrough and NVIDIA runtime"
-    )
-    launch_parser.add_argument(
-        "--builder",
-        default="renv_builder",
-        help="Use a custom Buildx builder name (default: renv_builder)",
-    )
-    launch_parser.add_argument(
-        "--platforms", help="Target platforms for Buildx (e.g. linux/amd64,linux/arm64)"
-    )
-    launch_parser.set_defaults(func=cmd_launch)
-
-    # List command
-    list_parser = subparsers.add_parser("list", help="Show active worktrees and running containers")
-    list_parser.set_defaults(func=cmd_list)
-
-    # Prune command
-    prune_parser = subparsers.add_parser("prune", help="Remove unused containers and cached images")
-    prune_parser.add_argument(
-        "repo_spec",
+    parser.add_argument(
+        "--prune",
         nargs="?",
-        help="Repository specification (optional - prunes everything if not specified)",
+        const="all",
+        help="Remove unused containers and cached images (optionally for specific repo)",
     )
-    prune_parser.set_defaults(func=cmd_prune)
+    parser.add_argument("--ext-list", action="store_true", help="List available extensions")
+    parser.add_argument("--doctor", action="store_true", help="Run diagnostics")
 
-    # Extension command
-    ext_parser = subparsers.add_parser("ext", help="Manage extensions")
-    ext_parser.add_argument("ext_action", choices=["list", "add", "remove"])
-    ext_parser.add_argument("ext_name", nargs="?", help="Extension name")
-    ext_parser.set_defaults(func=cmd_ext)
+    # Main positional arguments for the default launch behavior
+    parser.add_argument(
+        "repo_spec", nargs="?", help="Repository specification: owner/repo[@branch][#subfolder]"
+    )
+    parser.add_argument("command", nargs="*", help="Command to execute in the container")
 
-    # Doctor command
-    doctor_parser = subparsers.add_parser("doctor", help="Run diagnostics")
-    doctor_parser.set_defaults(func=cmd_doctor)
-
-    # Help command
-    help_parser = subparsers.add_parser("help", help="Show this help message")
-    help_parser.set_defaults(func=lambda args: parser.print_help() or 0)
-
-    # Global options
+    # Build and runtime options
     parser.add_argument(
         "--install",
         action="store_true",
@@ -1459,80 +1424,51 @@ Notes:
         help="Set log verbosity: debug, info, warn, error (default: info)",
     )
 
-    # Handle backward compatibility and convert old flags to new format
-    args = sys.argv[1:]
-
-    # Check if this looks like the old format: [flags] repo_spec [command]
-    if args and args[0] not in ["launch", "list", "prune", "ext", "doctor", "help"]:
-        # Extract global flags that should be moved to launch subcommand
-        launch_flags = []
-        remaining_args = []
-
-        i = 0
-        while i < len(args):
-            arg = args[i]
-            if arg in ["--force", "--rebuild"]:
-                launch_flags.append("--rebuild")  # Convert --force to --rebuild
-            elif arg in ["--nocache"]:
-                launch_flags.append("--nocache")
-            elif arg in ["--no-gui", "--no-gpu"]:
-                launch_flags.append(arg)
-            elif arg.startswith("--builder"):
-                if "=" in arg:
-                    launch_flags.append(arg)
-                else:
-                    launch_flags.extend([arg, args[i + 1]])
-                    i += 1
-            elif arg.startswith("--platforms"):
-                if "=" in arg:
-                    launch_flags.append(arg)
-                else:
-                    launch_flags.extend([arg, args[i + 1]])
-                    i += 1
-            elif arg.startswith("--log-level"):
-                if "=" in arg:
-                    remaining_args.append(arg)
-                else:
-                    remaining_args.extend([arg, args[i + 1]])
-                    i += 1
-            elif arg in ["--install"]:
-                remaining_args.append(arg)
-            else:
-                remaining_args.extend(args[i:])
-                break
-            i += 1
-
-        # Rebuild args in new format: [global_flags] launch [launch_flags] repo_spec [command]
-        global_flags = [
-            arg for arg in remaining_args if arg.startswith("--log-level") or arg == "--install"
-        ]
-        other_args = [
-            arg
-            for arg in remaining_args
-            if not arg.startswith("--log-level") and arg != "--install"
-        ]
-
-        if other_args:
-            args = global_flags + ["launch"] + launch_flags + other_args
-
     # Handle --install flag specially
-    if "--install" in args:
+    if "--install" in sys.argv:
         return cmd_install(argparse.Namespace())
 
-    parsed_args = parser.parse_args(args)
-
-    # If no command is provided, and '--prune' is present, treat as prune
-    if not args and "--prune" in sys.argv:
-        return cmd_prune(argparse.Namespace())
+    parsed_args = parser.parse_args()
 
     # Set up logging
     log_level = getattr(logging, parsed_args.log_level.upper())
     logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
-    if hasattr(parsed_args, "func"):
-        return parsed_args.func(parsed_args)
-    parser.print_help()
-    return 1
+    # Handle special command flags first
+    if parsed_args.list:
+        return cmd_list(parsed_args)
+
+    if parsed_args.prune is not None:
+        # Create a namespace with repo_spec for prune command
+        prune_args = argparse.Namespace()
+        prune_args.repo_spec = parsed_args.prune if parsed_args.prune != "all" else None
+        return cmd_prune(prune_args)
+
+    if parsed_args.ext_list:
+        return cmd_ext(argparse.Namespace(ext_action="list", ext_name=None))
+
+    if parsed_args.doctor:
+        return cmd_doctor(parsed_args)
+
+    # Default behavior - launch environment
+    if not parsed_args.repo_spec:
+        parser.print_help()
+        return 1
+
+    # Convert to launch command format
+    launch_args = argparse.Namespace()
+    launch_args.repo_spec = parsed_args.repo_spec
+    launch_args.command = parsed_args.command
+    # Flatten extensions list since they come from action="append"
+    launch_args.extensions = parsed_args.extensions if parsed_args.extensions else []
+    launch_args.rebuild = parsed_args.rebuild
+    launch_args.nocache = parsed_args.nocache
+    launch_args.no_gui = parsed_args.no_gui
+    launch_args.no_gpu = parsed_args.no_gpu
+    launch_args.builder = parsed_args.builder
+    launch_args.platforms = parsed_args.platforms
+
+    return cmd_launch(launch_args)
 
 
 if __name__ == "__main__":

@@ -21,9 +21,9 @@ echo
 
 # Force rebuild - removes and recreates container
 echo "=== FORCE REBUILD TEST ==="
-echo "Running: renv --force blooop/test_renv date to force a rebuild"
+echo "Running: renv --rebuild blooop/test_renv date to force a rebuild"
 start_time=$(date +%s)
-renv --force blooop/test_renv date
+renv --rebuild blooop/test_renv date
 end_time=$(date +%s)
 force_time=$((end_time - start_time))
 echo "TIMING: Force rebuild took ${force_time} seconds"

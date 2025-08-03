@@ -9,7 +9,7 @@ set -e
 cleanup() {
     echo "Cleaning up test environment..."
     # Use renv prune to clean up properly
-    renv prune 2>/dev/null || true
+    renv --prune 2>/dev/null || true
     # Fallback cleanup in case prune fails
     docker container prune -f --filter "label=renv" 2>/dev/null || true
     rm -rf ~/.renv 2>/dev/null || true
@@ -22,12 +22,12 @@ echo "=== TEST: NOCACHE FEATURE ==="
 
 # Initial cleanup to ensure clean state
 echo "=== STEP 1: INITIAL CLEANUP ==="
-renv prune 2>/dev/null || true
+renv --prune 2>/dev/null || true
 echo "✓ Initial cleanup completed"
 
 # Test --nocache flag shows up in help
 echo "=== STEP 2: TEST NOCACHE IN HELP ==="
-HELP_OUTPUT=$(renv help 2>&1)
+HELP_OUTPUT=$(renv --help 2>&1)
 
 if echo "$HELP_OUTPUT" | grep -q "nocache.*Disable use of Buildx cache"; then
     echo "✓ --nocache option appears in help"

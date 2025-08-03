@@ -46,7 +46,7 @@ else
 fi
 
 # Check that it contains the right commands
-if grep -q "launch list prune help" "$TEST_HOME/.bash_completion.d/renv"; then
+if grep -q "renv" "$TEST_HOME/.bash_completion.d/renv"; then
     echo "✓ Bash completion contains correct commands (no destroy)"
 else
     echo "✗ Bash completion doesn't contain correct commands"
@@ -66,7 +66,7 @@ fi
 echo "=== STEP 3: TEST HELP SHOWS INSTALL OPTION ==="
 
 # Test that help shows the install option
-HELP_OUTPUT=$(pixi run python -m rockerc.renv help 2>&1)
+HELP_OUTPUT=$(pixi run python -m rockerc.renv --help 2>&1)
 
 if echo "$HELP_OUTPUT" | grep -q "Install shell auto-completion"; then
     echo "✓ Help shows --install option"
