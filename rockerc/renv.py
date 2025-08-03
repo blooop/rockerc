@@ -573,8 +573,49 @@ def build_image_with_bake(
         return False
 
 
+def is_container_usable(repo_spec: RepoSpec, work_dir: Path) -> bool:
+    """Check if the existing container is usable and accessible."""
+    container_name = repo_spec.compose_project_name
+
+    try:
+        # Check if container exists and is running
+        result = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Status}}", container_name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            return False  # Container doesn't exist
+
+        status = result.stdout.strip()
+        if status != "running":
+            logging.info(f"Container {container_name} exists but is not running (status: {status})")
+            return False
+
+        # Try to execute a simple command to test accessibility
+        env = os.environ.copy()
+        env["COMPOSE_PROJECT_NAME"] = repo_spec.compose_project_name
+
+        test_cmd = ["docker", "compose", "exec", "-T", "dev", "echo", "test"]
+        test_result = subprocess.run(
+            test_cmd, cwd=work_dir, env=env, capture_output=True, check=False, timeout=5
+        )
+
+        if test_result.returncode == 0:
+            logging.info(f"Reusing existing container: {container_name}")
+            return True
+        logging.info(f"Container {container_name} is not accessible, will recreate")
+        return False
+
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        logging.info(f"Failed to check container {container_name} accessibility")
+        return False
+
+
 def cleanup_stale_container(repo_spec: RepoSpec) -> None:
-    """Clean up stale containers that may have invalid mount points."""
+    """Clean up stale containers that are not usable."""
     container_name = repo_spec.compose_project_name
     try:
         # Check if container exists
@@ -604,25 +645,29 @@ def run_compose_service(
     env["GROUP_ID"] = str(os.getgid())
 
     try:
-        # Clean up any stale containers that might have invalid mount points
-        cleanup_stale_container(repo_spec)
+        # Check if we can reuse existing container
+        container_is_usable = is_container_usable(repo_spec, work_dir)
 
-        # Start the service
-        subprocess.run(["docker", "compose", "up", "-d"], cwd=work_dir, env=env, check=True)
+        if not container_is_usable:
+            # Clean up stale container if it exists but is not usable
+            cleanup_stale_container(repo_spec)
 
-        # Fix git worktree configuration in the container
-        safe_branch = repo_spec.branch.replace("/", "-")
-        fix_git_cmd = [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "dev",
-            "bash",
-            "-c",
-            f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{safe_branch}' > /workspace/{repo_spec.repo}/.git",
-        ]
-        subprocess.run(fix_git_cmd, cwd=work_dir, env=env, check=False)
+            # Start the service
+            subprocess.run(["docker", "compose", "up", "-d"], cwd=work_dir, env=env, check=True)
+
+            # Fix git worktree configuration in the container
+            safe_branch = repo_spec.branch.replace("/", "-")
+            fix_git_cmd = [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "dev",
+                "bash",
+                "-c",
+                f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{safe_branch}' > /workspace/{repo_spec.repo}/.git",
+            ]
+            subprocess.run(fix_git_cmd, cwd=work_dir, env=env, check=False)
 
         if command:
             # Execute command in running container

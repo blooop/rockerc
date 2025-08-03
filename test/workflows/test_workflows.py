@@ -179,3 +179,55 @@ def test_workflow_8_prune():
     assert (
         "✓ .renv directory correctly removed by full prune" in output
     ), "Full prune did not remove .renv directory"
+
+
+def test_workflow_9_container_reuse():
+    """Test renv container reuse functionality"""
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_9_container_reuse.sh")
+    os.chmod(script, 0o755)
+    result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    output = result.stdout.decode() + result.stderr.decode()
+    assert result.returncode == 0, f"Workflow 9 container reuse failed: {output}"
+
+    # Check that all test steps completed successfully
+    assert (
+        "=== TEST 1: CREATE INITIAL ENVIRONMENT ===" in output
+    ), "Test 1 create environment not found"
+    assert "=== TEST 2: TEST CONTAINER REUSE ===" in output, "Test 2 container reuse not found"
+    assert (
+        "=== TEST 3: TEST CONTAINER RECREATION AFTER STOP ===" in output
+    ), "Test 3 recreation after stop not found"
+    assert (
+        "=== TEST 4: TEST REUSE OF RECREATED CONTAINER ===" in output
+    ), "Test 4 reuse of recreated not found"
+    assert "=== ALL CONTAINER REUSE TESTS PASSED ===" in output, "Final success message not found"
+
+    # Check that container reuse behavior is correct
+    assert (
+        "✓ Container was reused (same ID:" in output
+    ), "Container was not reused when it should have been"
+    assert (
+        "✓ Container was correctly recreated after being stopped" in output
+    ), "Container was not recreated when stopped"
+    assert (
+        "✓ Recreated container was reused (same ID:" in output
+    ), "Recreated container was not reused"
+
+    # Check that we don't see stale container removal message when reusing
+    lines = output.split("\n")
+    container_reuse_found = False
+    stale_removal_after_reuse = False
+
+    for i, line in enumerate(lines):
+        if "✓ Container was reused (same ID:" in line:
+            container_reuse_found = True
+            # Check if there's a stale container message in the nearby lines (shouldn't be)
+            for j in range(max(0, i - 10), min(len(lines), i + 10)):
+                if "Removing stale container" in lines[j]:
+                    stale_removal_after_reuse = True
+                    break
+
+    assert container_reuse_found, "Container reuse confirmation not found"
+    assert (
+        not stale_removal_after_reuse
+    ), "Stale container removal should not happen when reusing existing container"
