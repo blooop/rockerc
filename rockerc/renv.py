@@ -814,20 +814,125 @@ def cmd_destroy(args) -> int:
     return 0 if success else 1
 
 
-def cmd_prune(args) -> int:  # pylint: disable=unused-argument
-    """Prune unused containers and images."""
-    del args  # Unused parameter
+def cmd_prune(args) -> int:
+    """Prune containers, images, volumes, and renv folders."""
     try:
-        # Remove stopped containers
-        subprocess.run(["docker", "container", "prune", "-f"], check=True)
-        # Remove unused images
-        subprocess.run(["docker", "image", "prune", "-f"], check=True)
-        # Remove build cache
-        subprocess.run(["docker", "buildx", "prune", "-f"], check=True)
-        logging.info("Pruned unused Docker resources")
-        return 0
-    except subprocess.CalledProcessError as e:
+        if hasattr(args, "repo_spec") and args.repo_spec:
+            # Selective pruning for specific repo spec
+            repo_spec = RepoSpec.parse(args.repo_spec)
+            return prune_repo_environment(repo_spec)
+        # Prune everything
+        return prune_all()
+    except Exception as e:
         logging.error(f"Failed to prune: {e}")
+        return 1
+
+
+def prune_repo_environment(repo_spec: RepoSpec) -> int:
+    """Prune containers, images, and worktree for a specific repo spec."""
+    try:
+        container_name = repo_spec.compose_project_name
+        worktree_dir = get_worktree_dir(repo_spec)
+
+        # Stop and remove container
+        subprocess.run(["docker", "stop", container_name], check=False, capture_output=True)
+        subprocess.run(["docker", "rm", container_name], check=False, capture_output=True)
+
+        # Remove associated images (renv images for this repo)
+        try:
+            result = subprocess.run(
+                ["docker", "images", "--filter", f"reference=renv/{repo_spec.repo}*", "-q"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.stdout.strip():
+                image_ids = result.stdout.strip().split("\n")
+                subprocess.run(
+                    ["docker", "rmi", "-f"] + image_ids, check=False, capture_output=True
+                )
+        except subprocess.CalledProcessError:
+            pass
+
+        # Remove worktree and its compose files
+        if worktree_dir.exists():
+            env = os.environ.copy()
+            env["COMPOSE_PROJECT_NAME"] = repo_spec.compose_project_name
+            # Clean up compose volumes first
+            subprocess.run(
+                ["docker", "compose", "down", "-v"],
+                cwd=worktree_dir,
+                env=env,
+                check=False,
+                capture_output=True,
+            )
+
+            # Remove worktree directory
+            subprocess.run(["rm", "-rf", str(worktree_dir)], check=False)
+
+        # Clean up git worktree registration if repo exists
+        repo_dir = get_repo_dir(repo_spec)
+        if repo_dir.exists():
+            safe_branch = repo_spec.branch.replace("/", "-")
+            worktree_name = f"worktree-{safe_branch}"
+            subprocess.run(
+                ["git", "-C", str(repo_dir), "worktree", "remove", worktree_name],
+                check=False,
+                capture_output=True,
+            )
+
+        logging.info(f"Pruned environment for {repo_spec}")
+        return 0
+    except Exception as e:
+        logging.error(f"Failed to prune repo environment: {e}")
+        return 1
+
+
+def prune_all() -> int:
+    """Prune all containers, images, volumes, and renv folders."""
+    try:
+        # Get all container IDs and remove them
+        try:
+            result = subprocess.run(
+                ["docker", "ps", "-aq"], capture_output=True, text=True, check=False
+            )
+            if result.stdout.strip():
+                container_ids = result.stdout.strip().split("\n")
+                subprocess.run(
+                    ["docker", "rm", "-f"] + container_ids, check=False, capture_output=True
+                )
+        except subprocess.CalledProcessError:
+            pass
+
+        # Get all image IDs and remove them
+        try:
+            result = subprocess.run(
+                ["docker", "images", "-q"], capture_output=True, text=True, check=False
+            )
+            if result.stdout.strip():
+                image_ids = result.stdout.strip().split("\n")
+                subprocess.run(
+                    ["docker", "rmi", "-f"] + image_ids, check=False, capture_output=True
+                )
+        except subprocess.CalledProcessError:
+            pass
+
+        # Remove all volumes
+        subprocess.run(["docker", "volume", "prune", "-f"], check=False, capture_output=True)
+        # Remove build cache
+        subprocess.run(["docker", "buildx", "prune", "-f"], check=False, capture_output=True)
+
+        # Remove renv cache and workspaces folders
+        cache_dir = str(get_cache_dir())
+        workspaces_dir = str(get_workspaces_dir())
+        for folder in [cache_dir, workspaces_dir]:
+            if os.path.exists(folder):
+                subprocess.run(["rm", "-rf", folder], check=False)
+
+        logging.info("Pruned all Docker containers, images, volumes, and renv folders")
+        return 0
+    except Exception as e:
+        logging.error(f"Failed to prune all: {e}")
         return 1
 
 
@@ -924,6 +1029,11 @@ Examples:
 
     # Prune command
     prune_parser = subparsers.add_parser("prune", help="Prune unused resources")
+    prune_parser.add_argument(
+        "repo_spec",
+        nargs="?",
+        help="Repository specification (optional - prunes everything if not specified)",
+    )
     prune_parser.set_defaults(func=cmd_prune)
 
     # Extension command
@@ -993,6 +1103,10 @@ Examples:
             args = global_flags + ["launch"] + launch_flags + other_args
 
     parsed_args = parser.parse_args(args)
+
+    # If no command is provided, and '--prune' is present, treat as prune
+    if not args and "--prune" in sys.argv:
+        return cmd_prune(argparse.Namespace())
 
     # Set up logging
     log_level = getattr(logging, parsed_args.log_level.upper())
