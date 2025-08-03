@@ -11,6 +11,8 @@ from rockerc.renv import (
     Extension,
     RenvConfig,
     ExtensionManager,
+    ComposeConfig,
+    LaunchConfig,
     get_cache_dir,
     get_workspaces_dir,
     get_repo_dir,
@@ -249,7 +251,7 @@ class TestGitOperations:
         mock_run.return_value = Mock(returncode=0)
 
         spec = RepoSpec("owner", "repo", "main")
-        result = setup_bare_repo(spec)
+        setup_bare_repo(spec)
 
         # Should call git clone
         mock_run.assert_called()
@@ -383,9 +385,15 @@ class TestFileGeneration:
                 ),
             ]
 
-            compose_config = generate_compose_file(
-                spec, extensions, "test:image", work_dir, worktree_dir, repo_dir
+            compose_config_obj = ComposeConfig(
+                repo_spec=spec,
+                extensions=extensions,
+                image_name="test:image",
+                work_dir=work_dir,
+                worktree_dir=worktree_dir,
+                repo_dir=repo_dir,
             )
+            compose_config = generate_compose_file(compose_config_obj)
 
             service = compose_config["services"]["dev"]
             assert service["image"] == "test:image"
@@ -482,7 +490,9 @@ class TestComposeOperations:
     @patch("subprocess.run")
     @patch("os.getuid", return_value=1000)
     @patch("os.getgid", return_value=1000)
-    def test_run_compose_service_interactive(self, mock_getgid, mock_getuid, mock_run):
+    def test_run_compose_service_interactive(
+        self, mock_getgid, mock_getuid, mock_run
+    ):  # pylint: disable=unused-argument
         """Test running compose service interactively."""
         mock_run.return_value = Mock(returncode=0)
 
@@ -511,7 +521,9 @@ class TestComposeOperations:
     @patch("subprocess.run")
     @patch("os.getuid", return_value=1000)
     @patch("os.getgid", return_value=1000)
-    def test_run_compose_service_with_command(self, mock_getgid, mock_getuid, mock_run):
+    def test_run_compose_service_with_command(
+        self, mock_getgid, mock_getuid, mock_run
+    ):  # pylint: disable=unused-argument
         """Test running compose service with command."""
         mock_run.return_value = Mock(returncode=0)
 
@@ -570,12 +582,12 @@ class TestCommands:
         assert result == 0
 
         mock_launch.assert_called_once()
-        call_kwargs = mock_launch.call_args[1]
-        assert call_kwargs["extensions"] == ["git", "x11"]
-        assert call_kwargs["command"] == ["bash"]
-        assert call_kwargs["rebuild"] is True
-        assert call_kwargs["platforms"] == ["linux/amd64", "linux/arm64"]
-        assert call_kwargs["builder_name"] == "custom_builder"
+        call_args = mock_launch.call_args[0][0]  # First positional argument (config)
+        assert call_args.extensions == ["git", "x11"]
+        assert call_args.command == ["bash"]
+        assert call_args.rebuild is True
+        assert call_args.platforms == ["linux/amd64", "linux/arm64"]
+        assert call_args.builder_name == "custom_builder"
 
     @patch("rockerc.renv.list_active_containers")
     def test_cmd_list_empty(self, mock_list_containers):
@@ -687,7 +699,9 @@ class TestIntegration:
     @patch("subprocess.run")
     @patch("os.getuid", return_value=1000)
     @patch("os.getgid", return_value=1000)
-    def test_launch_environment_full_workflow(self, mock_getgid, mock_getuid, mock_run):
+    def test_launch_environment_full_workflow(
+        self, mock_getgid, mock_getuid, mock_run
+    ):  # pylint: disable=unused-argument
         """Test complete launch environment workflow."""
         # Mock all subprocess calls to succeed
         mock_run.return_value = Mock(returncode=0)
@@ -710,7 +724,8 @@ class TestIntegration:
                 with patch("rockerc.renv.get_worktree_dir", return_value=worktree_dir):
                     with patch("rockerc.renv.get_repo_dir", return_value=repo_dir):
                         spec = RepoSpec("owner", "repo", "main")
-                        result = launch_environment(spec, ["base"], rebuild=True)
+                        config = LaunchConfig(repo_spec=spec, extensions=["base"], rebuild=True)
+                        result = launch_environment(config)
 
                         assert result == 0
 

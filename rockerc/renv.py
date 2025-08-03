@@ -394,28 +394,33 @@ def generate_dockerfile(extensions: List[Extension], base_image: str, work_dir: 
     return dockerfile_content
 
 
-def generate_compose_file(  # pylint: disable=too-many-arguments
-    repo_spec: RepoSpec,
-    extensions: List[Extension],
-    image_name: str,
-    work_dir: Path,
-    worktree_dir: Path,
-    repo_dir: Path,
-) -> Dict[str, Any]:
+@dataclass
+class ComposeConfig:
+    """Configuration for generating compose files."""
+
+    repo_spec: RepoSpec
+    extensions: List[Extension]
+    image_name: str
+    work_dir: Path
+    worktree_dir: Path
+    repo_dir: Path
+
+
+def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
     """Generate docker-compose.yml for the environment."""
     # Start with base service
     service = {
-        "image": image_name,
-        "container_name": repo_spec.compose_project_name,
-        "hostname": repo_spec.compose_project_name,
-        "working_dir": f"/workspace/{repo_spec.repo}",
+        "image": config.image_name,
+        "container_name": config.repo_spec.compose_project_name,
+        "hostname": config.repo_spec.compose_project_name,
+        "working_dir": f"/workspace/{config.repo_spec.repo}",
         "volumes": [
-            f"{worktree_dir}:/workspace/{repo_spec.repo}",
-            f"{repo_dir}:/workspace/{repo_spec.repo}.git",
+            f"{config.worktree_dir}:/workspace/{config.repo_spec.repo}",
+            f"{config.repo_dir}:/workspace/{config.repo_spec.repo}.git",
         ],
         "environment": {
-            "REPO_NAME": repo_spec.repo,
-            "BRANCH_NAME": repo_spec.branch.replace("/", "-"),
+            "REPO_NAME": config.repo_spec.repo,
+            "BRANCH_NAME": config.repo_spec.branch.replace("/", "-"),
         },
         "stdin_open": True,
         "tty": True,
@@ -423,11 +428,11 @@ def generate_compose_file(  # pylint: disable=too-many-arguments
     }
 
     # Apply subfolder if specified
-    if repo_spec.subfolder:
-        service["working_dir"] = f"/workspace/{repo_spec.repo}/{repo_spec.subfolder}"
+    if config.repo_spec.subfolder:
+        service["working_dir"] = f"/workspace/{config.repo_spec.repo}/{config.repo_spec.subfolder}"
 
     # Merge extension compose fragments
-    for ext in extensions:
+    for ext in config.extensions:
         fragment = ext.compose_fragment
         if not fragment:
             continue
@@ -456,13 +461,13 @@ def generate_compose_file(  # pylint: disable=too-many-arguments
                 service["build"].setdefault("args", {}).update(fragment["build"]["args"])
 
     # If we have build args, enable building
-    if any(ext.compose_fragment.get("build", {}).get("args") for ext in extensions):
+    if any(ext.compose_fragment.get("build", {}).get("args") for ext in config.extensions):
         service["build"] = service.get("build", {"context": ".", "dockerfile": "Dockerfile"})
 
     compose_config = {"version": "3.8", "services": {"dev": service}}
 
     # Write compose file
-    compose_path = work_dir / "docker-compose.yml"
+    compose_path = config.work_dir / "docker-compose.yml"
     with open(compose_path, "w", encoding="utf-8") as f:
         yaml.dump(compose_config, f, default_flow_style=False)
 
@@ -639,32 +644,36 @@ def destroy_environment(repo_spec: RepoSpec) -> bool:
         return False
 
 
-def launch_environment(  # pylint: disable=too-many-arguments
-    repo_spec: RepoSpec,
-    extensions: List[str],
-    command: Optional[List[str]] = None,
-    rebuild: bool = False,
-    no_gui: bool = False,
-    no_gpu: bool = False,
-    platforms: List[str] = None,
-    builder_name: str = "renv_builder",
-) -> int:
+@dataclass
+class LaunchConfig:
+    """Configuration for launching environments."""
+
+    repo_spec: RepoSpec
+    extensions: List[str]
+    command: Optional[List[str]] = None
+    rebuild: bool = False
+    no_gui: bool = False
+    no_gpu: bool = False
+    platforms: Optional[List[str]] = None
+    builder_name: str = "renv_builder"
+
+
+def launch_environment(config: LaunchConfig) -> int:
     """Launch development environment for repository/branch."""
-    if platforms is None:
-        platforms = ["linux/amd64"]
+    platforms = config.platforms or ["linux/amd64"]
 
     # Set up worktree
-    worktree_dir = setup_worktree(repo_spec)
-    repo_dir = get_repo_dir(repo_spec)
+    worktree_dir = setup_worktree(config.repo_spec)
+    repo_dir = get_repo_dir(config.repo_spec)
 
     # Load repo configuration
-    config = RenvConfig(worktree_dir)
+    repo_config = RenvConfig(worktree_dir)
 
     # Merge extensions
-    all_extensions = list(extensions) + config.extensions
-    if no_gui and "x11" in all_extensions:
+    all_extensions = list(config.extensions) + repo_config.extensions
+    if config.no_gui and "x11" in all_extensions:
         all_extensions.remove("x11")
-    if no_gpu and "nvidia" in all_extensions:
+    if config.no_gpu and "nvidia" in all_extensions:
         all_extensions.remove("nvidia")
 
     # Add required base extensions
@@ -688,13 +697,13 @@ def launch_environment(  # pylint: disable=too-many-arguments
         "".join(ext.hash for ext in loaded_extensions).encode()
     ).hexdigest()[:12]
 
-    image_name = f"renv/{repo_spec.repo}:{combined_hash}"
-    base_image = config.base_image
+    image_name = f"renv/{config.repo_spec.repo}:{combined_hash}"
+    base_image = repo_config.base_image
 
     # Check if rebuild needed
-    if rebuild or should_rebuild_image(image_name, loaded_extensions):
+    if config.rebuild or should_rebuild_image(image_name, loaded_extensions):
         # Ensure Buildx builder
-        if not ensure_buildx_builder(builder_name):
+        if not ensure_buildx_builder(config.builder_name):
             return 1
 
         # Generate build files
@@ -702,24 +711,30 @@ def launch_environment(  # pylint: disable=too-many-arguments
         generate_bake_file(loaded_extensions, base_image, platforms, worktree_dir)
 
         # Build image
-        if not build_image_with_bake(worktree_dir, builder_name):
+        if not build_image_with_bake(worktree_dir, config.builder_name):
             return 1
 
         logging.info(f"Built image: {image_name}")
 
     # Generate compose file
-    generate_compose_file(
-        repo_spec, loaded_extensions, image_name, worktree_dir, worktree_dir, repo_dir
+    compose_config = ComposeConfig(
+        repo_spec=config.repo_spec,
+        extensions=loaded_extensions,
+        image_name=image_name,
+        work_dir=worktree_dir,
+        worktree_dir=worktree_dir,
+        repo_dir=repo_dir,
     )
+    generate_compose_file(compose_config)
 
     # Run environment
-    return run_compose_service(worktree_dir, repo_spec, command)
+    return run_compose_service(worktree_dir, config.repo_spec, config.command)
 
 
 def cmd_launch(args) -> int:
     """Launch command implementation."""
     repo_spec = RepoSpec.parse(args.repo_spec)
-    return launch_environment(
+    config = LaunchConfig(
         repo_spec=repo_spec,
         extensions=args.extensions or [],
         command=args.command if args.command else None,
@@ -729,6 +744,7 @@ def cmd_launch(args) -> int:
         platforms=args.platforms.split(",") if args.platforms else None,
         builder_name=args.builder,
     )
+    return launch_environment(config)
 
 
 def cmd_list(args) -> int:  # pylint: disable=unused-argument
