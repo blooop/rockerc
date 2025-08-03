@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 cd /tmp
-rm -rf /tmp/renv
+
 
 # Clean up test container for fresh start
 echo "=== CLEANING TEST ENVIRONMENT ==="
