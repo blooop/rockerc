@@ -286,6 +286,12 @@ def get_workspaces_dir() -> Path:
     return get_cache_dir() / "workspaces"
 
 
+def get_build_cache_dir(repo_spec: RepoSpec) -> Path:
+    """Get build cache directory for a specific repo spec."""
+    safe_branch = repo_spec.branch.replace("/", "-")
+    return get_cache_dir() / "builds" / repo_spec.owner / repo_spec.repo / safe_branch
+
+
 def get_repo_dir(repo_spec: RepoSpec) -> Path:
     """Get bare repository directory."""
     return get_workspaces_dir() / repo_spec.owner / repo_spec.repo
@@ -371,7 +377,7 @@ def ensure_buildx_builder(builder_name: str = "renv_builder") -> bool:
         return False
 
 
-def generate_dockerfile(extensions: List[Extension], base_image: str, work_dir: Path) -> str:
+def generate_dockerfile(extensions: List[Extension], base_image: str, build_dir: Path) -> str:
     """Generate Dockerfile combining all extensions."""
     lines = [f"FROM {base_image} as base"]
 
@@ -387,8 +393,11 @@ def generate_dockerfile(extensions: List[Extension], base_image: str, work_dir: 
 
     dockerfile_content = "\n".join(lines)
 
-    # Write Dockerfile to work directory
-    dockerfile_path = work_dir / "Dockerfile"
+    # Ensure build directory exists
+    build_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write Dockerfile to build directory
+    dockerfile_path = build_dir / "Dockerfile"
     dockerfile_path.write_text(dockerfile_content, encoding="utf-8")
 
     return dockerfile_content
@@ -404,6 +413,7 @@ class ComposeConfig:
     work_dir: Path
     worktree_dir: Path
     repo_dir: Path
+    build_dir: Optional[Path] = None
 
 
 def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
@@ -471,8 +481,13 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
 
     compose_config = {"services": {"dev": service}}
 
-    # Write compose file
-    compose_path = config.work_dir / "docker-compose.yml"
+    # Write compose file to build directory to keep worktree clean
+    # Use work_dir as fallback for cases where we don't have a separate build dir
+    compose_dir = config.build_dir if config.build_dir is not None else config.work_dir
+    if config.build_dir is not None:
+        config.build_dir.mkdir(parents=True, exist_ok=True)
+
+    compose_path = compose_dir / "docker-compose.yml"
     with open(compose_path, "w", encoding="utf-8") as f:
         yaml.dump(compose_config, f, default_flow_style=False)
 
@@ -480,7 +495,7 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
 
 
 def generate_bake_file(
-    extensions: List[Extension], base_image: str, platforms: List[str], work_dir: Path
+    extensions: List[Extension], base_image: str, platforms: List[str], build_dir: Path
 ) -> str:
     """Generate docker-bake.hcl file for Buildx."""
     # Create targets for each extension layer
@@ -506,9 +521,12 @@ target "{target_name}" {{
 }}"""
         targets.append(target)
 
+        # Ensure build directory exists
+        build_dir.mkdir(parents=True, exist_ok=True)
+
         # Write individual Dockerfile for this extension
         ext_dockerfile = f"FROM {current_image}\n{ext.dockerfile_content}"
-        dockerfile_path = work_dir / f"Dockerfile.{ext.name}"
+        dockerfile_path = build_dir / f"Dockerfile.{ext.name}"
         dockerfile_path.write_text(ext_dockerfile, encoding="utf-8")
 
         current_image = f"renv/{ext.name}:{ext.hash}"
@@ -528,7 +546,7 @@ target "final" {{
     bake_content = "\n".join(targets)
 
     # Write bake file
-    bake_path = work_dir / "docker-bake.hcl"
+    bake_path = build_dir / "docker-bake.hcl"
     bake_path.write_text(bake_content, encoding="utf-8")
 
     return bake_content
@@ -556,7 +574,7 @@ def should_rebuild_image(
 
 
 def build_image_with_bake(
-    work_dir: Path, builder_name: str = "renv_builder", load: bool = True
+    build_dir: Path, builder_name: str = "renv_builder", load: bool = True
 ) -> bool:
     """Build images using docker buildx bake."""
     try:
@@ -566,7 +584,7 @@ def build_image_with_bake(
         cmd.append("final")
 
         logging.info(f"Building with bake: {' '.join(cmd)}")
-        result = subprocess.run(cmd, cwd=work_dir, check=True)
+        result = subprocess.run(cmd, cwd=build_dir, check=True)
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         logging.error(f"Failed to build with bake: {e}")
@@ -636,7 +654,7 @@ def cleanup_stale_container(repo_spec: RepoSpec) -> None:
 
 
 def run_compose_service(
-    work_dir: Path, repo_spec: RepoSpec, command: Optional[List[str]] = None
+    compose_dir: Path, repo_spec: RepoSpec, command: Optional[List[str]] = None
 ) -> int:
     """Run Docker Compose service and optionally execute command."""
     env = os.environ.copy()
@@ -646,14 +664,15 @@ def run_compose_service(
 
     try:
         # Check if we can reuse existing container
-        container_is_usable = is_container_usable(repo_spec, work_dir)
+        # Use compose_dir for container accessibility test since that's where compose file is
+        container_is_usable = is_container_usable(repo_spec, compose_dir)
 
         if not container_is_usable:
             # Clean up stale container if it exists but is not usable
             cleanup_stale_container(repo_spec)
 
             # Start the service
-            subprocess.run(["docker", "compose", "up", "-d"], cwd=work_dir, env=env, check=True)
+            subprocess.run(["docker", "compose", "up", "-d"], cwd=compose_dir, env=env, check=True)
 
             # Fix git worktree configuration in the container
             safe_branch = repo_spec.branch.replace("/", "-")
@@ -667,7 +686,7 @@ def run_compose_service(
                 "-c",
                 f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{safe_branch}' > /workspace/{repo_spec.repo}/.git",
             ]
-            subprocess.run(fix_git_cmd, cwd=work_dir, env=env, check=False)
+            subprocess.run(fix_git_cmd, cwd=compose_dir, env=env, check=False)
 
         if command:
             # Execute command in running container
@@ -678,10 +697,10 @@ def run_compose_service(
                 # Simple command
                 exec_cmd = ["docker", "compose", "exec", "dev"] + command
 
-            return subprocess.run(exec_cmd, cwd=work_dir, env=env, check=False).returncode
+            return subprocess.run(exec_cmd, cwd=compose_dir, env=env, check=False).returncode
         # Interactive shell
         exec_cmd = ["docker", "compose", "exec", "dev", "bash"]
-        return subprocess.run(exec_cmd, cwd=work_dir, env=env, check=False).returncode
+        return subprocess.run(exec_cmd, cwd=compose_dir, env=env, check=False).returncode
 
     except subprocess.CalledProcessError as e:
         logging.error(f"Failed to run compose service: {e}")
@@ -718,8 +737,8 @@ def list_active_containers() -> List[Dict[str, str]]:
 
 def destroy_environment(repo_spec: RepoSpec) -> bool:
     """Destroy Docker Compose environment for repo/branch."""
-    work_dir = get_worktree_dir(repo_spec)
-    if not work_dir.exists():
+    build_dir = get_build_cache_dir(repo_spec)
+    if not build_dir.exists():
         logging.warning(f"Environment not found: {repo_spec}")
         return False
 
@@ -727,7 +746,7 @@ def destroy_environment(repo_spec: RepoSpec) -> bool:
     env["COMPOSE_PROJECT_NAME"] = repo_spec.compose_project_name
 
     try:
-        subprocess.run(["docker", "compose", "down", "-v"], cwd=work_dir, env=env, check=True)
+        subprocess.run(["docker", "compose", "down", "-v"], cwd=build_dir, env=env, check=True)
         logging.info(f"Destroyed environment: {repo_spec}")
         return True
     except subprocess.CalledProcessError as e:
@@ -797,15 +816,21 @@ def launch_environment(config: LaunchConfig) -> int:
         if not ensure_buildx_builder(config.builder_name):
             return 1
 
-        # Generate build files
-        generate_dockerfile(loaded_extensions, base_image, worktree_dir)
-        generate_bake_file(loaded_extensions, base_image, platforms, worktree_dir)
+        # Get build cache directory to keep worktree clean
+        build_dir = get_build_cache_dir(config.repo_spec)
+
+        # Generate build files in build cache directory
+        generate_dockerfile(loaded_extensions, base_image, build_dir)
+        generate_bake_file(loaded_extensions, base_image, platforms, build_dir)
 
         # Build image
-        if not build_image_with_bake(worktree_dir, config.builder_name):
+        if not build_image_with_bake(build_dir, config.builder_name):
             return 1
 
         logging.info(f"Built image: {image_name}")
+
+    # Get build cache directory for compose file
+    build_dir = get_build_cache_dir(config.repo_spec)
 
     # Generate compose file
     compose_config = ComposeConfig(
@@ -815,11 +840,12 @@ def launch_environment(config: LaunchConfig) -> int:
         work_dir=worktree_dir,
         worktree_dir=worktree_dir,
         repo_dir=repo_dir,
+        build_dir=build_dir,
     )
     generate_compose_file(compose_config)
 
-    # Run environment
-    return run_compose_service(worktree_dir, config.repo_spec, config.command)
+    # Run environment using build directory for compose file
+    return run_compose_service(build_dir, config.repo_spec, config.command)
 
 
 def cmd_launch(args) -> int:
@@ -914,22 +940,28 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
         except subprocess.CalledProcessError:
             pass
 
-        # Remove worktree and its compose files
-        if worktree_dir.exists():
-            print(f"Removing worktree: {worktree_dir}")
+        # Clean up compose volumes first from build directory
+        build_dir = get_build_cache_dir(repo_spec)
+        if build_dir.exists():
             env = os.environ.copy()
             env["COMPOSE_PROJECT_NAME"] = repo_spec.compose_project_name
-            # Clean up compose volumes first
             subprocess.run(
                 ["docker", "compose", "down", "-v"],
-                cwd=worktree_dir,
+                cwd=build_dir,
                 env=env,
                 check=False,
                 capture_output=True,
             )
 
-            # Remove worktree directory
+        # Remove worktree directory
+        if worktree_dir.exists():
+            print(f"Removing worktree: {worktree_dir}")
             subprocess.run(["rm", "-rf", str(worktree_dir)], check=False)
+
+        # Remove build cache directory
+        if build_dir.exists():
+            print(f"Removing build cache: {build_dir}")
+            subprocess.run(["rm", "-rf", str(build_dir)], check=False)
 
         # Clean up git worktree registration if repo exists
         repo_dir = get_repo_dir(repo_spec)

@@ -590,11 +590,11 @@ class TestComposeOperations:
         mock_run.return_value = Mock(returncode=0)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create worktree directory
-            worktree_dir = Path(tmpdir) / "worktree-main"
-            worktree_dir.mkdir()
+            # Create build cache directory
+            build_dir = Path(tmpdir) / "build-cache"
+            build_dir.mkdir()
 
-            with patch("rockerc.renv.get_worktree_dir", return_value=worktree_dir):
+            with patch("rockerc.renv.get_build_cache_dir", return_value=build_dir):
                 spec = RepoSpec("owner", "repo", "main")
                 result = destroy_environment(spec)
 
@@ -666,15 +666,26 @@ class TestCommands:
         result = cmd_destroy(args)
         assert result == 0
 
-    @patch("subprocess.run")
-    def test_cmd_prune(self, mock_run):
+    @patch("rockerc.renv.prune_all")
+    @patch("rockerc.renv.prune_repo_environment")
+    def test_cmd_prune(self, mock_prune_repo, mock_prune_all):
         """Test prune command."""
-        mock_run.return_value = Mock(returncode=0)
+        mock_prune_all.return_value = 0
+        mock_prune_repo.return_value = 0
 
+        # Test general prune (no repo_spec)
         args = Mock()
+        args.repo_spec = None
         result = cmd_prune(args)
         assert result == 0
-        assert mock_run.call_count == 3  # container, image, buildx prune
+        mock_prune_all.assert_called_once()
+
+        # Test selective prune (with repo_spec)
+        mock_prune_all.reset_mock()
+        args.repo_spec = "owner/repo"
+        result = cmd_prune(args)
+        assert result == 0
+        mock_prune_repo.assert_called_once()
 
     @patch("rockerc.renv.ExtensionManager")
     def test_cmd_ext_list(self, mock_ext_manager):
@@ -775,10 +786,11 @@ class TestIntegration:
 
                         assert result == 0
 
-                        # Check that files were created
-                        assert (worktree_dir / "Dockerfile").exists()
-                        assert (worktree_dir / "docker-compose.yml").exists()
-                        assert (worktree_dir / "docker-bake.hcl").exists()
+                        # Check that files were created in build cache directory
+                        build_dir = cache_dir / "builds" / "owner" / "repo" / "main"
+                        assert (build_dir / "Dockerfile").exists()
+                        assert (build_dir / "docker-compose.yml").exists()
+                        assert (build_dir / "docker-bake.hcl").exists()
 
 
 if __name__ == "__main__":

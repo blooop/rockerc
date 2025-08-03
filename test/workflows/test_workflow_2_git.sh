@@ -6,3 +6,5 @@ renv prune
 
 echo "Running: renv blooop/test_renv and confirming the git status works as expected"
 renv blooop/test_renv git status
+
+echo "Should enter a clean workspace, with no dirty changes"
