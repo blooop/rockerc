@@ -231,3 +231,49 @@ def test_workflow_9_container_reuse():
     assert (
         not stale_removal_after_reuse
     ), "Stale container removal should not happen when reusing existing container"
+
+
+def test_workflow_10_new_branch():
+    """Test renv workflow for creating new branches that don't exist yet with prune functionality"""
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_10_new_branch.sh")
+    os.chmod(script, 0o755)
+    result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    output = result.stdout.decode() + result.stderr.decode()
+    assert result.returncode == 0, f"Workflow 10 new branch failed: {output}"
+
+    # Check that the test completed successfully
+    assert "=== TEST: NEW BRANCH WORKFLOW WITH PRUNE ===" in output, "Test start not found"
+    assert "=== NEW BRANCH WORKFLOW WITH PRUNE TEST PASSED ===" in output, "Test completion not found"
+
+    # Check that all steps completed successfully
+    assert "=== STEP 1: INITIAL CLEANUP ===" in output, "Step 1 not found"
+    assert "=== STEP 2: CREATE NEW BRANCH ENVIRONMENT ===" in output, "Step 2 not found"
+    assert "=== STEP 3: VERIFY NEW BRANCH ENVIRONMENT ===" in output, "Step 3 not found"
+    assert "=== STEP 4: VERIFY CONTAINER EXISTS ===" in output, "Step 4 not found"
+    assert "=== STEP 5: TEST SELECTIVE PRUNE ===" in output, "Step 5 not found"
+    assert "=== STEP 6: RECREATE ENVIRONMENT FOR FULL PRUNE TEST ===" in output, "Step 6 not found"
+    assert "=== STEP 7: TEST FULL PRUNE ===" in output, "Step 7 not found"
+    assert "=== STEP 8: VERIFY WORKFLOW WORKS AFTER FULL PRUNE ===" in output, "Step 8 not found"
+
+    # Check that the new branch was created correctly
+    assert "✓ Successfully created worktree for new branch and ran git status" in output, "Worktree creation not confirmed"
+    assert "✓ Confirmed on new branch 'new_branch'" in output, "Branch creation not confirmed"
+    assert "✓ Workspace is clean as expected" in output, "Clean workspace not confirmed"
+
+    # Check that container management works correctly
+    assert "✓ Container for new branch environment is running" in output, "Container existence not confirmed"
+    assert "✓ Container correctly removed by selective prune" in output, "Selective prune container removal not confirmed"
+    assert "✓ Worktree correctly removed by selective prune" in output, "Selective prune worktree removal not confirmed"
+
+    # Check that prune operations work correctly
+    assert "✓ Selective prune completed" in output, "Selective prune not completed"
+    assert "✓ Full prune completed" in output, "Full prune not completed"
+    assert "✓ All renv containers correctly removed by full prune" in output, "Full prune container removal not confirmed"
+    assert "✓ .renv directory correctly removed by full prune" in output, "Full prune directory removal not confirmed"
+
+    # Check that workflow still works after full prune
+    assert "✓ New branch workflow still works after full prune" in output, "Workflow recovery not confirmed"
+
+    # Check that git status shows expected output
+    assert "On branch new_branch" in output, "Git status doesn't show correct branch"
+    assert "nothing to commit, working tree clean" in output, "Git status doesn't show clean workspace"

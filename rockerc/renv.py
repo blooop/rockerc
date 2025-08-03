@@ -329,10 +329,22 @@ def setup_worktree(repo_spec: RepoSpec) -> Path:
 
     if not worktree_dir.exists():
         logging.info(f"Creating worktree for branch: {repo_spec.branch}")
-        subprocess.run(
-            ["git", "-C", str(repo_dir), "worktree", "add", str(worktree_dir), repo_spec.branch],
-            check=True,
-        )
+        
+        # Check if branch exists, if not create it
+        try:
+            # Try to create worktree with existing branch
+            subprocess.run(
+                ["git", "-C", str(repo_dir), "worktree", "add", str(worktree_dir), repo_spec.branch],
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            # Branch doesn't exist, create new branch and worktree
+            logging.info(f"Branch {repo_spec.branch} doesn't exist, creating new branch")
+            subprocess.run(
+                ["git", "-C", str(repo_dir), "worktree", "add", "-b", repo_spec.branch, str(worktree_dir)],
+                check=True,
+            )
+        
         time.sleep(0.1)  # Allow filesystem to sync
     else:
         logging.info(f"Worktree already exists: {worktree_dir}")
