@@ -1,15 +1,28 @@
+"""
+renv - Development environment launcher using Docker, Git worktrees, and Buildx/Bake
+
+A tool that combines git worktrees with Docker Compose and Buildx to provide
+isolated development environments for each repository branch.
+"""
+
 import sys
 import subprocess
-import pathlib
 import logging
 import argparse
 import time
-from dataclasses import dataclass
+import json
+import yaml
+import hashlib
+import os
+from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
+from pathlib import Path
 
 
 @dataclass
 class RepoSpec:
+    """Repository specification parser and container."""
+
     owner: str
     repo: str
     branch: str = "main"
@@ -39,181 +52,253 @@ class RepoSpec:
             result += f"#{self.subfolder}"
         return result
 
-
-def get_renv_root() -> pathlib.Path:
-    """Get the root directory for renv repositories"""
-    return pathlib.Path.home() / "renv"
-
-
-def get_available_users() -> List[str]:
-    """Get list of available users from renv directory"""
-    renv_root = get_renv_root()
-    if not renv_root.exists():
-        return []
-    return [d.name for d in renv_root.iterdir() if d.is_dir()]
+    @property
+    def compose_project_name(self) -> str:
+        """Generate Docker Compose project name."""
+        safe_branch = self.branch.replace("/", "-").replace("_", "-")
+        return f"{self.repo}-{safe_branch}"
 
 
-def get_available_repos(user: str) -> List[str]:
-    """Get list of available repositories for a user"""
-    user_dir = get_renv_root() / user
-    if not user_dir.exists():
-        return []
-    return [d.name for d in user_dir.iterdir() if d.is_dir()]
+@dataclass
+class Extension:
+    """Represents a renv extension with its configuration."""
+
+    name: str
+    dockerfile_content: str
+    compose_fragment: Dict[str, Any]
+    files: Dict[str, str] = field(default_factory=dict)  # Additional files to copy
+
+    @property
+    def hash(self) -> str:
+        """Generate SHA256 hash for cache tagging."""
+        content = f"{self.dockerfile_content}{json.dumps(self.compose_fragment, sort_keys=True)}"
+        for filename, file_content in sorted(self.files.items()):
+            content += f"{filename}:{file_content}"
+        return hashlib.sha256(content.encode()).hexdigest()[:12]
 
 
-def get_available_branches(repo_spec: RepoSpec) -> List[str]:
-    """Get list of available branches for a repository"""
-    repo_dir = get_repo_dir(repo_spec)
-    if not repo_dir.exists():
-        return []
+class RenvConfig:
+    """Manages renv configuration from .renv.yml/.renv.json files."""
 
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(repo_dir), "branch", "-r"],
-            capture_output=True,
-            text=True,
-            check=True,
+    def __init__(self, repo_path: Path):
+        self.repo_path = repo_path
+        self.config = self._load_config()
+
+    def _load_config(self) -> Dict[str, Any]:
+        """Load configuration from repo directory."""
+        for config_file in [".renv.yml", ".renv.yaml", ".renv.json"]:
+            config_path = self.repo_path / config_file
+            if config_path.exists():
+                try:
+                    with open(config_path, "r", encoding="utf-8") as f:
+                        if config_file.endswith(".json"):
+                            return json.load(f)
+                        return yaml.safe_load(f) or {}
+                except Exception as e:
+                    logging.warning(f"Failed to load {config_file}: {e}")
+        return {}
+
+    @property
+    def extensions(self) -> List[str]:
+        """Get list of default extensions."""
+        return self.config.get("extensions", [])
+
+    @property
+    def base_image(self) -> str:
+        """Get base image for containers."""
+        return self.config.get("base_image", "ubuntu:22.04")
+
+    @property
+    def platforms(self) -> List[str]:
+        """Get target platforms for multi-arch builds."""
+        return self.config.get("platforms", ["linux/amd64"])
+
+
+class ExtensionManager:
+    """Manages extensions and their definitions."""
+
+    def __init__(self, cache_dir: Path):
+        self.cache_dir = cache_dir
+        self.extensions_dir = cache_dir / "extensions"
+        self.extensions_dir.mkdir(parents=True, exist_ok=True)
+        self._builtin_extensions = self._load_builtin_extensions()
+
+    def _load_builtin_extensions(self) -> Dict[str, Extension]:
+        """Load built-in extension definitions."""
+        extensions = {}
+
+        # Base development tools
+        extensions["base"] = Extension(
+            name="base",
+            dockerfile_content="""
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y \\
+    git curl wget unzip build-essential \\
+    ca-certificates gnupg lsb-release \\
+    && rm -rf /var/lib/apt/lists/*
+""",
+            compose_fragment={},
         )
-        branches = []
-        for line in result.stdout.strip().split("\n"):
-            if line.strip() and not line.strip().startswith("origin/HEAD"):
-                branch = line.strip().replace("origin/", "")
-                if branch:
-                    branches.append(branch)
-        return sorted(set(branches))
-    except subprocess.CalledProcessError:
-        return []
+
+        # Git configuration
+        extensions["git"] = Extension(
+            name="git",
+            dockerfile_content="""
+# Git is already installed in base, just configure
+RUN git config --global --add safe.directory '*'
+""",
+            compose_fragment={
+                "volumes": ["~/.gitconfig:/home/renv/.gitconfig:ro", "~/.ssh:/home/renv/.ssh:ro"]
+            },
+        )
+
+        # User setup
+        extensions["user"] = Extension(
+            name="user",
+            dockerfile_content="""
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+RUN groupadd -g ${GROUP_ID} renv && \\
+    useradd -u ${USER_ID} -g renv -m -s /bin/bash renv && \\
+    echo 'renv ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+USER renv
+WORKDIR /workspace
+""",
+            compose_fragment={
+                "build": {"args": {"USER_ID": "${USER_ID:-1000}", "GROUP_ID": "${GROUP_ID:-1000}"}},
+                "environment": {"USER": "renv", "HOME": "/home/renv"},
+            },
+        )
+
+        # X11 GUI support
+        extensions["x11"] = Extension(
+            name="x11",
+            dockerfile_content="""
+RUN apt-get update && apt-get install -y \\
+    xauth x11-apps libgl1-mesa-glx libgl1-mesa-dri \\
+    && rm -rf /var/lib/apt/lists/*
+""",
+            compose_fragment={
+                "environment": {"DISPLAY": "${DISPLAY}", "XAUTHORITY": "/tmp/.Xauth"},
+                "volumes": ["/tmp/.X11-unix:/tmp/.X11-unix:rw", "/tmp/.Xauth:/tmp/.Xauth:rw"],
+                "network_mode": "host",
+            },
+        )
+
+        # NVIDIA GPU support
+        extensions["nvidia"] = Extension(
+            name="nvidia",
+            dockerfile_content="""
+# NVIDIA runtime will be handled by Docker Compose
+""",
+            compose_fragment={
+                "runtime": "nvidia",
+                "environment": {
+                    "NVIDIA_VISIBLE_DEVICES": "all",
+                    "NVIDIA_DRIVER_CAPABILITIES": "all",
+                },
+            },
+        )
+
+        # Python/UV package manager
+        extensions["uv"] = Extension(
+            name="uv",
+            dockerfile_content="""
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/home/renv/.cargo/bin:$PATH"
+""",
+            compose_fragment={},
+        )
+
+        # Fuzzy finder
+        extensions["fzf"] = Extension(
+            name="fzf",
+            dockerfile_content="""
+RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/renv/.fzf && \\
+    chown -R renv:renv /home/renv/.fzf && \\
+    /home/renv/.fzf/install --all
+""",
+            compose_fragment={},
+        )
+
+        return extensions
+
+    def get_extension(self, name: str, repo_path: Optional[Path] = None) -> Optional[Extension]:
+        """Get extension by name, checking repo-local first, then built-in."""
+        # Check repo-local extensions first
+        if repo_path:
+            local_ext_dir = repo_path / ".renv" / "exts" / name
+            if local_ext_dir.exists():
+                return self._load_local_extension(name, local_ext_dir)
+
+        # Check built-in extensions
+        return self._builtin_extensions.get(name)
+
+    def _load_local_extension(self, name: str, ext_dir: Path) -> Extension:
+        """Load extension from local repository directory."""
+        dockerfile_path = ext_dir / "Dockerfile"
+        compose_path = ext_dir / "docker-compose.fragment.yml"
+
+        dockerfile_content = ""
+        if dockerfile_path.exists():
+            dockerfile_content = dockerfile_path.read_text(encoding="utf-8")
+
+        compose_fragment = {}
+        if compose_path.exists():
+            with open(compose_path, "r", encoding="utf-8") as f:
+                compose_fragment = yaml.safe_load(f) or {}
+
+        # Load any additional files
+        files = {}
+        for file_path in ext_dir.glob("*"):
+            if file_path.name not in ["Dockerfile", "docker-compose.fragment.yml"]:
+                files[file_path.name] = file_path.read_text(encoding="utf-8")
+
+        return Extension(
+            name=name,
+            dockerfile_content=dockerfile_content,
+            compose_fragment=compose_fragment,
+            files=files,
+        )
+
+    def list_extensions(self, repo_path: Optional[Path] = None) -> List[str]:
+        """List all available extensions."""
+        extensions = set(self._builtin_extensions.keys())
+
+        if repo_path:
+            local_exts_dir = repo_path / ".renv" / "exts"
+            if local_exts_dir.exists():
+                extensions.update(d.name for d in local_exts_dir.iterdir() if d.is_dir())
+
+        return sorted(extensions)
 
 
-def get_all_repo_branch_combinations() -> List[str]:
-    """Get all available repo@branch combinations for fuzzy finder"""
-    combinations = []
-    for user in get_available_users():
-        for repo in get_available_repos(user):
-            repo_spec = RepoSpec(user, repo, "main")
-            branches = get_available_branches(repo_spec)
-            if branches:
-                for branch in branches:
-                    combinations.append(f"{user}/{repo}@{branch}")
-            else:
-                # If no branches found, still add with main
-                combinations.append(f"{user}/{repo}@main")
-    return sorted(combinations)
+def get_cache_dir() -> Path:
+    """Get renv cache directory."""
+    cache_dir = os.getenv("RENV_CACHE_DIR")
+    if cache_dir:
+        return Path(cache_dir)
+    return Path.home() / ".renv"
 
 
-def fuzzy_select_repo() -> Optional[str]:
-    """Interactive fuzzy finder for repo selection"""
-    try:
-        from iterfzf import iterfzf
-    except ImportError:
-        logging.error("iterfzf not available. Install with: pip install iterfzf")
-        return None
-
-    combinations = get_all_repo_branch_combinations()
-    if not combinations:
-        logging.info("No repositories found in ~/renv/. Clone some repos first!")
-        return None
-
-    print("Select repo@branch (type 'bl tes ma' for blooop/test_renv@main):")
-    selected = iterfzf(combinations, multi=False)
-    return selected
+def get_workspaces_dir() -> Path:
+    """Get workspaces directory."""
+    return get_cache_dir() / "workspaces"
 
 
-def install_shell_completion() -> int:
-    """Install shell autocompletion for renv"""
-    bash_completion = """# renv completion
-_renv_completion() {
-    local cur prev opts
-    COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    prev="${COMP_WORDS[COMP_CWORD-1]}"
-    
-    # Basic options
-    opts="--help --install --force --nocache --no-container"
-    
-    if [[ ${cur} == -* ]]; then
-        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
-        return 0
-    fi
-    
-    # Complete repository specifications
-    if [[ ${COMP_CWORD} -eq 1 ]]; then
-        local renv_root="$HOME/renv"
-        if [[ -d "$renv_root" ]]; then
-            local users=$(find "$renv_root" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^renv$")
-            local repos=""
-            for user in $users; do
-                if [[ -d "$renv_root/$user" ]]; then
-                    local user_repos=$(find "$renv_root/$user" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^$user$")
-                    for repo in $user_repos; do
-                        repos="$repos $user/$repo"
-                        # Add branches if @ is present
-                        if [[ "$cur" == *"@"* ]]; then
-                            local repo_dir="$renv_root/$user/$repo"
-                            if [[ -d "$repo_dir" ]]; then
-                                local branches=$(git -C "$repo_dir" branch -r 2>/dev/null | sed 's/origin\\///' | grep -v HEAD | xargs)
-                                for branch in $branches; do
-                                    repos="$repos $user/$repo@$branch"
-                                done
-                            fi
-                        fi
-                    done
-                fi
-            done
-            COMPREPLY=( $(compgen -W "${repos}" -- ${cur}) )
-        fi
-    fi
-    
-    return 0
-}
-
-complete -F _renv_completion renv
-"""
-
-    # Install to .bashrc
-    bashrc_path = pathlib.Path.home() / ".bashrc"
-
-    try:
-        # Check if already installed
-        if bashrc_path.exists():
-            with open(bashrc_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                if "# renv completion" in content:
-                    logging.info("renv completion already installed in ~/.bashrc")
-                    return 0
-
-        # Append completion to .bashrc
-        with open(bashrc_path, "a", encoding="utf-8") as f:
-            f.write("\n" + bash_completion + "\n")
-
-        logging.info("Shell completion installed to ~/.bashrc")
-        logging.info("Run 'source ~/.bashrc' or restart your terminal to enable completion")
-        return 0
-
-    except Exception as e:
-        logging.error(f"Failed to install shell completion: {e}")
-        return 1
+def get_repo_dir(repo_spec: RepoSpec) -> Path:
+    """Get bare repository directory."""
+    return get_workspaces_dir() / repo_spec.owner / repo_spec.repo
 
 
-def get_repo_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Get the directory path for a repository"""
-    return get_renv_root() / repo_spec.owner / repo_spec.repo
-
-
-def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Get the worktree directory path for a repository and branch"""
+def get_worktree_dir(repo_spec: RepoSpec) -> Path:
+    """Get worktree directory for a specific branch."""
     safe_branch = repo_spec.branch.replace("/", "-")
     return get_repo_dir(repo_spec) / f"worktree-{safe_branch}"
 
 
-def get_container_name(repo_spec: RepoSpec) -> str:
-    """Generate container name from repo specification"""
-    safe_branch = repo_spec.branch.replace("/", "-")
-    return f"{repo_spec.repo}-{safe_branch}"
-
-
-def setup_bare_repo(repo_spec: RepoSpec) -> pathlib.Path:
-    """Clone or update bare repository"""
+def setup_bare_repo(repo_spec: RepoSpec) -> Path:
+    """Clone or update bare repository."""
     repo_dir = get_repo_dir(repo_spec)
     repo_url = f"git@github.com:{repo_spec.owner}/{repo_spec.repo}.git"
 
@@ -228,8 +313,8 @@ def setup_bare_repo(repo_spec: RepoSpec) -> pathlib.Path:
     return repo_dir
 
 
-def setup_worktree(repo_spec: RepoSpec) -> pathlib.Path:
-    """Set up git worktree for the specified branch"""
+def setup_worktree(repo_spec: RepoSpec) -> Path:
+    """Set up git worktree for the specified branch."""
     repo_dir = get_repo_dir(repo_spec)
     worktree_dir = get_worktree_dir(repo_spec)
 
@@ -242,365 +327,578 @@ def setup_worktree(repo_spec: RepoSpec) -> pathlib.Path:
             ["git", "-C", str(repo_dir), "worktree", "add", str(worktree_dir), repo_spec.branch],
             check=True,
         )
-        # Ensure worktree is fully populated before returning
-        git_file = worktree_dir / ".git"
-        if not git_file.exists():
-            time.sleep(0.5)  # Wait for filesystem to sync
-        # Additional check to ensure directory is fully ready
-        time.sleep(0.1)
+        time.sleep(0.1)  # Allow filesystem to sync
     else:
         logging.info(f"Worktree already exists: {worktree_dir}")
 
     return worktree_dir
 
 
-def build_rocker_config(
+def ensure_buildx_builder(builder_name: str = "renv_builder") -> bool:
+    """Ensure Buildx builder exists and is active."""
+    try:
+        # Check if builder exists
+        result = subprocess.run(
+            ["docker", "buildx", "inspect", builder_name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            # Create builder
+            logging.info(f"Creating Buildx builder: {builder_name}")
+            subprocess.run(
+                [
+                    "docker",
+                    "buildx",
+                    "create",
+                    "--name",
+                    builder_name,
+                    "--driver",
+                    "docker-container",
+                    "--use",
+                ],
+                check=True,
+            )
+        else:
+            # Use existing builder
+            subprocess.run(["docker", "buildx", "use", builder_name], check=True)
+
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to set up Buildx builder: {e}")
+        return False
+
+
+def generate_dockerfile(extensions: List[Extension], base_image: str, work_dir: Path) -> str:
+    """Generate Dockerfile combining all extensions."""
+    lines = [f"FROM {base_image} as base"]
+
+    # Add each extension's Dockerfile content
+    for ext in extensions:
+        if ext.dockerfile_content.strip():
+            lines.append(f"\n# Extension: {ext.name}")
+            lines.append(ext.dockerfile_content.strip())
+
+    # Ensure we end up in the right working directory
+    lines.append("\nWORKDIR /workspace")
+    lines.append('CMD ["bash"]')
+
+    dockerfile_content = "\n".join(lines)
+
+    # Write Dockerfile to work directory
+    dockerfile_path = work_dir / "Dockerfile"
+    dockerfile_path.write_text(dockerfile_content, encoding="utf-8")
+
+    return dockerfile_content
+
+
+def generate_compose_file(  # pylint: disable=too-many-arguments
     repo_spec: RepoSpec,
-    force: bool = False,  # pylint: disable=unused-argument
-    nocache: bool = False,  # pylint: disable=unused-argument
+    extensions: List[Extension],
+    image_name: str,
+    work_dir: Path,
+    worktree_dir: Path,
+    repo_dir: Path,
 ) -> Dict[str, Any]:
-    """Build rocker configuration with default extensions"""
-    container_name = get_container_name(repo_spec)
-    repo_dir = get_repo_dir(repo_spec)
-    worktree_dir = get_worktree_dir(repo_spec)
-
-    # Docker mount points
-    docker_bare_repo_mount = f"/workspace/{repo_spec.repo}.git"
-    docker_worktree_mount = f"/workspace/{repo_spec.repo}"
-    docker_workdir = docker_worktree_mount
-
-    if repo_spec.subfolder:
-        docker_workdir = f"{docker_worktree_mount}/{repo_spec.subfolder}"
-
-    # For git worktrees, we need to mount the worktree git directory as well
-    worktree_git_dir = repo_dir / "worktrees" / f"worktree-{repo_spec.branch.replace('/', '-')}"
-    docker_worktree_git_mount = (
-        f"/workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}"
-    )
-
-    # Create config using spec from renv.md
-    config = {
-        "image": "ubuntu:22.04",
-        "args": ["user", "pull", "git-clone", "git", "nocleanup"],
-        "name": container_name,
-        "hostname": container_name,
-        "volume": [
-            f"{repo_dir}:{docker_bare_repo_mount}",
-            f"{worktree_dir}:{docker_worktree_mount}",
-            f"{worktree_git_dir}:{docker_worktree_git_mount}",
+    """Generate docker-compose.yml for the environment."""
+    # Start with base service
+    service = {
+        "image": image_name,
+        "container_name": repo_spec.compose_project_name,
+        "hostname": repo_spec.compose_project_name,
+        "working_dir": f"/workspace/{repo_spec.repo}",
+        "volumes": [
+            f"{worktree_dir}:/workspace/{repo_spec.repo}",
+            f"{repo_dir}:/workspace/{repo_spec.repo}.git",
         ],
-        "oyr-run-arg": f"--workdir={docker_workdir} --env=REPO_NAME={repo_spec.repo} --env=BRANCH_NAME={repo_spec.branch.replace('/', '-')}",
+        "environment": {
+            "REPO_NAME": repo_spec.repo,
+            "BRANCH_NAME": repo_spec.branch.replace("/", "-"),
+        },
+        "stdin_open": True,
+        "tty": True,
+        "command": ["tail", "-f", "/dev/null"],
     }
 
-    # Note: force rebuild is handled by removing existing containers, not by rocker extensions
-    # nocache is not implemented as rocker extension - it should be handled during container management
+    # Apply subfolder if specified
+    if repo_spec.subfolder:
+        service["working_dir"] = f"/workspace/{repo_spec.repo}/{repo_spec.subfolder}"
 
-    return config
+    # Merge extension compose fragments
+    for ext in extensions:
+        fragment = ext.compose_fragment
+        if not fragment:
+            continue
+
+        # Merge volumes
+        if "volumes" in fragment:
+            service.setdefault("volumes", []).extend(fragment["volumes"])
+
+        # Merge environment
+        if "environment" in fragment:
+            service.setdefault("environment", {}).update(fragment["environment"])
+
+        # Set runtime if specified
+        if "runtime" in fragment:
+            service["runtime"] = fragment["runtime"]
+
+        # Set network mode if specified
+        if "network_mode" in fragment:
+            service["network_mode"] = fragment["network_mode"]
+
+        # Merge build args if specified
+        if "build" in fragment:
+            if "build" not in service:
+                service["build"] = {"context": ".", "dockerfile": "Dockerfile"}
+            if "args" in fragment["build"]:
+                service["build"].setdefault("args", {}).update(fragment["build"]["args"])
+
+    # If we have build args, enable building
+    if any(ext.compose_fragment.get("build", {}).get("args") for ext in extensions):
+        service["build"] = service.get("build", {"context": ".", "dockerfile": "Dockerfile"})
+
+    compose_config = {"version": "3.8", "services": {"dev": service}}
+
+    # Write compose file
+    compose_path = work_dir / "docker-compose.yml"
+    with open(compose_path, "w", encoding="utf-8") as f:
+        yaml.dump(compose_config, f, default_flow_style=False)
+
+    return compose_config
 
 
-def container_exists(container_name: str) -> bool:
-    """Check if container exists"""
+def generate_bake_file(
+    extensions: List[Extension], base_image: str, platforms: List[str], work_dir: Path
+) -> str:
+    """Generate docker-bake.hcl file for Buildx."""
+    # Create targets for each extension layer
+    targets = []
+
+    current_image = base_image
+    for ext in extensions:
+        if not ext.dockerfile_content.strip():
+            continue
+
+        target_name = f"ext-{ext.name}"
+        target = f"""
+target "{target_name}" {{
+    context = "."
+    dockerfile = "Dockerfile.{ext.name}"
+    tags = ["renv/{ext.name}:{ext.hash}"]
+    platforms = {platforms}
+    cache-from = ["type=local,src=.buildx-cache"]
+    cache-to = ["type=local,dest=.buildx-cache,mode=max"]
+}}"""
+        targets.append(target)
+
+        # Write individual Dockerfile for this extension
+        ext_dockerfile = f"FROM {current_image}\n{ext.dockerfile_content}"
+        dockerfile_path = work_dir / f"Dockerfile.{ext.name}"
+        dockerfile_path.write_text(ext_dockerfile, encoding="utf-8")
+
+        current_image = f"renv/{ext.name}:{ext.hash}"
+
+    # Final target combining all extensions
+    final_target = f"""
+target "final" {{
+    context = "."
+    dockerfile = "Dockerfile"
+    tags = ["renv/final:{'-'.join(ext.hash for ext in extensions)}"]
+    platforms = {platforms}
+    cache-from = ["type=local,src=.buildx-cache"]
+    cache-to = ["type=local,dest=.buildx-cache,mode=max"]
+}}"""
+    targets.append(final_target)
+
+    bake_content = "\n".join(targets)
+
+    # Write bake file
+    bake_path = work_dir / "docker-bake.hcl"
+    bake_path.write_text(bake_content, encoding="utf-8")
+
+    return bake_content
+
+
+def should_rebuild_image(
+    image_name: str, extensions: List[Extension]  # pylint: disable=unused-argument
+) -> bool:
+    """Check if image needs rebuilding based on extension hashes."""
     try:
+        # Check if image exists
         result = subprocess.run(
-            ["docker", "ps", "-a", "--format", "{{.Names}}", "--filter", f"name={container_name}"],
-            capture_output=True,
-            text=True,
-            check=True,
+            ["docker", "image", "inspect", image_name], capture_output=True, text=True, check=False
         )
-        return container_name in result.stdout.strip().split("\n")
+
+        if result.returncode != 0:
+            return True  # Image doesn't exist
+
+        # Check if any extension hash changed
+        # This is a simplified check - in production you'd want to store metadata
+        return False
+
     except subprocess.CalledProcessError:
+        return True
+
+
+def build_image_with_bake(
+    work_dir: Path, builder_name: str = "renv_builder", load: bool = True
+) -> bool:
+    """Build images using docker buildx bake."""
+    try:
+        cmd = ["docker", "buildx", "bake", "--builder", builder_name]
+        if load:
+            cmd.append("--load")
+        cmd.append("final")
+
+        logging.info(f"Building with bake: {' '.join(cmd)}")
+        result = subprocess.run(cmd, cwd=work_dir, check=True)
+        return result.returncode == 0
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to build with bake: {e}")
         return False
 
 
-def container_running(container_name: str) -> bool:
-    """Check if container is running"""
+def run_compose_service(
+    work_dir: Path, repo_spec: RepoSpec, command: Optional[List[str]] = None
+) -> int:
+    """Run Docker Compose service and optionally execute command."""
+    env = os.environ.copy()
+    env["COMPOSE_PROJECT_NAME"] = repo_spec.compose_project_name
+    env["USER_ID"] = str(os.getuid())
+    env["GROUP_ID"] = str(os.getgid())
+
     try:
-        result = subprocess.run(
-            ["docker", "ps", "--format", "{{.Names}}", "--filter", f"name={container_name}"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return container_name in result.stdout.strip().split("\n")
-    except subprocess.CalledProcessError:
-        return False
+        # Start the service
+        subprocess.run(["docker", "compose", "up", "-d"], cwd=work_dir, env=env, check=True)
 
-
-def attach_to_container(container_name: str, command: Optional[List[str]] = None) -> int:
-    """Attach to an existing running container"""
-    if command:
-        # Execute command in running container (non-interactive for commands)
-        # Check if we have a single argument that looks like a shell command
-        if len(command) == 1:
-            cmd_str = command[0]
-            # If it starts with "bash -c" or contains shell constructs or spaces, pass it to bash -c
-            if (
-                cmd_str.startswith("bash -c ")
-                or any(char in cmd_str for char in [";", "&&", "||", "|", ">", "<"])
-                or " " in cmd_str
-            ):
-                # Extract the actual command from "bash -c 'command'" format
-                if cmd_str.startswith("bash -c "):
-                    actual_cmd = cmd_str[8:].strip()
-                    # Remove surrounding quotes if present
-                    if (actual_cmd.startswith("'") and actual_cmd.endswith("'")) or (
-                        actual_cmd.startswith('"') and actual_cmd.endswith('"')
-                    ):
-                        actual_cmd = actual_cmd[1:-1]
-                    cmd_parts = ["docker", "exec", container_name, "/bin/bash", "-c", actual_cmd]
-                else:
-                    # For other shell constructs, wrap the whole thing
-                    cmd_parts = ["docker", "exec", container_name, "/bin/bash", "-c", cmd_str]
+        if command:
+            # Execute command in running container
+            if len(command) == 1 and any(char in command[0] for char in [";", "&&", "||", "|"]):
+                # Complex shell command
+                exec_cmd = ["docker", "compose", "exec", "dev", "bash", "-c", command[0]]
             else:
-                # Simple command, execute directly
-                cmd_parts = ["docker", "exec", container_name] + command
-        else:
-            # Multiple arguments, execute directly
-            cmd_parts = ["docker", "exec", container_name] + command
-    else:
-        # Attach to running container for interactive session
-        # Check if we have a TTY available
-        if sys.stdin.isatty() and sys.stdout.isatty():
-            cmd_parts = ["docker", "exec", "-it", container_name, "/bin/bash"]
-        else:
-            # No TTY available, run non-interactively
-            cmd_parts = ["docker", "exec", container_name, "/bin/bash"]
+                # Simple command
+                exec_cmd = ["docker", "compose", "exec", "dev"] + command
 
-    logging.info(f"Attaching to container: {' '.join(cmd_parts)}")
-    return subprocess.run(cmd_parts, check=False).returncode
+            return subprocess.run(exec_cmd, cwd=work_dir, env=env, check=False).returncode
+        # Interactive shell
+        exec_cmd = ["docker", "compose", "exec", "dev", "bash"]
+        return subprocess.run(exec_cmd, cwd=work_dir, env=env, check=False).returncode
+
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to run compose service: {e}")
+        return e.returncode
 
 
-def start_and_attach_container(container_name: str, command: Optional[List[str]] = None) -> int:
-    """Start a stopped container and attach to it"""
-    # Start the container
-    start_result = subprocess.run(
-        ["docker", "start", container_name], capture_output=True, text=True, check=False
-    )
-    if start_result.returncode != 0:
-        logging.error(f"Failed to start container {container_name}: {start_result.stderr}")
-        return start_result.returncode
+def list_active_containers() -> List[Dict[str, str]]:
+    """List active renv containers."""
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "--filter",
+                "label=com.docker.compose.project",
+                "--format",
+                "table {{.Names}}\\t{{.Status}}\\t{{.Image}}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
-    logging.info(f"Started container {container_name}")
-
-    # Now attach to it
-    return attach_to_container(container_name, command)
-
-
-def run_rocker_command(
-    config: Dict[str, Any], command: Optional[List[str]] = None, detached: bool = False
-) -> int:
-    """Execute rocker command by building command parts directly"""
-    # Start with the base rocker command
-    cmd_parts = ["rocker"]
-
-    # Extract special values that need separate handling
-    image = config.get("image", "")
-    volumes = []
-    if "volume" in config:
-        volume_config = config["volume"]
-        if isinstance(volume_config, list):
-            volumes = volume_config
-        else:
-            volumes = volume_config.split()
-
-    oyr_run_arg = config.get("oyr-run-arg", "")
-
-    # Add basic extensions from args
-    if "args" in config:
-        for arg in config["args"]:
-            cmd_parts.append(f"--{arg}")
-
-    # Add named parameters (but skip special ones we handle separately)
-    for key, value in config.items():
-        if key not in ["image", "args", "volume", "oyr-run-arg"]:
-            cmd_parts.extend([f"--{key}", str(value)])
-
-    # Add oyr-run-arg if present
-    if oyr_run_arg:
-        cmd_parts.extend(["--oyr-run-arg", oyr_run_arg])
-
-    # Add volumes
-    for volume in volumes:
-        cmd_parts.extend(["--volume", volume])
-
-    # Add -- separator if volumes are present (required by rocker)
-    if volumes:
-        cmd_parts.append("--")
-
-    # Add image
-    if image:
-        cmd_parts.append(image)
-
-    # Add command if provided
-    if command:
-        cmd_parts.extend(command)
-
-    # Log the full command for debugging
-    cmd_str = " ".join(cmd_parts)
-    logging.info(f"Running rocker: {cmd_str}")
-    logging.info(f"Final command parts: {cmd_parts}")
-
-    if detached:
-        # Run in background and return immediately
-        # pylint: disable=consider-using-with
-        subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        # Give it a moment to start
-        time.sleep(2)
-        return 0
-    return subprocess.run(cmd_parts, check=False).returncode
+        containers = []
+        for line in result.stdout.strip().split("\n")[1:]:  # Skip header
+            if line.strip():
+                parts = line.split("\t")
+                if len(parts) >= 3:
+                    containers.append({"name": parts[0], "status": parts[1], "image": parts[2]})
+        return containers
+    except subprocess.CalledProcessError:
+        return []
 
 
-def manage_container(
+def destroy_environment(repo_spec: RepoSpec) -> bool:
+    """Destroy Docker Compose environment for repo/branch."""
+    work_dir = get_worktree_dir(repo_spec)
+    if not work_dir.exists():
+        logging.warning(f"Environment not found: {repo_spec}")
+        return False
+
+    env = os.environ.copy()
+    env["COMPOSE_PROJECT_NAME"] = repo_spec.compose_project_name
+
+    try:
+        subprocess.run(["docker", "compose", "down", "-v"], cwd=work_dir, env=env, check=True)
+        logging.info(f"Destroyed environment: {repo_spec}")
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to destroy environment: {e}")
+        return False
+
+
+def launch_environment(  # pylint: disable=too-many-arguments
     repo_spec: RepoSpec,
+    extensions: List[str],
     command: Optional[List[str]] = None,
-    force: bool = False,
-    nocache: bool = False,
-    no_container: bool = False,
+    rebuild: bool = False,
+    no_gui: bool = False,
+    no_gpu: bool = False,
+    platforms: List[str] = None,
+    builder_name: str = "renv_builder",
 ) -> int:
-    """Manage container lifecycle and execution"""
-    if no_container:
-        setup_worktree(repo_spec)
-        logging.info(f"Worktree set up at: {get_worktree_dir(repo_spec)}")
-        return 0
+    """Launch development environment for repository/branch."""
+    if platforms is None:
+        platforms = ["linux/amd64"]
 
     # Set up worktree
-    setup_worktree(repo_spec)
+    worktree_dir = setup_worktree(repo_spec)
+    repo_dir = get_repo_dir(repo_spec)
 
-    container_name = get_container_name(repo_spec)
+    # Load repo configuration
+    config = RenvConfig(worktree_dir)
 
-    # Handle force rebuild by removing existing container
-    if force and container_exists(container_name):
-        logging.info(f"Force rebuild: removing existing container {container_name}")
-        subprocess.run(["docker", "rm", "-f", container_name], check=True)
+    # Merge extensions
+    all_extensions = list(extensions) + config.extensions
+    if no_gui and "x11" in all_extensions:
+        all_extensions.remove("x11")
+    if no_gpu and "nvidia" in all_extensions:
+        all_extensions.remove("nvidia")
 
-    # Implement reconnect logic as per spec:
-    # 1. If container is running -> attach to it
-    # 2. If container exists but not running -> start and attach
-    # 3. If container doesn't exist -> create persistent container
+    # Add required base extensions
+    if "base" not in all_extensions:
+        all_extensions.insert(0, "base")
+    if "user" not in all_extensions:
+        all_extensions.append("user")
 
-    if container_exists(container_name) and not force:
-        if container_running(container_name):
-            logging.info(f"Container {container_name} is running, attaching to it")
-            return attach_to_container(container_name, command)
+    # Load extension definitions
+    ext_manager = ExtensionManager(get_cache_dir())
+    loaded_extensions = []
+    for ext_name in all_extensions:
+        ext = ext_manager.get_extension(ext_name, worktree_dir)
+        if ext:
+            loaded_extensions.append(ext)
+        else:
+            logging.warning(f"Extension not found: {ext_name}")
 
-        logging.info(f"Container {container_name} exists but is stopped, starting it")
-        return start_and_attach_container(container_name, command)
+    # Generate combined hash for image name
+    combined_hash = hashlib.sha256(
+        "".join(ext.hash for ext in loaded_extensions).encode()
+    ).hexdigest()[:12]
 
-    logging.info(f"Creating new persistent container {container_name}")
-    # Build rocker configuration
-    config = build_rocker_config(repo_spec, force=force, nocache=nocache)
+    image_name = f"renv/{repo_spec.repo}:{combined_hash}"
+    base_image = config.base_image
 
-    # Create persistent container first
-    create_result = run_rocker_command(config, ["tail", "-f", "/dev/null"], detached=True)
-    if create_result != 0:
-        return create_result
+    # Check if rebuild needed
+    if rebuild or should_rebuild_image(image_name, loaded_extensions):
+        # Ensure Buildx builder
+        if not ensure_buildx_builder(builder_name):
+            return 1
 
-    # Wait for container to be running before attaching
-    wait_result = _wait_for_container_running(container_name, max_wait=60)
-    if wait_result != 0:
-        return wait_result
+        # Generate build files
+        generate_dockerfile(loaded_extensions, base_image, worktree_dir)
+        generate_bake_file(loaded_extensions, base_image, platforms, worktree_dir)
 
-    # Fix the .git file to point to container paths for git worktree
-    fix_git_cmd = [
-        "/bin/bash",
-        "-c",
-        f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}' > /workspace/{repo_spec.repo}/.git",
-    ]
-    fix_result = subprocess.run(
-        ["docker", "exec", container_name] + fix_git_cmd,
-        capture_output=True,
-        text=True,
-        check=False,
+        # Build image
+        if not build_image_with_bake(worktree_dir, builder_name):
+            return 1
+
+        logging.info(f"Built image: {image_name}")
+
+    # Generate compose file
+    generate_compose_file(
+        repo_spec, loaded_extensions, image_name, worktree_dir, worktree_dir, repo_dir
     )
-    if fix_result.returncode != 0:
-        logging.warning(f"Failed to fix git file: {fix_result.stderr}")
 
-    # Attach to the container
-    return attach_to_container(container_name, command)
+    # Run environment
+    return run_compose_service(worktree_dir, repo_spec, command)
 
 
-def _wait_for_container_running(container_name: str, max_wait: int = 30) -> int:
-    """Wait for container to be running, return 0 on success, 1 on timeout"""
-    wait_time = 0
-    while wait_time < max_wait:
-        if container_running(container_name):
-            return 0
-        time.sleep(1)
-        wait_time += 1
+def cmd_launch(args) -> int:
+    """Launch command implementation."""
+    repo_spec = RepoSpec.parse(args.repo_spec)
+    return launch_environment(
+        repo_spec=repo_spec,
+        extensions=args.extensions or [],
+        command=args.command if args.command else None,
+        rebuild=args.rebuild,
+        no_gui=args.no_gui,
+        no_gpu=args.no_gpu,
+        platforms=args.platforms.split(",") if args.platforms else None,
+        builder_name=args.builder,
+    )
 
-    logging.error(f"Container {container_name} failed to start after {max_wait} seconds")
+
+def cmd_list(args) -> int:  # pylint: disable=unused-argument
+    """List active environments."""
+    containers = list_active_containers()
+    if not containers:
+        print("No active environments found.")
+        return 0
+
+    print("Active environments:")
+    for container in containers:
+        print(f"  {container['name']}: {container['status']}")
+    return 0
+
+
+def cmd_destroy(args) -> int:
+    """Destroy environment command."""
+    repo_spec = RepoSpec.parse(args.repo_spec)
+    success = destroy_environment(repo_spec)
+    return 0 if success else 1
+
+
+def cmd_prune(args) -> int:  # pylint: disable=unused-argument
+    """Prune unused containers and images."""
+    try:
+        # Remove stopped containers
+        subprocess.run(["docker", "container", "prune", "-f"], check=True)
+        # Remove unused images
+        subprocess.run(["docker", "image", "prune", "-f"], check=True)
+        # Remove build cache
+        subprocess.run(["docker", "buildx", "prune", "-f"], check=True)
+        logging.info("Pruned unused Docker resources")
+        return 0
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to prune: {e}")
+        return 1
+
+
+def cmd_ext(args) -> int:
+    """Extension management command."""
+    ext_manager = ExtensionManager(get_cache_dir())
+
+    if args.ext_action == "list":
+        extensions = ext_manager.list_extensions()
+        print("Available extensions:")
+        for ext in extensions:
+            print(f"  {ext}")
+        return 0
+
+    # TODO: Implement add/remove functionality
+    logging.error("Extension add/remove not yet implemented")
     return 1
 
 
-def run_renv(args: Optional[List[str]] = None) -> int:
-    """Main entry point for renv"""
-    if args is None:
-        args = sys.argv[1:]
+def cmd_doctor(args) -> int:  # pylint: disable=unused-argument
+    """Run environment diagnostics."""
+    checks = [
+        (
+            "Docker",
+            lambda: subprocess.run(["docker", "--version"], capture_output=True, check=True),
+        ),
+        (
+            "Docker Compose",
+            lambda: subprocess.run(
+                ["docker", "compose", "version"], capture_output=True, check=True
+            ),
+        ),
+        (
+            "Docker Buildx",
+            lambda: subprocess.run(
+                ["docker", "buildx", "version"], capture_output=True, check=True
+            ),
+        ),
+        ("Git", lambda: subprocess.run(["git", "--version"], capture_output=True, check=True)),
+    ]
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    all_good = True
+    for name, check_func in checks:
+        try:
+            check_func()
+            print(f"✓ {name}")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print(f"✗ {name}")
+            all_good = False
 
+    return 0 if all_good else 1
+
+
+def main() -> int:
+    """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Rocker Environment Manager - Seamless multi-repo development with git worktrees and rocker containers",
+        description="A development environment launcher using Docker, Git worktrees, and Buildx/Bake",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  renv blooop/test_renv@main
+  renv blooop/test_renv@feature/foo
+  renv blooop/test_renv@main#src
+  renv blooop/test_renv git status
+  renv blooop/test_renv@dev "bash -c 'git pull && make test'"
+""",
     )
 
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Launch command (default)
+    launch_parser = subparsers.add_parser("launch", help="Launch container environment")
+    launch_parser.add_argument(
+        "repo_spec", help="Repository specification: owner/repo[@branch][#subfolder]"
+    )
+    launch_parser.add_argument("command", nargs="*", help="Command to execute")
+    launch_parser.add_argument("--extensions", "-e", nargs="*", help="Extensions to enable")
+    launch_parser.add_argument("--rebuild", action="store_true", help="Force rebuild")
+    launch_parser.add_argument("--no-gui", action="store_true", help="Disable GUI support")
+    launch_parser.add_argument("--no-gpu", action="store_true", help="Disable GPU support")
+    launch_parser.add_argument("--builder", default="renv_builder", help="Buildx builder name")
+    launch_parser.add_argument("--platforms", help="Target platforms (comma-separated)")
+    launch_parser.set_defaults(func=cmd_launch)
+
+    # List command
+    list_parser = subparsers.add_parser("list", help="List active environments")
+    list_parser.set_defaults(func=cmd_list)
+
+    # Destroy command
+    destroy_parser = subparsers.add_parser("destroy", help="Destroy environment")
+    destroy_parser.add_argument("repo_spec", help="Repository specification")
+    destroy_parser.set_defaults(func=cmd_destroy)
+
+    # Prune command
+    prune_parser = subparsers.add_parser("prune", help="Prune unused resources")
+    prune_parser.set_defaults(func=cmd_prune)
+
+    # Extension command
+    ext_parser = subparsers.add_parser("ext", help="Manage extensions")
+    ext_parser.add_argument("ext_action", choices=["list", "add", "remove"])
+    ext_parser.add_argument("ext_name", nargs="?", help="Extension name")
+    ext_parser.set_defaults(func=cmd_ext)
+
+    # Doctor command
+    doctor_parser = subparsers.add_parser("doctor", help="Run diagnostics")
+    doctor_parser.set_defaults(func=cmd_doctor)
+
+    # Global options
     parser.add_argument(
-        "repo_spec", nargs="?", help="Repository specification: owner/repo[@branch][#subfolder]"
+        "--log-level",
+        choices=["debug", "info", "warn", "error"],
+        default="info",
+        help="Set log level",
     )
 
-    parser.add_argument("command", nargs="*", help="Command to execute in container")
-
-    parser.add_argument(
-        "--no-container", action="store_true", help="Set up worktree only, do not launch container"
-    )
-
-    parser.add_argument("--force", "-f", action="store_true", help="Force rebuild container")
-
-    parser.add_argument("--nocache", action="store_true", help="Rebuild container with no cache")
-
-    parser.add_argument("--install", action="store_true", help="Install shell autocompletion")
+    # If no command specified, treat first argument as repo_spec for launch
+    args = sys.argv[1:]
+    if (
+        args
+        and not args[0].startswith("-")
+        and args[0] not in ["list", "destroy", "prune", "ext", "doctor", "help"]
+    ):
+        args = ["launch"] + args
 
     parsed_args = parser.parse_args(args)
 
-    if parsed_args.install:
-        return install_shell_completion()
+    # Set up logging
+    log_level = getattr(logging, parsed_args.log_level.upper())
+    logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
-    # Interactive fuzzy finder if no repo_spec provided
-    if not parsed_args.repo_spec:
-        selected = fuzzy_select_repo()
-        if not selected:
-            logging.error("No repository selected. Usage: renv owner/repo[@branch]")
-            parser.print_help()
-            return 1
-        parsed_args.repo_spec = selected
-
-    try:
-        repo_spec = RepoSpec.parse(parsed_args.repo_spec)
-        logging.info(f"Working with: {repo_spec}")
-
-        return manage_container(
-            repo_spec=repo_spec,
-            command=parsed_args.command if parsed_args.command else None,
-            force=parsed_args.force,
-            nocache=parsed_args.nocache,
-            no_container=parsed_args.no_container,
-        )
-
-    except ValueError as e:
-        logging.error(f"Invalid repository specification: {e}")
-        return 1
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Command failed: {e}")
-        return e.returncode
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        return 1
-
-
-def main():
-    """Entry point for the renv command"""
-    sys.exit(run_renv())
+    if hasattr(parsed_args, "func"):
+        return parsed_args.func(parsed_args)
+    parser.print_help()
+    return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
