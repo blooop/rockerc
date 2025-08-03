@@ -210,6 +210,16 @@ ENV PATH="/home/renv/.cargo/bin:$PATH"
             compose_fragment={},
         )
 
+        # Pixi package manager
+        extensions["pixi"] = Extension(
+            name="pixi",
+            dockerfile_content="""
+RUN curl -fsSL https://pixi.sh/install.sh | bash
+ENV PATH="/home/renv/.pixi/bin:$PATH"
+""",
+            compose_fragment={},
+        )
+
         # Fuzzy finder
         extensions["fzf"] = Extension(
             name="fzf",
@@ -329,22 +339,39 @@ def setup_worktree(repo_spec: RepoSpec) -> Path:
 
     if not worktree_dir.exists():
         logging.info(f"Creating worktree for branch: {repo_spec.branch}")
-        
+
         # Check if branch exists, if not create it
         try:
             # Try to create worktree with existing branch
             subprocess.run(
-                ["git", "-C", str(repo_dir), "worktree", "add", str(worktree_dir), repo_spec.branch],
+                [
+                    "git",
+                    "-C",
+                    str(repo_dir),
+                    "worktree",
+                    "add",
+                    str(worktree_dir),
+                    repo_spec.branch,
+                ],
                 check=True,
             )
         except subprocess.CalledProcessError:
             # Branch doesn't exist, create new branch and worktree
             logging.info(f"Branch {repo_spec.branch} doesn't exist, creating new branch")
             subprocess.run(
-                ["git", "-C", str(repo_dir), "worktree", "add", "-b", repo_spec.branch, str(worktree_dir)],
+                [
+                    "git",
+                    "-C",
+                    str(repo_dir),
+                    "worktree",
+                    "add",
+                    "-b",
+                    repo_spec.branch,
+                    str(worktree_dir),
+                ],
                 check=True,
             )
-        
+
         time.sleep(0.1)  # Allow filesystem to sync
     else:
         logging.info(f"Worktree already exists: {worktree_dir}")
@@ -810,12 +837,15 @@ def launch_environment(config: LaunchConfig) -> int:
     # Load extension definitions
     ext_manager = ExtensionManager(get_cache_dir())
     loaded_extensions = []
+    print(f"Loading extensions: {', '.join(all_extensions)}")
     for ext_name in all_extensions:
         ext = ext_manager.get_extension(ext_name, worktree_dir)
         if ext:
             loaded_extensions.append(ext)
+            print(f"✓ Loaded extension: {ext_name}")
         else:
             logging.warning(f"Extension not found: {ext_name}")
+            print(f"✗ Extension not found: {ext_name}")
 
     # Generate combined hash for image name
     combined_hash = hashlib.sha256(
@@ -897,9 +927,9 @@ def cmd_list(args) -> int:  # pylint: disable=unused-argument
 def cmd_install(args) -> int:  # pylint: disable=unused-argument
     """Install shell completion scripts."""
     import os  # pylint: disable=reimported,redefined-outer-name
-    
+
     # Bash completion script
-    bash_completion = '''# renv bash completion
+    bash_completion = """# renv bash completion
 _renv_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
@@ -920,10 +950,10 @@ _renv_complete() {
     fi
 }
 complete -F _renv_complete renv
-'''
-    
-    # Zsh completion script  
-    zsh_completion = '''#compdef renv
+"""
+
+    # Zsh completion script
+    zsh_completion = """#compdef renv
 _renv() {
     local context state line
     typeset -A opt_args
@@ -957,10 +987,10 @@ _renv_repos() {
 }
 
 _renv "$@"
-'''
+"""
 
     # Fish completion script
-    fish_completion = '''# renv fish completion
+    fish_completion = """# renv fish completion
 complete -c renv -f
 
 # Commands
@@ -983,54 +1013,54 @@ if test -d ~/.renv/workspaces
         complete -c renv -a "$repo" -d "Repository"
     end
 end
-'''
+"""
 
     # Detect shell and install appropriate completion
-    shell = os.environ.get('SHELL', '').split('/')[-1]
-    home = os.path.expanduser('~')
-    
+    shell = os.environ.get("SHELL", "").split("/")[-1]
+    home = os.path.expanduser("~")
+
     success = False
-    
-    if shell == 'bash':
+
+    if shell == "bash":
         # Install bash completion
         bash_completion_dir = f"{home}/.bash_completion.d"
         os.makedirs(bash_completion_dir, exist_ok=True)
         completion_file = f"{bash_completion_dir}/renv"
-        
-        with open(completion_file, 'w', encoding='utf-8') as f:
+
+        with open(completion_file, "w", encoding="utf-8") as f:
             f.write(bash_completion)
-        
+
         print(f"✓ Bash completion installed to {completion_file}")
         print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
         success = True
-        
-    elif shell == 'zsh':
+
+    elif shell == "zsh":
         # Install zsh completion
         zsh_completion_dir = f"{home}/.zsh/completions"
         os.makedirs(zsh_completion_dir, exist_ok=True)
         completion_file = f"{zsh_completion_dir}/_renv"
-        
-        with open(completion_file, 'w', encoding='utf-8') as f:
+
+        with open(completion_file, "w", encoding="utf-8") as f:
             f.write(zsh_completion)
-            
+
         print(f"✓ Zsh completion installed to {completion_file}")
         print("Add 'fpath=(~/.zsh/completions $fpath)' to your ~/.zshrc if not already present")
         print("Run 'autoload -U compinit && compinit' or restart your terminal")
         success = True
-        
-    elif shell == 'fish':
+
+    elif shell == "fish":
         # Install fish completion
         fish_completion_dir = f"{home}/.config/fish/completions"
         os.makedirs(fish_completion_dir, exist_ok=True)
         completion_file = f"{fish_completion_dir}/renv.fish"
-        
-        with open(completion_file, 'w', encoding='utf-8') as f:
+
+        with open(completion_file, "w", encoding="utf-8") as f:
             f.write(fish_completion)
-            
+
         print(f"✓ Fish completion installed to {completion_file}")
         print("Restart your fish shell to enable completion")
         success = True
-        
+
     else:
         print(f"✗ Unknown shell: {shell}")
         print("Supported shells: bash, zsh, fish")
@@ -1041,7 +1071,7 @@ end
         print(zsh_completion)
         print("\nFish completion script:")
         print(fish_completion)
-    
+
     return 0 if success else 1
 
 
@@ -1331,18 +1361,38 @@ Notes:
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Launch command (default)
-    launch_parser = subparsers.add_parser("launch", help="Launch container for the given repo and branch (default behavior)")
+    launch_parser = subparsers.add_parser(
+        "launch", help="Launch container for the given repo and branch (default behavior)"
+    )
     launch_parser.add_argument(
         "repo_spec", help="Repository specification: owner/repo[@branch][#subfolder]"
     )
     launch_parser.add_argument("command", nargs="*", help="Command to execute")
     launch_parser.add_argument("--extensions", "-e", nargs="*", help="Extensions to enable")
-    launch_parser.add_argument("--rebuild", action="store_true", help="Force rebuild of container and extensions, even if cached")
-    launch_parser.add_argument("--nocache", action="store_true", help="Disable use of Buildx cache (useful for clean debugging)")
-    launch_parser.add_argument("--no-gui", action="store_true", help="Disable X11 socket mounting and GUI support")
-    launch_parser.add_argument("--no-gpu", action="store_true", help="Disable GPU passthrough and NVIDIA runtime")
-    launch_parser.add_argument("--builder", default="renv_builder", help="Use a custom Buildx builder name (default: renv_builder)")
-    launch_parser.add_argument("--platforms", help="Target platforms for Buildx (e.g. linux/amd64,linux/arm64)")
+    launch_parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Force rebuild of container and extensions, even if cached",
+    )
+    launch_parser.add_argument(
+        "--nocache",
+        action="store_true",
+        help="Disable use of Buildx cache (useful for clean debugging)",
+    )
+    launch_parser.add_argument(
+        "--no-gui", action="store_true", help="Disable X11 socket mounting and GUI support"
+    )
+    launch_parser.add_argument(
+        "--no-gpu", action="store_true", help="Disable GPU passthrough and NVIDIA runtime"
+    )
+    launch_parser.add_argument(
+        "--builder",
+        default="renv_builder",
+        help="Use a custom Buildx builder name (default: renv_builder)",
+    )
+    launch_parser.add_argument(
+        "--platforms", help="Target platforms for Buildx (e.g. linux/amd64,linux/arm64)"
+    )
     launch_parser.set_defaults(func=cmd_launch)
 
     # List command
@@ -1376,36 +1426,31 @@ Notes:
     parser.add_argument(
         "--install",
         action="store_true",
-        help="Install shell auto-completion script (bash/zsh/fish)"
+        help="Install shell auto-completion script (bash/zsh/fish)",
     )
     parser.add_argument(
         "--rebuild",
         action="store_true",
-        help="Force rebuild of container and extensions, even if cached"
+        help="Force rebuild of container and extensions, even if cached",
     )
     parser.add_argument(
         "--nocache",
         action="store_true",
-        help="Disable use of Buildx cache (useful for clean debugging)"
+        help="Disable use of Buildx cache (useful for clean debugging)",
     )
     parser.add_argument(
-        "--no-gui",
-        action="store_true",
-        help="Disable X11 socket mounting and GUI support"
+        "--no-gui", action="store_true", help="Disable X11 socket mounting and GUI support"
     )
     parser.add_argument(
-        "--no-gpu",
-        action="store_true",
-        help="Disable GPU passthrough and NVIDIA runtime"
+        "--no-gpu", action="store_true", help="Disable GPU passthrough and NVIDIA runtime"
     )
     parser.add_argument(
         "--builder",
         default="renv_builder",
-        help="Use a custom Buildx builder name (default: renv_builder)"
+        help="Use a custom Buildx builder name (default: renv_builder)",
     )
     parser.add_argument(
-        "--platforms",
-        help="Target platforms for Buildx (e.g. linux/amd64,linux/arm64)"
+        "--platforms", help="Target platforms for Buildx (e.g. linux/amd64,linux/arm64)"
     )
     parser.add_argument(
         "--log-level",
@@ -1458,8 +1503,14 @@ Notes:
             i += 1
 
         # Rebuild args in new format: [global_flags] launch [launch_flags] repo_spec [command]
-        global_flags = [arg for arg in remaining_args if arg.startswith("--log-level") or arg == "--install"]
-        other_args = [arg for arg in remaining_args if not arg.startswith("--log-level") and arg != "--install"]
+        global_flags = [
+            arg for arg in remaining_args if arg.startswith("--log-level") or arg == "--install"
+        ]
+        other_args = [
+            arg
+            for arg in remaining_args
+            if not arg.startswith("--log-level") and arg != "--install"
+        ]
 
         if other_args:
             args = global_flags + ["launch"] + launch_flags + other_args
