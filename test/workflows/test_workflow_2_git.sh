@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 set -e
-cd /tmp
-
 
 echo "Running: renv blooop/test_renv and confirming the git status works as expected"
 renv blooop/test_renv git status

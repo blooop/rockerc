@@ -11,7 +11,7 @@ def test_workflow_1_pwd():
     output = result.stdout.decode() + result.stderr.decode()
     # Add custom asserts for this workflow as needed
     assert result.returncode in (0, 1), f"Workflow 1 pwd failed: {output}"
-    assert "On branch" in output, "Expected git status 'On branch' not found in workflow 1 output"
+    assert "/workspace/test_renv" in output, "Expected working directory '/workspace/test_renv' not found in workflow 1 output"
 
 
 def test_workflow_2_git():
