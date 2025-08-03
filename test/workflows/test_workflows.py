@@ -21,6 +21,10 @@ def test_workflow_2_git():
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode in (0, 1), f"Workflow 2 git failed: {output}"
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 2 output"
+    # Fail if workspace is dirty
+    dirty_indicators = ["Changes not staged for commit", "Untracked files", "modified:", "deleted:", "added:"]
+    for indicator in dirty_indicators:
+        assert indicator not in output, f"Workspace is dirty: found '{indicator}' in git status output: {output}"
 
 
 def test_workflow_3_cmd():
