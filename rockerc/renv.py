@@ -1243,9 +1243,9 @@ def prune_all() -> int:
 
         # Get all renv-related containers and remove them
         try:
-            # Find containers with renv-related project names
+            # Find all containers
             result = subprocess.run(
-                ["docker", "ps", "-aq", "--filter", "label=com.docker.compose.project"],
+                ["docker", "ps", "-aq"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1253,7 +1253,6 @@ def prune_all() -> int:
             if result.stdout.strip():
                 container_ids = result.stdout.strip().split("\n")
                 for container_id in container_ids:
-                    # Check if container name matches renv patterns
                     inspect_result = subprocess.run(
                         ["docker", "inspect", "--format", "{{.Name}}", container_id],
                         capture_output=True,
@@ -1262,8 +1261,15 @@ def prune_all() -> int:
                     )
                     if inspect_result.stdout.strip():
                         container_name = inspect_result.stdout.strip().lstrip("/")
-                        # Remove containers that match renv naming patterns
-                        if any(pattern in container_name for pattern in ["renv-", "-main", "-dev"]):
+                        # Remove containers that match renv/test naming patterns
+                        if (
+                            container_name.startswith("renv-")
+                            or container_name.startswith("test_renv-")
+                            or container_name.startswith("test_wtd-")
+                            or container_name.endswith("-main")
+                            or container_name.endswith("-dev")
+                            or "renv" in container_name
+                        ):
                             print(f"Removing container: {container_name}")
                             subprocess.run(
                                 ["docker", "stop", container_id], check=False, capture_output=True
@@ -1279,16 +1285,15 @@ def prune_all() -> int:
 
         # Get renv-related images and remove them
         try:
-            # Remove images with renv prefix
+            # Remove images with renv/test prefixes
             result = subprocess.run(
-                ["docker", "images", "--filter", "reference=renv/*", "-q"],
+                ["docker", "images", "-q"],
                 capture_output=True,
                 text=True,
                 check=False,
             )
             if result.stdout.strip():
                 image_ids = result.stdout.strip().split("\n")
-                # Get image names before removing
                 for image_id in image_ids:
                     name_result = subprocess.run(
                         ["docker", "inspect", "--format", "{{.RepoTags}}", image_id],
@@ -1297,13 +1302,18 @@ def prune_all() -> int:
                         check=False,
                     )
                     if name_result.stdout.strip():
-                        image_name = name_result.stdout.strip()
-                        print(f"Removing image: {image_name}")
-                        removed_images.append(image_name)
-
-                subprocess.run(
-                    ["docker", "rmi", "-f"] + image_ids, check=False, capture_output=True
-                )
+                        image_tags = name_result.stdout.strip()
+                        # Remove images that match renv/test naming patterns
+                        if (
+                            "renv/" in image_tags
+                            or "test_renv" in image_tags
+                            or "test_wtd" in image_tags
+                        ):
+                            print(f"Removing image: {image_tags}")
+                            removed_images.append(image_tags)
+                            subprocess.run(
+                                ["docker", "rmi", "-f", image_id], check=False, capture_output=True
+                            )
         except subprocess.CalledProcessError:
             pass
 
