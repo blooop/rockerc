@@ -42,7 +42,7 @@ echo "=== STEP 3: TEST PIXI EXTENSION LOADING ==="
 echo "Testing pixi extension loading with test repository..."
 
 # Capture output to check if pixi extension is loaded
-LOAD_OUTPUT=$(timeout 60 renv --rebuild -e pixi blooop/test_renv@main echo "pixi extension test" 2>&1 || true)
+LOAD_OUTPUT=$(timeout 60 renv --rebuild -e pixi blooop/test_wtd@main echo "pixi extension test" 2>&1 || true)
 
 # Check if pixi extension was loaded
 if echo "$LOAD_OUTPUT" | grep -q "✓ Loaded extension: pixi"; then
@@ -66,7 +66,7 @@ fi
 
 # Test that pixi is available in the container
 echo "=== STEP 4: TEST PIXI AVAILABILITY IN CONTAINER ==="
-PIXI_TEST_OUTPUT=$(timeout 60 renv -e pixi blooop/test_renv@main which pixi 2>&1 || true)
+PIXI_TEST_OUTPUT=$(timeout 60 renv -e pixi blooop/test_wtd@main which pixi 2>&1 || true)
 
 if echo "$PIXI_TEST_OUTPUT" | grep -q "pixi"; then
     echo "✓ pixi is available in container and shows version"
@@ -79,7 +79,7 @@ fi
 
 # Test basic pixi functionality
 echo "=== STEP 5: TEST PIXI BASIC FUNCTIONALITY ==="
-PIXI_FUNC_OUTPUT=$(timeout 60 renv -e pixi blooop/test_renv@main pixi --help 2>&1 || true)
+PIXI_FUNC_OUTPUT=$(timeout 60 renv -e pixi blooop/test_wtd@main pixi --help 2>&1 || true)
 
 if echo "$PIXI_FUNC_OUTPUT" | grep -q "usage"; then
     echo "✓ pixi help command works correctly"
@@ -92,7 +92,7 @@ fi
 
 echo "=== STEP 6: TEST PIXI WITH OTHER EXTENSIONS ==="
 # Test that pixi works with other common extensions
-MULTI_EXT_OUTPUT=$(timeout 60 renv -e git -e pixi blooop/test_renv@main echo "multi-extension test" 2>&1 || true)
+MULTI_EXT_OUTPUT=$(timeout 60 renv -e git -e pixi blooop/test_wtd@main echo "multi-extension test" 2>&1 || true)
 
 if echo "$MULTI_EXT_OUTPUT" | grep -q "✓ Loaded extension: git" && echo "$MULTI_EXT_OUTPUT" | grep -q "✓ Loaded extension: pixi"; then
     echo "✓ pixi extension works with other extensions"

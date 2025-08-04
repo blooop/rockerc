@@ -20,8 +20,8 @@ This checklist summarizes all requirements and features for building the `renv` 
 - [ ] If image not built, build it; if not running, start and attach; if running, attach
 - [ ] Enter correct folder for git to work with worktrees
 - [ ] Support switching branches and multiple parallel worktrees/containers
-- [ ] Allow running commands directly in the container (e.g., `renv blooop/test_renv git status`)
-- [ ] Support multi-stage commands (e.g., `renv blooop/test_renv "bash -c 'git status; pwd; ls -l'"`)
+- [ ] Allow running commands directly in the container (e.g., `renv blooop/test_wtd git status`)
+- [ ] Support multi-stage commands (e.g., `renv blooop/test_wtd "bash -c 'git status; pwd; ls -l'"`)
 - [ ] Pass last arguments directly to rocker/docker
 
 ## 3. Default Extensions & Blacklist

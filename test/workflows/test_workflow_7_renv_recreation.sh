@@ -8,8 +8,8 @@ echo
 
 # Step 1: Test normal operation
 echo "=== STEP 1: Normal renv operation ==="
-echo "Running: renv blooop/test_renv date"
-renv blooop/test_renv date
+echo "Running: renv blooop/test_wtd date"
+renv blooop/test_wtd date
 echo "SUCCESS: Initial renv operation completed"
 echo
 
@@ -22,15 +22,15 @@ echo
 
 # Step 3: Test renv recreation and operation
 echo "=== STEP 3: Testing renv recreation ==="
-echo "Running: renv blooop/test_renv date (should recreate everything)"
-renv blooop/test_renv date
+echo "Running: renv blooop/test_wtd date (should recreate everything)"
+renv blooop/test_wtd date
 echo "SUCCESS: renv recreated and operated correctly"
 echo
 
 # Step 4: Test that subsequent operations work normally
 echo "=== STEP 4: Testing subsequent operations ==="
-echo "Running: renv blooop/test_renv git status"
-renv blooop/test_renv git status
+echo "Running: renv blooop/test_wtd git status"
+renv blooop/test_wtd git status
 echo "SUCCESS: Subsequent operations work correctly"
 echo
 
