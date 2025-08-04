@@ -2,6 +2,7 @@
 set -e
 cd /tmp
 
+renv --prune blooop/test_renv
 
 echo "Running: renv blooop/test_renv touch persistent.txt to confirm that persistent files work as expected"
 renv blooop/test_renv touch persistent.txt

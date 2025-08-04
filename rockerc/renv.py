@@ -672,8 +672,9 @@ def build_image_with_bake(
             cmd.append("--load")
         if nocache:
             cmd.append("--no-cache")
+        # Always build the 'final' target, never 'default'
         cmd.append("final")
-
+        print(f"Building with bake: {' '.join(cmd)}", flush=True)
         logging.info(f"Building with bake: {' '.join(cmd)}")
         result = subprocess.run(cmd, cwd=build_dir, check=True)
         return result.returncode == 0
@@ -1275,11 +1276,11 @@ def prune_all() -> int:
         except subprocess.CalledProcessError:
             pass
 
-        # Get renv-related images and remove them
+        # Get renv-managed images and remove them
         try:
-            # Remove images with renv/test prefixes
+            # Only prune images with the renv.managed label
             result = subprocess.run(
-                ["docker", "images", "-q"],
+                ["docker", "images", "-q", "--filter", "label=renv.managed=true"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1295,17 +1296,11 @@ def prune_all() -> int:
                     )
                     if name_result.stdout.strip():
                         image_tags = name_result.stdout.strip()
-                        # Remove images that match renv/test naming patterns
-                        if (
-                            "renv/" in image_tags
-                            or "test_renv" in image_tags
-                            or "test_wtd" in image_tags
-                        ):
-                            print(f"Removing image: {image_tags}")
-                            removed_images.append(image_tags)
-                            subprocess.run(
-                                ["docker", "rmi", "-f", image_id], check=False, capture_output=True
-                            )
+                        print(f"Removing image: {image_tags}")
+                        removed_images.append(image_tags)
+                        subprocess.run(
+                            ["docker", "rmi", "-f", image_id], check=False, capture_output=True
+                        )
         except subprocess.CalledProcessError:
             pass
 
