@@ -1,10 +1,10 @@
 #!/bin/bash
 
-mv rockerc "$1"
-mv rockerc.deps.yaml "$1".deps.yaml
+mv worktree_docker "$1"
+mv worktree_docker.deps.yaml "$1".deps.yaml
 
 # change project name in all files
-find . \( -type d -name .git -prune \) -o \( -type f -not -name 'tasks.json' -not -name 'update_from_template.sh'  \) -print0 | xargs -0 sed -i "s/rockerc/$1/g"
+find . \( -type d -name .git -prune \) -o \( -type f -not -name 'tasks.json' -not -name 'update_from_template.sh'  \) -print0 | xargs -0 sed -i "s/worktree_docker/$1/g"
 
 # author name
 if [ -n "$2" ]; then

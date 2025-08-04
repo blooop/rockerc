@@ -1,8 +1,8 @@
 [project]
-name = "rockerc"
+name = "worktree_docker"
 version = "0.7.1"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
-description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
+description = "A tool to parse worktree_docker.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
 license = "MIT"
 
@@ -15,11 +15,11 @@ dependencies = [
 ]
 
 [tool.pixi.pypi-dependencies]
-rockerc = { path = ".", editable = true }
+worktree_docker = { path = ".", editable = true }
 
 [project.urls]
-Source = "https://github.com/blooop/rockerc"
-Home = "https://github.com/blooop/rockerc"
+Source = "https://github.com/blooop/worktree_docker"
+Home = "https://github.com/blooop/worktree_docker"
 
 [tool.pixi.project]
 channels = ["conda-forge"]
@@ -50,7 +50,7 @@ test = [
   "ruff>=0.5.0,<=0.12.1",
   "coverage>=7.5.4,<=7.9.1",
 ]
-#These are a list of externally maintained rocker extensions. use pip install rockerc[extensions] to install all of them
+#These are a list of externally maintained rocker extensions. use pip install worktree_docker[extensions] to install all of them
 extensions = [
   "pixi-rocker>=0.0.9",
   "palanteer-rocker>=0.0.1",
@@ -66,12 +66,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-include = ["rockerc"]
+include = ["worktree_docker"]
 
 [project.scripts]
-rockerc = "rockerc.rockerc:run_rockerc"
-renv = "rockerc.renv:main"
-dwt = "rockerc.renv:main"
+worktree_docker = "worktree_docker.worktree_docker:run_worktree_docker"
+renv = "worktree_docker.renv:main"
+dwt = "worktree_docker.renv:main"
 
 # Environments
 [tool.pixi.environments]

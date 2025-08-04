@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-rockerc is a Python tool that provides a configuration-file approach to using [rocker](https://github.com/osrf/rocker) - a Docker container tool for robotics development. It reads `rockerc.yaml` configuration files and passes the arguments to rocker to simplify container management.
+worktree_docker is a Python tool that provides a configuration-file approach to using [rocker](https://github.com/osrf/rocker) - a Docker container tool for robotics development. It reads `worktree_docker.yaml` configuration files and passes the arguments to rocker to simplify container management.
 
 ## Development Commands
 
@@ -32,17 +32,17 @@ This project uses [Pixi](https://pixi.sh) for package and environment management
 
 ## Code Architecture
 
-### Core Module: `rockerc/rockerc.py`
+### Core Module: `worktree_docker/worktree_docker.py`
 
 **Key Functions:**
 - `yaml_dict_to_args(d: dict) -> str` - Converts YAML config to rocker command arguments
-- `collect_arguments(path: str = ".") -> dict` - Searches for and merges rockerc.yaml files
+- `collect_arguments(path: str = ".") -> dict` - Searches for and merges worktree_docker.yaml files
 - `build_docker(dockerfile_path: str = ".") -> str` - Builds Docker images from Dockerfiles
 - `save_rocker_cmd(split_cmd: str)` - Generates Dockerfile.rocker and run_dockerfile.sh
-- `run_rockerc(path: str = ".")` - Main entry point that orchestrates the workflow
+- `run_worktree_docker(path: str = ".")` - Main entry point that orchestrates the workflow
 
 **Configuration Flow:**
-1. Searches for `rockerc.yaml` files in the specified path
+1. Searches for `worktree_docker.yaml` files in the specified path
 2. Merges configurations if multiple files found
 3. Handles special cases for dockerfile builds vs image pulls
 4. Converts configuration to rocker command line arguments
@@ -50,7 +50,7 @@ This project uses [Pixi](https://pixi.sh) for package and environment management
 
 ### Configuration Files
 
-**rockerc.yaml structure:**
+**worktree_docker.yaml structure:**
 ```yaml
 image: ubuntu:22.04  # Base Docker image
 # OR
@@ -66,7 +66,7 @@ args:  # List of rocker extensions/arguments
   - pixi
 ```
 
-**rockerc.deps.yaml** - Defines dependencies for rocker extensions:
+**worktree_docker.deps.yaml** - Defines dependencies for rocker extensions:
 - `apt_tools` - System packages to install
 - `pip_language-toolchain` - Python packages for development
 
@@ -74,8 +74,8 @@ args:  # List of rocker extensions/arguments
 
 - If `dockerfile` is specified, automatically builds the image and removes `pull` from args
 - The `--create-dockerfile` flag generates `Dockerfile.rocker` and `run_dockerfile.sh`
-- Supports recursive search for multiple `rockerc.yaml` files
-- Entry point script: `rockerc` command maps to `rockerc.rockerc:run_rockerc`
+- Supports recursive search for multiple `worktree_docker.yaml` files
+- Entry point script: `worktree_docker` command maps to `worktree_docker.worktree_docker:run_worktree_docker`
 
 ## Dependencies
 

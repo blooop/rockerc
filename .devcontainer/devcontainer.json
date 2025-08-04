@@ -1,5 +1,5 @@
 {
-	"name": "rockerc",
+	"name": "worktree_docker",
 	"build": {
 		"dockerfile": "Dockerfile",
 		"context": ".."

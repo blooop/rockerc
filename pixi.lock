@@ -1283,7 +1283,7 @@ packages:
   - pytest ; extra == 'test'
   requires_python: '>=3.0'
 - pypi: ./
-  name: rockerc
+  name: worktree_docker
   version: 0.7.1
   sha256: c730172a063ebd979dd068c196e6a7757f94868a892c89cc0e2efe3aca00545f
   requires_dist:

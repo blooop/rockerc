@@ -10,8 +10,8 @@ from importlib import metadata
 
 copyright = "2023, Austin Gregg-Smith"  # pylint:disable=redefined-builtin
 author = "Austin Gregg-Smith"
-release = metadata.version("rockerc")
-project = f"rockerc {release}"
+release = metadata.version("worktree_docker")
+project = f"worktree_docker {release}"
 
 
 # -- General configuration ---------------------------------------------------
@@ -29,7 +29,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 html_theme = "sphinx_rtd_theme"
 # html_static_path = ["_static"]
 
-autoapi_dirs = ["../rockerc"]
+autoapi_dirs = ["../worktree_docker"]
 autoapi_ignore = ["*example_*", "*example*", "*experimental*"]
 
 

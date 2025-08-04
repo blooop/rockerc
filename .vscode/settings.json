@@ -4,7 +4,7 @@
 	"python.testing.pytestEnabled": true,
 	"files.exclude": {
 		"**/__pycache__/**": true,
-		"/home/vscode/.local/lib/python3.10/site-packages/rockerc/**": true
+		"/home/vscode/.local/lib/python3.10/site-packages/worktree_docker/**": true
 	},
 	"python.analysis.autoImportCompletions": false //vscode gets it wrong more than right and mostly gets in the way
 }

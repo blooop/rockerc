@@ -1,6 +1,6 @@
 from unittest import TestCase
 import pytest
-from rockerc.rockerc import yaml_dict_to_args, collect_arguments
+from worktree_docker.worktree_docker import yaml_dict_to_args, collect_arguments
 
 
 class TestBasicClass(TestCase):

@@ -6,7 +6,7 @@ import pytest
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
-from rockerc.renv import (
+from worktree_docker.renv import (
     RepoSpec,
     Extension,
     RenvConfig,
@@ -224,19 +224,19 @@ class TestPathHelpers:
 
     def test_get_workspaces_dir(self):
         """Test workspaces directory."""
-        with patch("rockerc.renv.get_cache_dir", return_value=Path("/cache")):
+        with patch("worktree_docker.renv.get_cache_dir", return_value=Path("/cache")):
             assert get_workspaces_dir() == Path("/cache/workspaces")
 
     def test_get_repo_dir(self):
         """Test repository directory path."""
         spec = RepoSpec("owner", "repo", "main")
-        with patch("rockerc.renv.get_workspaces_dir", return_value=Path("/workspaces")):
+        with patch("worktree_docker.renv.get_workspaces_dir", return_value=Path("/workspaces")):
             assert get_repo_dir(spec) == Path("/workspaces/owner/repo")
 
     def test_get_worktree_dir(self):
         """Test worktree directory path."""
         spec = RepoSpec("owner", "repo", "feature/new")
-        with patch("rockerc.renv.get_repo_dir", return_value=Path("/repo")):
+        with patch("worktree_docker.renv.get_repo_dir", return_value=Path("/repo")):
             assert get_worktree_dir(spec) == Path("/repo/worktree-feature-new")
 
 
@@ -278,7 +278,7 @@ class TestGitOperations:
         assert "fetch" in call_args
         assert "--all" in call_args
 
-    @patch("rockerc.renv.setup_bare_repo")
+    @patch("worktree_docker.renv.setup_bare_repo")
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
     def test_setup_worktree_create(self, mock_exists, mock_run, mock_setup_bare):
@@ -594,7 +594,7 @@ class TestComposeOperations:
             build_dir = Path(tmpdir) / "build-cache"
             build_dir.mkdir()
 
-            with patch("rockerc.renv.get_build_cache_dir", return_value=build_dir):
+            with patch("worktree_docker.renv.get_build_cache_dir", return_value=build_dir):
                 spec = RepoSpec("owner", "repo", "main")
                 result = destroy_environment(spec)
 
@@ -609,7 +609,7 @@ class TestComposeOperations:
 class TestCommands:
     """Test CLI command functions."""
 
-    @patch("rockerc.renv.launch_environment")
+    @patch("worktree_docker.renv.launch_environment")
     def test_cmd_launch(self, mock_launch):
         """Test launch command."""
         mock_launch.return_value = 0
@@ -635,7 +635,7 @@ class TestCommands:
         assert call_args.platforms == ["linux/amd64", "linux/arm64"]
         assert call_args.builder_name == "custom_builder"
 
-    @patch("rockerc.renv.list_active_containers")
+    @patch("worktree_docker.renv.list_active_containers")
     def test_cmd_list_empty(self, mock_list_containers):
         """Test list command with no containers."""
         mock_list_containers.return_value = []
@@ -644,7 +644,7 @@ class TestCommands:
         result = cmd_list(args)
         assert result == 0
 
-    @patch("rockerc.renv.list_active_containers")
+    @patch("worktree_docker.renv.list_active_containers")
     def test_cmd_list_with_containers(self, mock_list_containers):
         """Test list command with containers."""
         mock_list_containers.return_value = [
@@ -655,8 +655,8 @@ class TestCommands:
         result = cmd_list(args)
         assert result == 0
 
-    @patch("rockerc.renv.prune_all")
-    @patch("rockerc.renv.prune_repo_environment")
+    @patch("worktree_docker.renv.prune_all")
+    @patch("worktree_docker.renv.prune_repo_environment")
     def test_cmd_prune(self, mock_prune_repo, mock_prune_all):
         """Test prune command."""
         mock_prune_all.return_value = 0
@@ -676,7 +676,7 @@ class TestCommands:
         assert result == 0
         mock_prune_repo.assert_called_once()
 
-    @patch("rockerc.renv.ExtensionManager")
+    @patch("worktree_docker.renv.ExtensionManager")
     def test_cmd_ext_list(self, mock_ext_manager):
         """Test extension list command."""
         mock_manager = Mock()
@@ -713,7 +713,7 @@ class TestMainFunction:
     """Test main entry point."""
 
     @patch("sys.argv", ["renv", "blooop/test_renv@main"])
-    @patch("rockerc.renv.cmd_launch")
+    @patch("worktree_docker.renv.cmd_launch")
     def test_main_launch_command(self, mock_cmd_launch):
         """Test main function with launch command."""
         mock_cmd_launch.return_value = 0
@@ -723,7 +723,7 @@ class TestMainFunction:
         mock_cmd_launch.assert_called_once()
 
     @patch("sys.argv", ["renv", "--list"])
-    @patch("rockerc.renv.cmd_list")
+    @patch("worktree_docker.renv.cmd_list")
     def test_main_list_command(self, mock_cmd_list):
         """Test main function with list command."""
         mock_cmd_list.return_value = 0
@@ -766,9 +766,9 @@ class TestIntegration:
             config_file = worktree_dir / ".renv.yml"
             config_file.write_text("extensions: [git, x11]", encoding="utf-8")
 
-            with patch("rockerc.renv.get_cache_dir", return_value=cache_dir):
-                with patch("rockerc.renv.get_worktree_dir", return_value=worktree_dir):
-                    with patch("rockerc.renv.get_repo_dir", return_value=repo_dir):
+            with patch("worktree_docker.renv.get_cache_dir", return_value=cache_dir):
+                with patch("worktree_docker.renv.get_worktree_dir", return_value=worktree_dir):
+                    with patch("worktree_docker.renv.get_repo_dir", return_value=repo_dir):
                         spec = RepoSpec("owner", "repo", "main")
                         config = LaunchConfig(repo_spec=spec, extensions=["base"], rebuild=True)
                         result = launch_environment(config)
@@ -853,7 +853,7 @@ version = "0.1.0"
             assert "/root/.pixi/bin:/home/renv/.pixi/bin" in pixi_ext.dockerfile_content
 
     @patch("sys.argv", ["renv", "blooop/test_renv", "pixi", "--version"])
-    @patch("rockerc.renv.cmd_launch")
+    @patch("worktree_docker.renv.cmd_launch")
     def test_command_line_parsing_with_flags(self, mock_cmd_launch):
         """Test that flags in container commands are not parsed as renv flags."""
         mock_cmd_launch.return_value = 0
