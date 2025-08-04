@@ -788,7 +788,7 @@ class TestCommandParsing:
     @patch("subprocess.run")
     @patch("os.getuid", return_value=1000)
     @patch("os.getgid", return_value=1000)
-    def test_bash_command_parsing(self, mock_getgid, mock_getuid, mock_run):
+    def test_bash_command_parsing(self, _mock_getgid, _mock_getuid, mock_run):
         """Test that bash -c commands are parsed correctly."""
         mock_run.return_value = Mock(returncode=0)
 

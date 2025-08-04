@@ -1,0 +1,7 @@
+environment:
+  DISPLAY: "${DISPLAY}"
+  XAUTHORITY: "/tmp/.Xauth"
+volumes:
+  - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+  - "/tmp/.Xauth:/tmp/.Xauth:rw"
+network_mode: "host"

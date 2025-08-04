@@ -1,0 +1,3 @@
+volumes:
+  - "~/.gitconfig:/home/renv/.gitconfig:ro"
+  - "~/.ssh:/home/renv/.ssh:ro"
