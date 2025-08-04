@@ -205,8 +205,9 @@ RUN apt-get update && apt-get install -y \\
         extensions["uv"] = Extension(
             name="uv",
             dockerfile_content="""
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/home/renv/.cargo/bin:$PATH"
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \\
+    mv /root/.local/bin/uv /usr/local/bin/uv && \\
+    mv /root/.local/bin/uvx /usr/local/bin/uvx
 """,
             compose_fragment={},
         )
