@@ -1006,12 +1006,15 @@ def cmd_install(args) -> int:  # pylint: disable=unused-argument
     shell = os.environ.get("SHELL", "").split("/")[-1]
     home = os.path.expanduser("~")
     success = False
+    bash_script = bash_completion()
+    zsh_script = zsh_completion()
+    fish_script = fish_completion()
     if shell == "bash":
         bash_completion_dir = f"{home}/.bash_completion.d"
         os.makedirs(bash_completion_dir, exist_ok=True)
         completion_file = f"{bash_completion_dir}/wtd"
         with open(completion_file, "w", encoding="utf-8") as f:
-            f.write(bash_completion)
+            f.write(bash_script)
         print(f"✓ Bash completion installed to {completion_file}")
         print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
         success = True
@@ -1020,7 +1023,7 @@ def cmd_install(args) -> int:  # pylint: disable=unused-argument
         os.makedirs(zsh_completion_dir, exist_ok=True)
         completion_file = f"{zsh_completion_dir}/_wtd"
         with open(completion_file, "w", encoding="utf-8") as f:
-            f.write(zsh_completion)
+            f.write(zsh_script)
         print(f"✓ Zsh completion installed to {completion_file}")
         print("Add 'fpath=(~/.zsh/completions $fpath)' to your ~/.zshrc if not already present")
         print("Run 'autoload -U compinit && compinit' or restart your terminal")
@@ -1030,7 +1033,7 @@ def cmd_install(args) -> int:  # pylint: disable=unused-argument
         os.makedirs(fish_completion_dir, exist_ok=True)
         completion_file = f"{fish_completion_dir}/wtd.fish"
         with open(completion_file, "w", encoding="utf-8") as f:
-            f.write(fish_completion)
+            f.write(fish_script)
         print(f"✓ Fish completion installed to {completion_file}")
         print("Restart your fish shell to enable completion")
         success = True
@@ -1039,11 +1042,11 @@ def cmd_install(args) -> int:  # pylint: disable=unused-argument
         print("Supported shells: bash, zsh, fish")
         print("You can manually install completion scripts:")
         print("\nBash completion script:")
-        print(bash_completion)
+        print(bash_script)
         print("\nZsh completion script:")
-        print(zsh_completion)
+        print(zsh_script)
         print("\nFish completion script:")
-        print(fish_completion)
+        print(fish_script)
     return 0 if success else 1
 
 
