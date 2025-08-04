@@ -230,7 +230,9 @@ class TestPathHelpers:
     def test_get_repo_dir(self):
         """Test repository directory path."""
         spec = RepoSpec("owner", "repo", "main")
-        with patch("worktree_docker.worktree_docker.get_workspaces_dir", return_value=Path("/workspaces")):
+        with patch(
+            "worktree_docker.worktree_docker.get_workspaces_dir", return_value=Path("/workspaces")
+        ):
             assert get_repo_dir(spec) == Path("/workspaces/owner/repo")
 
     def test_get_worktree_dir(self):
@@ -594,7 +596,9 @@ class TestComposeOperations:
             build_dir = Path(tmpdir) / "build-cache"
             build_dir.mkdir()
 
-            with patch("worktree_docker.worktree_docker.get_build_cache_dir", return_value=build_dir):
+            with patch(
+                "worktree_docker.worktree_docker.get_build_cache_dir", return_value=build_dir
+            ):
                 spec = RepoSpec("owner", "repo", "main")
                 result = destroy_environment(spec)
 
@@ -767,8 +771,12 @@ class TestIntegration:
             config_file.write_text("extensions: [git, x11]", encoding="utf-8")
 
             with patch("worktree_docker.worktree_docker.get_cache_dir", return_value=cache_dir):
-                with patch("worktree_docker.worktree_docker.get_worktree_dir", return_value=worktree_dir):
-                    with patch("worktree_docker.worktree_docker.get_repo_dir", return_value=repo_dir):
+                with patch(
+                    "worktree_docker.worktree_docker.get_worktree_dir", return_value=worktree_dir
+                ):
+                    with patch(
+                        "worktree_docker.worktree_docker.get_repo_dir", return_value=repo_dir
+                    ):
                         spec = RepoSpec("owner", "repo", "main")
                         config = LaunchConfig(repo_spec=spec, extensions=["base"], rebuild=True)
                         result = launch_environment(config)

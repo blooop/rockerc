@@ -88,7 +88,11 @@ class worktree_dockerConfig:
 
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from repo directory."""
-        for config_file in [".worktree_docker.yml", ".worktree_docker.yaml", ".worktree_docker.json"]:
+        for config_file in [
+            ".worktree_docker.yml",
+            ".worktree_docker.yaml",
+            ".worktree_docker.json",
+        ]:
             config_path = self.repo_path / config_file
             if config_path.exists():
                 try:
@@ -150,7 +154,10 @@ RUN apt-get update && apt-get install -y \\
 RUN git config --global --add safe.directory '*'
 """,
             compose_fragment={
-                "volumes": ["~/.gitconfig:/home/worktree_docker/.gitconfig:ro", "~/.ssh:/home/worktree_docker/.ssh:ro"]
+                "volumes": [
+                    "~/.gitconfig:/home/worktree_docker/.gitconfig:ro",
+                    "~/.ssh:/home/worktree_docker/.ssh:ro",
+                ]
             },
         )
 
@@ -664,7 +671,10 @@ def should_rebuild_image(
 
 
 def build_image_with_bake(
-    build_dir: Path, builder_name: str = "worktree_docker_builder", load: bool = True, nocache: bool = False
+    build_dir: Path,
+    builder_name: str = "worktree_docker_builder",
+    load: bool = True,
+    nocache: bool = False,
 ) -> bool:
     """Build images using docker buildx bake."""
     try:
@@ -992,6 +1002,7 @@ def cmd_list(args) -> int:  # pylint: disable=unused-argument
 
 def cmd_install(args) -> int:  # pylint: disable=unused-argument
     import os  # pylint: disable=reimported,redefined-outer-name
+
     shell = os.environ.get("SHELL", "").split("/")[-1]
     home = os.path.expanduser("~")
     success = False
@@ -1065,7 +1076,13 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
         removed_images = []
         try:
             result = subprocess.run(
-                ["docker", "images", "--filter", f"reference=worktree_docker/{repo_spec.repo}*", "-q"],
+                [
+                    "docker",
+                    "images",
+                    "--filter",
+                    f"reference=worktree_docker/{repo_spec.repo}*",
+                    "-q",
+                ],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1356,9 +1373,7 @@ Clones and manages repositories in isolated git worktrees, builds cached contain
         return cmd_doctor(args)
 
     # Default to launch if no command given
-    if len(sys.argv) == 1 or (
-        len(sys.argv) == 2 and sys.argv[1] in ["-h", "--help"]
-    ):
+    if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] in ["-h", "--help"]):
         parser.print_help()
         return 0
 

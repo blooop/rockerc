@@ -1282,30 +1282,6 @@ packages:
   - importlib-metadata ; python_full_version < '3.8'
   - pytest ; extra == 'test'
   requires_python: '>=3.0'
-- pypi: ./
-  name: worktree_docker
-  version: 0.7.1
-  sha256: c730172a063ebd979dd068c196e6a7757f94868a892c89cc0e2efe3aca00545f
-  requires_dist:
-  - rocker>=0.2.17
-  - deps-rocker>=0.10
-  - off-your-rocker>=0.1.0
-  - pyyaml>=5
-  - iterfzf>=1.0.0
-  - black>=23,<=25.1.0 ; extra == 'test'
-  - pylint>=3.2.5,<=3.3.7 ; extra == 'test'
-  - pytest-cov>=4.1,<=6.2.1 ; extra == 'test'
-  - pytest>=7.4,<=8.4.1 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.135.20 ; extra == 'test'
-  - ruff>=0.5.0,<=0.12.1 ; extra == 'test'
-  - coverage>=7.5.4,<=7.9.1 ; extra == 'test'
-  - pixi-rocker>=0.0.9 ; extra == 'extensions'
-  - palanteer-rocker>=0.0.1 ; extra == 'extensions'
-  - lazygit-rocker>=0.0.1 ; extra == 'extensions'
-  - ghrocker==0.0.10 ; extra == 'extensions'
-  - groot-rocker==0.4.1 ; extra == 'extensions'
-  - cargo-rocker==0.0.3 ; extra == 'extensions'
-  editable: true
 - pypi: https://files.pythonhosted.org/packages/c3/56/edf942f7fdac5888094d9ffa303f12096f1a93eb46570bcf5f14c0c70880/ruff-0.11.12-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
   name: ruff
   version: 0.11.12
@@ -1365,3 +1341,27 @@ packages:
   - pysocks>=1.5.6,!=1.5.7,<2.0 ; extra == 'socks'
   - zstandard>=0.18.0 ; extra == 'zstd'
   requires_python: '>=3.9'
+- pypi: ./
+  name: worktree-docker
+  version: 0.7.1
+  sha256: 5abecf4b8867883ff4277c942bfecf46254e208ea869f3495c6664e362558444
+  requires_dist:
+  - rocker>=0.2.17
+  - deps-rocker>=0.10
+  - off-your-rocker>=0.1.0
+  - pyyaml>=5
+  - iterfzf>=1.0.0
+  - black>=23,<=25.1.0 ; extra == 'test'
+  - pylint>=3.2.5,<=3.3.7 ; extra == 'test'
+  - pytest-cov>=4.1,<=6.2.1 ; extra == 'test'
+  - pytest>=7.4,<=8.4.1 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.135.20 ; extra == 'test'
+  - ruff>=0.5.0,<=0.12.1 ; extra == 'test'
+  - coverage>=7.5.4,<=7.9.1 ; extra == 'test'
+  - pixi-rocker>=0.0.9 ; extra == 'extensions'
+  - palanteer-rocker>=0.0.1 ; extra == 'extensions'
+  - lazygit-rocker>=0.0.1 ; extra == 'extensions'
+  - ghrocker==0.0.10 ; extra == 'extensions'
+  - groot-rocker==0.4.1 ; extra == 'extensions'
+  - cargo-rocker==0.0.3 ; extra == 'extensions'
+  editable: true

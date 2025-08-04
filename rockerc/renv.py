@@ -87,7 +87,11 @@ class worktree_dockerConfig:
 
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from repo directory."""
-        for config_file in [".worktree_docker.yml", ".worktree_docker.yaml", ".worktree_docker.json"]:
+        for config_file in [
+            ".worktree_docker.yml",
+            ".worktree_docker.yaml",
+            ".worktree_docker.json",
+        ]:
             config_path = self.repo_path / config_file
             if config_path.exists():
                 try:
@@ -149,7 +153,10 @@ RUN apt-get update && apt-get install -y \\
 RUN git config --global --add safe.directory '*'
 """,
             compose_fragment={
-                "volumes": ["~/.gitconfig:/home/worktree_docker/.gitconfig:ro", "~/.ssh:/home/worktree_docker/.ssh:ro"]
+                "volumes": [
+                    "~/.gitconfig:/home/worktree_docker/.gitconfig:ro",
+                    "~/.ssh:/home/worktree_docker/.ssh:ro",
+                ]
             },
         )
 
@@ -663,7 +670,10 @@ def should_rebuild_image(
 
 
 def build_image_with_bake(
-    build_dir: Path, builder_name: str = "worktree_docker_builder", load: bool = True, nocache: bool = False
+    build_dir: Path,
+    builder_name: str = "worktree_docker_builder",
+    load: bool = True,
+    nocache: bool = False,
 ) -> bool:
     """Build images using docker buildx bake."""
     try:
@@ -1169,7 +1179,13 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
         removed_images = []
         try:
             result = subprocess.run(
-                ["docker", "images", "--filter", f"reference=worktree_docker/{repo_spec.repo}*", "-q"],
+                [
+                    "docker",
+                    "images",
+                    "--filter",
+                    f"reference=worktree_docker/{repo_spec.repo}*",
+                    "-q",
+                ],
                 capture_output=True,
                 text=True,
                 check=False,
