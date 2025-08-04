@@ -17,6 +17,7 @@ from rockerc.renv import (
     get_workspaces_dir,
     get_repo_dir,
     get_worktree_dir,
+    auto_detect_extensions,
     setup_bare_repo,
     setup_worktree,
     ensure_buildx_builder,
@@ -779,6 +780,92 @@ class TestIntegration:
                         assert (build_dir / "Dockerfile").exists()
                         assert (build_dir / "docker-compose.yml").exists()
                         assert (build_dir / "docker-bake.hcl").exists()
+
+
+class TestCommandParsing:
+    """Test command parsing and execution."""
+
+    @patch("subprocess.run")
+    @patch("os.getuid", return_value=1000)
+    @patch("os.getgid", return_value=1000)
+    def test_bash_command_parsing(self, mock_getgid, mock_getuid, mock_run):
+        """Test that bash -c commands are parsed correctly."""
+        mock_run.return_value = Mock(returncode=0)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            spec = RepoSpec("owner", "repo", "main")
+            # Test the problematic command format
+            command = ["bash -c 'pixi --version'"]
+            result = run_compose_service(Path(tmpdir), spec, command)
+
+            assert result == 0
+
+            # Find the command exec call - should use bash -c format
+            # It should be the last call since it's the actual command execution
+            user_cmd_calls = [
+                call
+                for call in mock_run.call_args_list
+                if len(call[0]) > 0
+                and "exec" in call[0][0]
+                and "dev" in call[0][0]
+                and "bash -c 'pixi --version'" in call[0][0]
+            ]
+            assert len(user_cmd_calls) >= 1
+            exec_call = user_cmd_calls[-1][0][0]  # Get the last matching call
+            assert "docker" in exec_call
+            assert "compose" in exec_call
+            assert "exec" in exec_call
+            assert "dev" in exec_call
+            assert "bash" in exec_call
+            assert "-c" in exec_call
+            assert "bash -c 'pixi --version'" in exec_call
+
+    def test_auto_detect_pixi_extension(self):
+        """Test that pixi extension is auto-detected from pixi.toml file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir)
+            # Create a pixi.toml file
+            pixi_toml = repo_path / "pixi.toml"
+            pixi_toml.write_text(
+                """
+[project]
+name = "test"
+version = "0.1.0"
+""",
+                encoding="utf-8",
+            )
+
+            detected = auto_detect_extensions(repo_path)
+            assert "pixi" in detected
+
+    def test_pixi_extension_installation(self):
+        """Test that pixi extension has proper installation logic."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = ExtensionManager(Path(tmpdir))
+            pixi_ext = manager.get_extension("pixi")
+
+            assert pixi_ext is not None
+            assert pixi_ext.name == "pixi"
+            # Check that the dockerfile includes logic to install as the right user
+            assert "if id renv" in pixi_ext.dockerfile_content
+            assert "su - renv -c" in pixi_ext.dockerfile_content
+            # Check that PATH includes both locations
+            assert "/root/.pixi/bin:/home/renv/.pixi/bin" in pixi_ext.dockerfile_content
+
+    @patch("sys.argv", ["renv", "blooop/test_renv", "pixi", "--version"])
+    @patch("rockerc.renv.cmd_launch")
+    def test_command_line_parsing_with_flags(self, mock_cmd_launch):
+        """Test that flags in container commands are not parsed as renv flags."""
+        mock_cmd_launch.return_value = 0
+
+        result = main()
+        assert result == 0
+        mock_cmd_launch.assert_called_once()
+
+        # Check that the command includes both pixi and --version
+        call_args = mock_cmd_launch.call_args[0][0]  # First positional argument (config)
+        assert call_args.command == ["pixi", "--version"]
+        assert call_args.repo_spec == "blooop/test_renv"
 
 
 if __name__ == "__main__":

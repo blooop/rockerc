@@ -14,6 +14,7 @@ import json
 import yaml
 import hashlib
 import os
+import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from pathlib import Path
@@ -214,8 +215,14 @@ ENV PATH="/home/renv/.cargo/bin:$PATH"
         extensions["pixi"] = Extension(
             name="pixi",
             dockerfile_content="""
-RUN curl -fsSL https://pixi.sh/install.sh | bash
-ENV PATH="/home/renv/.pixi/bin:$PATH"
+# Install pixi as the renv user if user exists, otherwise as root
+RUN if id renv >/dev/null 2>&1; then \\
+        su - renv -c "curl -fsSL https://pixi.sh/install.sh | bash"; \\
+    else \\
+        curl -fsSL https://pixi.sh/install.sh | bash; \\
+    fi
+# Add pixi to PATH for both root and renv user
+ENV PATH="/root/.pixi/bin:/home/renv/.pixi/bin:$PATH"
 """,
             compose_fragment={},
         )
@@ -311,6 +318,47 @@ def get_worktree_dir(repo_spec: RepoSpec) -> Path:
     """Get worktree directory for a specific branch."""
     safe_branch = repo_spec.branch.replace("/", "-")
     return get_repo_dir(repo_spec) / f"worktree-{safe_branch}"
+
+
+def auto_detect_extensions(repo_path: Path) -> List[str]:
+    """Auto-detect extensions based on files present in the repository."""
+    detected_extensions = []
+
+    # Extension detection patterns: (file_pattern, extension_name)
+    detection_patterns = [
+        (r"^pixi\.toml$", "pixi"),
+        (r"^pyproject\.toml$", "uv"),
+        (r"^package\.json$", "uv"),  # Could use uv for Node.js too
+        (r"^Cargo\.toml$", "uv"),  # Rust projects can benefit from uv
+        (r"^poetry\.lock$", "uv"),
+        (r"^requirements.*\.txt$", "uv"),
+        (r"^\.python-version$", "uv"),
+        (r"^environment\.ya?ml$", "uv"),  # conda env files
+        (r"^conda\.ya?ml$", "uv"),
+        (r"^Dockerfile$", "base"),
+        (r"^docker-compose\.ya?ml$", "base"),
+    ]
+
+    try:
+        # Get all files in the repository root
+        if not repo_path.exists():
+            return detected_extensions
+
+        for item in repo_path.iterdir():
+            if item.is_file():
+                filename = item.name
+                for pattern, extension in detection_patterns:
+                    if re.match(pattern, filename, re.IGNORECASE):
+                        if extension not in detected_extensions:
+                            detected_extensions.append(extension)
+                            logging.info(
+                                f"Auto-detected extension '{extension}' from file '{filename}'"
+                            )
+
+    except Exception as e:
+        logging.warning(f"Failed to auto-detect extensions: {e}")
+
+    return detected_extensions
 
 
 def setup_bare_repo(repo_spec: RepoSpec) -> Path:
@@ -731,8 +779,13 @@ def run_compose_service(
 
         if command:
             # Execute command in running container
-            if len(command) == 1 and any(char in command[0] for char in [";", "&&", "||", "|"]):
-                # Complex shell command
+            if len(command) == 1 and (
+                any(char in command[0] for char in [";", "&&", "||", "|"])
+                or command[0].startswith("bash -c")
+                or "'" in command[0]
+                or '"' in command[0]
+            ):
+                # Complex shell command or bash -c format
                 exec_cmd = ["docker", "compose", "exec", "dev", "bash", "-c", command[0]]
             else:
                 # Simple command
@@ -821,8 +874,18 @@ def launch_environment(config: LaunchConfig) -> int:
     # Load repo configuration
     repo_config = RenvConfig(worktree_dir)
 
-    # Merge extensions
-    all_extensions = list(config.extensions) + repo_config.extensions
+    # Auto-detect extensions based on repository contents
+    auto_detected = auto_detect_extensions(worktree_dir)
+    if auto_detected:
+        print(f"Auto-detected extensions: {', '.join(auto_detected)}")
+
+    # Merge extensions: manual config + repo config + auto-detected
+    # Remove duplicates while preserving order
+    all_extensions = []
+    for ext in list(config.extensions) + repo_config.extensions + auto_detected:
+        if ext not in all_extensions:
+            all_extensions.append(ext)
+
     if config.no_gui and "x11" in all_extensions:
         all_extensions.remove("x11")
     if config.no_gpu and "nvidia" in all_extensions:
@@ -1428,7 +1491,16 @@ Notes:
     if "--install" in sys.argv:
         return cmd_install(argparse.Namespace())
 
-    parsed_args = parser.parse_args()
+    # Parse known args first to avoid conflicts with container command flags
+    parsed_args, unknown_args = parser.parse_known_args()
+
+    # If we have unknown args and a repo_spec, treat unknown args as part of the command
+    if unknown_args and parsed_args.repo_spec:
+        # Combine existing command with unknown args
+        if parsed_args.command:
+            parsed_args.command.extend(unknown_args)
+        else:
+            parsed_args.command = unknown_args
 
     # Set up logging
     log_level = getattr(logging, parsed_args.log_level.upper())
