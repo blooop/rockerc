@@ -1,19 +1,19 @@
 # Example Repository with Custom Extensions
 
-This is an example repository that demonstrates the new modular extension system in renv.
+This is an example repository that demonstrates the new modular extension system in worktree_docker.
 
 ## Custom Extensions
 
-This repository includes a custom extension in `.renv/extensions/custom-tool/` that:
+This repository includes a custom extension in `.worktree_docker/extensions/custom-tool/` that:
 
 1. Installs a simple command-line tool called `custom-tool`
 2. Sets environment variables for the tool configuration
-3. Is automatically discovered and loaded when using renv
+3. Is automatically discovered and loaded when using worktree_docker
 
 ## File Structure
 
 ```
-.renv/
+.worktree_docker/
 └── extensions/
     └── custom-tool/
         ├── Dockerfile           # Docker build instructions
@@ -30,10 +30,10 @@ This repository includes a custom extension in `.renv/extensions/custom-tool/` t
 ## Usage
 
 ```bash
-# From this directory, renv will automatically discover and load:
+# From this directory, worktree_docker will automatically discover and load:
 # 1. Built-in extensions (base, user)
 # 2. Auto-detected extensions (uv from pyproject.toml)  
-# 3. Custom local extensions (custom-tool from .renv/extensions/)
+# 3. Custom local extensions (custom-tool from .worktree_docker/extensions/)
 
-renv your-repo@main
+worktree_docker your-repo@main
 ```

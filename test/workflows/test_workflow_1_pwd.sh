@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "Running: renv blooop/test_renv and confirming the working directory is test_renv to match the name of the git repo"
-renv blooop/test_renv pwd
+echo "Running: worktree_docker blooop/test_worktree_docker and confirming the working directory is test_worktree_docker to match the name of the git repo"
+worktree_docker blooop/test_worktree_docker pwd
 
 

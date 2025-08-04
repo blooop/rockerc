@@ -1,4 +1,4 @@
 [project]
 name = "example-project"
 version = "0.1.0"
-description = "Example project to test renv extensions"
+description = "Example project to test worktree_docker extensions"

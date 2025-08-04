@@ -3,5 +3,5 @@ build:
     USER_ID: "${USER_ID:-1000}"
     GROUP_ID: "${GROUP_ID:-1000}"
 environment:
-  USER: "renv"
-  HOME: "/home/renv"
+  USER: "worktree_docker"
+  HOME: "/home/worktree_docker"

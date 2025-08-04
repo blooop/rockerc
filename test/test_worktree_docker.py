@@ -1,5 +1,5 @@
 """
-Comprehensive test suite for the new renv implementation with Docker Compose + Buildx/Bake
+Comprehensive test suite for the new worktree_docker implementation with Docker Compose + Buildx/Bake
 """
 
 import pytest
@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from worktree_docker.worktree_docker import (
     RepoSpec,
     Extension,
-    RenvConfig,
+    worktree_dockerConfig,
     ExtensionManager,
     ComposeConfig,
     LaunchConfig,
@@ -44,45 +44,45 @@ class TestRepoSpec:
 
     def test_parse_simple(self):
         """Test simple repo specification parsing."""
-        spec = RepoSpec.parse("blooop/test_renv")
+        spec = RepoSpec.parse("blooop/test_worktree_docker")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_worktree_docker"
         assert spec.branch == "main"
         assert spec.subfolder is None
 
     def test_parse_with_branch(self):
         """Test repo specification with branch."""
-        spec = RepoSpec.parse("blooop/test_renv@feature/new")
+        spec = RepoSpec.parse("blooop/test_worktree_docker@feature/new")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_worktree_docker"
         assert spec.branch == "feature/new"
         assert spec.subfolder is None
 
     def test_parse_with_subfolder(self):
         """Test repo specification with subfolder."""
-        spec = RepoSpec.parse("blooop/test_renv#src/core")
+        spec = RepoSpec.parse("blooop/test_worktree_docker#src/core")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_worktree_docker"
         assert spec.branch == "main"
         assert spec.subfolder == "src/core"
 
     def test_parse_with_branch_and_subfolder(self):
         """Test repo specification with both branch and subfolder."""
-        spec = RepoSpec.parse("blooop/test_renv@feature/new#src/core")
+        spec = RepoSpec.parse("blooop/test_worktree_docker@feature/new#src/core")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_worktree_docker"
         assert spec.branch == "feature/new"
         assert spec.subfolder == "src/core"
 
     def test_str_representation(self):
         """Test string representation."""
-        spec = RepoSpec("blooop", "test_renv", "feature/new", "src")
-        assert str(spec) == "blooop/test_renv@feature/new#src"
+        spec = RepoSpec("blooop", "test_worktree_docker", "feature/new", "src")
+        assert str(spec) == "blooop/test_worktree_docker@feature/new#src"
 
     def test_compose_project_name(self):
         """Test Docker Compose project name generation."""
-        spec = RepoSpec("blooop", "test_renv", "feature/new")
-        assert spec.compose_project_name == "test_renv-feature-new"
+        spec = RepoSpec("blooop", "test_worktree_docker", "feature/new")
+        assert spec.compose_project_name == "test_worktree_docker-feature-new"
 
 
 class TestExtension:
@@ -111,13 +111,13 @@ class TestExtension:
         assert ext1.hash != ext2.hash
 
 
-class TestRenvConfig:
-    """Test RenvConfig functionality."""
+class Testworktree_dockerConfig:
+    """Test worktree_dockerConfig functionality."""
 
     def test_load_yaml_config(self):
         """Test loading YAML configuration."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".renv.yml"
+            config_path = Path(tmpdir) / ".worktree_docker.yml"
             config_data = {
                 "extensions": ["git", "x11"],
                 "base_image": "ubuntu:20.04",
@@ -129,7 +129,7 @@ class TestRenvConfig:
 
                 yaml.dump(config_data, f)
 
-            config = RenvConfig(Path(tmpdir))
+            config = worktree_dockerConfig(Path(tmpdir))
             assert config.extensions == ["git", "x11"]
             assert config.base_image == "ubuntu:20.04"
             assert config.platforms == ["linux/amd64", "linux/arm64"]
@@ -137,7 +137,7 @@ class TestRenvConfig:
     def test_load_json_config(self):
         """Test loading JSON configuration."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".renv.json"
+            config_path = Path(tmpdir) / ".worktree_docker.json"
             config_data = {"extensions": ["fzf", "uv"], "base_image": "debian:bullseye"}
 
             with open(config_path, "w", encoding="utf-8") as f:
@@ -145,14 +145,14 @@ class TestRenvConfig:
 
                 json.dump(config_data, f)
 
-            config = RenvConfig(Path(tmpdir))
+            config = worktree_dockerConfig(Path(tmpdir))
             assert config.extensions == ["fzf", "uv"]
             assert config.base_image == "debian:bullseye"
 
     def test_default_config(self):
         """Test default configuration when no file exists."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config = RenvConfig(Path(tmpdir))
+            config = worktree_dockerConfig(Path(tmpdir))
             assert config.extensions == []
             assert config.base_image == "ubuntu:22.04"
             assert config.platforms == ["linux/amd64"]
@@ -179,7 +179,7 @@ class TestExtensionManager:
         """Test loading repo-local extensions."""
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_dir = Path(tmpdir) / "repo"
-            ext_dir = repo_dir / ".renv" / "exts" / "custom"
+            ext_dir = repo_dir / ".worktree_docker" / "exts" / "custom"
             ext_dir.mkdir(parents=True)
 
             # Create extension files
@@ -212,7 +212,7 @@ class TestExtensionManager:
 class TestPathHelpers:
     """Test path helper functions."""
 
-    @patch.dict("os.environ", {"RENV_CACHE_DIR": "/custom/cache"})
+    @patch.dict("os.environ", {"worktree_docker_CACHE_DIR": "/custom/cache"})
     def test_get_cache_dir_custom(self):
         """Test custom cache directory from environment."""
         assert get_cache_dir() == Path("/custom/cache")
@@ -220,23 +220,23 @@ class TestPathHelpers:
     @patch.dict("os.environ", {}, clear=True)
     def test_get_cache_dir_default(self):
         """Test default cache directory."""
-        assert get_cache_dir() == Path.home() / ".renv"
+        assert get_cache_dir() == Path.home() / ".worktree_docker"
 
     def test_get_workspaces_dir(self):
         """Test workspaces directory."""
-        with patch("worktree_docker.renv.get_cache_dir", return_value=Path("/cache")):
+        with patch("worktree_docker.worktree_docker.get_cache_dir", return_value=Path("/cache")):
             assert get_workspaces_dir() == Path("/cache/workspaces")
 
     def test_get_repo_dir(self):
         """Test repository directory path."""
         spec = RepoSpec("owner", "repo", "main")
-        with patch("worktree_docker.renv.get_workspaces_dir", return_value=Path("/workspaces")):
+        with patch("worktree_docker.worktree_docker.get_workspaces_dir", return_value=Path("/workspaces")):
             assert get_repo_dir(spec) == Path("/workspaces/owner/repo")
 
     def test_get_worktree_dir(self):
         """Test worktree directory path."""
         spec = RepoSpec("owner", "repo", "feature/new")
-        with patch("worktree_docker.renv.get_repo_dir", return_value=Path("/repo")):
+        with patch("worktree_docker.worktree_docker.get_repo_dir", return_value=Path("/repo")):
             assert get_worktree_dir(spec) == Path("/repo/worktree-feature-new")
 
 
@@ -278,7 +278,7 @@ class TestGitOperations:
         assert "fetch" in call_args
         assert "--all" in call_args
 
-    @patch("worktree_docker.renv.setup_bare_repo")
+    @patch("worktree_docker.worktree_docker.setup_bare_repo")
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
     def test_setup_worktree_create(self, mock_exists, mock_run, mock_setup_bare):
@@ -594,7 +594,7 @@ class TestComposeOperations:
             build_dir = Path(tmpdir) / "build-cache"
             build_dir.mkdir()
 
-            with patch("worktree_docker.renv.get_build_cache_dir", return_value=build_dir):
+            with patch("worktree_docker.worktree_docker.get_build_cache_dir", return_value=build_dir):
                 spec = RepoSpec("owner", "repo", "main")
                 result = destroy_environment(spec)
 
@@ -609,7 +609,7 @@ class TestComposeOperations:
 class TestCommands:
     """Test CLI command functions."""
 
-    @patch("worktree_docker.renv.launch_environment")
+    @patch("worktree_docker.worktree_docker.launch_environment")
     def test_cmd_launch(self, mock_launch):
         """Test launch command."""
         mock_launch.return_value = 0
@@ -635,7 +635,7 @@ class TestCommands:
         assert call_args.platforms == ["linux/amd64", "linux/arm64"]
         assert call_args.builder_name == "custom_builder"
 
-    @patch("worktree_docker.renv.list_active_containers")
+    @patch("worktree_docker.worktree_docker.list_active_containers")
     def test_cmd_list_empty(self, mock_list_containers):
         """Test list command with no containers."""
         mock_list_containers.return_value = []
@@ -644,7 +644,7 @@ class TestCommands:
         result = cmd_list(args)
         assert result == 0
 
-    @patch("worktree_docker.renv.list_active_containers")
+    @patch("worktree_docker.worktree_docker.list_active_containers")
     def test_cmd_list_with_containers(self, mock_list_containers):
         """Test list command with containers."""
         mock_list_containers.return_value = [
@@ -655,8 +655,8 @@ class TestCommands:
         result = cmd_list(args)
         assert result == 0
 
-    @patch("worktree_docker.renv.prune_all")
-    @patch("worktree_docker.renv.prune_repo_environment")
+    @patch("worktree_docker.worktree_docker.prune_all")
+    @patch("worktree_docker.worktree_docker.prune_repo_environment")
     def test_cmd_prune(self, mock_prune_repo, mock_prune_all):
         """Test prune command."""
         mock_prune_all.return_value = 0
@@ -676,7 +676,7 @@ class TestCommands:
         assert result == 0
         mock_prune_repo.assert_called_once()
 
-    @patch("worktree_docker.renv.ExtensionManager")
+    @patch("worktree_docker.worktree_docker.ExtensionManager")
     def test_cmd_ext_list(self, mock_ext_manager):
         """Test extension list command."""
         mock_manager = Mock()
@@ -712,8 +712,8 @@ class TestCommands:
 class TestMainFunction:
     """Test main entry point."""
 
-    @patch("sys.argv", ["renv", "blooop/test_renv@main"])
-    @patch("worktree_docker.renv.cmd_launch")
+    @patch("sys.argv", ["worktree_docker", "blooop/test_worktree_docker@main"])
+    @patch("worktree_docker.worktree_docker.cmd_launch")
     def test_main_launch_command(self, mock_cmd_launch):
         """Test main function with launch command."""
         mock_cmd_launch.return_value = 0
@@ -722,8 +722,8 @@ class TestMainFunction:
         assert result == 0
         mock_cmd_launch.assert_called_once()
 
-    @patch("sys.argv", ["renv", "--list"])
-    @patch("worktree_docker.renv.cmd_list")
+    @patch("sys.argv", ["worktree_docker", "--list"])
+    @patch("worktree_docker.worktree_docker.cmd_list")
     def test_main_list_command(self, mock_cmd_list):
         """Test main function with list command."""
         mock_cmd_list.return_value = 0
@@ -732,7 +732,7 @@ class TestMainFunction:
         assert result == 0
         mock_cmd_list.assert_called_once()
 
-    @patch("sys.argv", ["renv", "--help"])
+    @patch("sys.argv", ["worktree_docker", "--help"])
     def test_main_help(self):
         """Test main function with help."""
         with pytest.raises(SystemExit):
@@ -763,12 +763,12 @@ class TestIntegration:
             repo_dir.mkdir()
 
             # Create mock config
-            config_file = worktree_dir / ".renv.yml"
+            config_file = worktree_dir / ".worktree_docker.yml"
             config_file.write_text("extensions: [git, x11]", encoding="utf-8")
 
-            with patch("worktree_docker.renv.get_cache_dir", return_value=cache_dir):
-                with patch("worktree_docker.renv.get_worktree_dir", return_value=worktree_dir):
-                    with patch("worktree_docker.renv.get_repo_dir", return_value=repo_dir):
+            with patch("worktree_docker.worktree_docker.get_cache_dir", return_value=cache_dir):
+                with patch("worktree_docker.worktree_docker.get_worktree_dir", return_value=worktree_dir):
+                    with patch("worktree_docker.worktree_docker.get_repo_dir", return_value=repo_dir):
                         spec = RepoSpec("owner", "repo", "main")
                         config = LaunchConfig(repo_spec=spec, extensions=["base"], rebuild=True)
                         result = launch_environment(config)
@@ -847,15 +847,15 @@ version = "0.1.0"
             assert pixi_ext is not None
             assert pixi_ext.name == "pixi"
             # Check that the dockerfile includes logic to install as the right user
-            assert "if id renv" in pixi_ext.dockerfile_content
-            assert "su - renv -c" in pixi_ext.dockerfile_content
+            assert "if id worktree_docker" in pixi_ext.dockerfile_content
+            assert "su - worktree_docker -c" in pixi_ext.dockerfile_content
             # Check that PATH includes both locations
-            assert "/root/.pixi/bin:/home/renv/.pixi/bin" in pixi_ext.dockerfile_content
+            assert "/root/.pixi/bin:/home/worktree_docker/.pixi/bin" in pixi_ext.dockerfile_content
 
-    @patch("sys.argv", ["renv", "blooop/test_renv", "pixi", "--version"])
-    @patch("worktree_docker.renv.cmd_launch")
+    @patch("sys.argv", ["worktree_docker", "blooop/test_worktree_docker", "pixi", "--version"])
+    @patch("worktree_docker.worktree_docker.cmd_launch")
     def test_command_line_parsing_with_flags(self, mock_cmd_launch):
-        """Test that flags in container commands are not parsed as renv flags."""
+        """Test that flags in container commands are not parsed as worktree_docker flags."""
         mock_cmd_launch.return_value = 0
 
         result = main()
@@ -865,7 +865,7 @@ version = "0.1.0"
         # Check that the command includes both pixi and --version
         call_args = mock_cmd_launch.call_args[0][0]  # First positional argument (config)
         assert call_args.command == ["pixi", "--version"]
-        assert call_args.repo_spec == "blooop/test_renv"
+        assert call_args.repo_spec == "blooop/test_worktree_docker"
 
 
 if __name__ == "__main__":

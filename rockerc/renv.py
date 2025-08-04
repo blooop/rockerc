@@ -18,7 +18,6 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-from .completion_scripts import bash_completion, zsh_completion, fish_completion
 
 
 @dataclass
@@ -991,38 +990,142 @@ def cmd_list(args) -> int:  # pylint: disable=unused-argument
 
 
 def cmd_install(args) -> int:  # pylint: disable=unused-argument
+    """Install shell completion scripts."""
     import os  # pylint: disable=reimported,redefined-outer-name
+
+    # Bash completion script
+    bash_completion = """# worktree_docker bash completion
+_worktree_docker_complete() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Complete commands
+    if [[ ${COMP_CWORD} == 1 ]]; then
+        COMPREPLY=($(compgen -W "launch list prune help" -- ${cur}))
+        return 0
+    fi
+    
+    # Complete repo specs from existing workspaces
+    if [[ -d ~/.worktree_docker/workspaces ]]; then
+        local repos=$(find ~/.worktree_docker/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+                     sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
+        local branches=$(find ~/.worktree_docker/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+                        sed 's|.*worktree-||' | sort -u)
+        COMPREPLY=($(compgen -W "${repos} ${branches}" -- ${cur}))
+    fi
+}
+complete -F _worktree_docker_complete worktree_docker
+"""
+
+    # Zsh completion script
+    zsh_completion = """#compdef worktree_docker
+_worktree_docker() {
+    local context state line
+    typeset -A opt_args
+    
+    _arguments \\
+        '1: :->commands' \\
+        '*: :->args'
+        
+    case $state in
+        commands)
+            _alternative \\
+                'commands:commands:(launch list prune help)' \\
+                'repos:repositories:_worktree_docker_repos'
+            ;;
+        args)
+            _worktree_docker_repos
+            ;;
+    esac
+}
+
+_worktree_docker_repos() {
+    if [[ -d ~/.worktree_docker/workspaces ]]; then
+        local repos branches
+        repos=($(find ~/.worktree_docker/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+                sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u))
+        branches=($(find ~/.worktree_docker/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+                   sed 's|.*worktree-||' | sort -u))
+        _describe 'repositories' repos
+        _describe 'branches' branches  
+    fi
+}
+
+_worktree_docker "$@"
+"""
+
+    # Fish completion script
+    fish_completion = """# worktree_docker fish completion
+complete -c worktree_docker -f
+
+# Commands
+complete -c worktree_docker -n "not __fish_seen_subcommand_from launch list prune help" -a "launch" -d "Launch container for repo and branch"
+complete -c worktree_docker -n "not __fish_seen_subcommand_from launch list prune help" -a "list" -d "Show active worktrees and containers"  
+complete -c worktree_docker -n "not __fish_seen_subcommand_from launch list prune help" -a "prune" -d "Remove unused containers and images"
+complete -c worktree_docker -n "not __fish_seen_subcommand_from launch list prune help" -a "help" -d "Show help message"
+
+# Options
+complete -c worktree_docker -l install -d "Install shell auto-completion"
+complete -c worktree_docker -l rebuild -d "Force rebuild of container"
+complete -c worktree_docker -l nocache -d "Disable Buildx cache"
+complete -c worktree_docker -l no-gui -d "Disable X11/GUI support"
+complete -c worktree_docker -l no-gpu -d "Disable GPU passthrough"
+complete -c worktree_docker -l log-level -d "Set log level" -xa "debug info warn error"
+
+# Dynamic repo completion
+if test -d ~/.worktree_docker/workspaces
+    for repo in (find ~/.worktree_docker/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
+        complete -c worktree_docker -a "$repo" -d "Repository"
+    end
+end
+"""
+
+    # Detect shell and install appropriate completion
     shell = os.environ.get("SHELL", "").split("/")[-1]
     home = os.path.expanduser("~")
+
     success = False
+
     if shell == "bash":
+        # Install bash completion
         bash_completion_dir = f"{home}/.bash_completion.d"
         os.makedirs(bash_completion_dir, exist_ok=True)
-        completion_file = f"{bash_completion_dir}/wtd"
+        completion_file = f"{bash_completion_dir}/worktree_docker"
+
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(bash_completion)
+
         print(f"✓ Bash completion installed to {completion_file}")
         print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
         success = True
+
     elif shell == "zsh":
+        # Install zsh completion
         zsh_completion_dir = f"{home}/.zsh/completions"
         os.makedirs(zsh_completion_dir, exist_ok=True)
-        completion_file = f"{zsh_completion_dir}/_wtd"
+        completion_file = f"{zsh_completion_dir}/_worktree_docker"
+
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(zsh_completion)
+
         print(f"✓ Zsh completion installed to {completion_file}")
         print("Add 'fpath=(~/.zsh/completions $fpath)' to your ~/.zshrc if not already present")
         print("Run 'autoload -U compinit && compinit' or restart your terminal")
         success = True
+
     elif shell == "fish":
+        # Install fish completion
         fish_completion_dir = f"{home}/.config/fish/completions"
         os.makedirs(fish_completion_dir, exist_ok=True)
-        completion_file = f"{fish_completion_dir}/wtd.fish"
+        completion_file = f"{fish_completion_dir}/worktree_docker.fish"
+
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(fish_completion)
+
         print(f"✓ Fish completion installed to {completion_file}")
         print("Restart your fish shell to enable completion")
         success = True
+
     else:
         print(f"✗ Unknown shell: {shell}")
         print("Supported shells: bash, zsh, fish")
@@ -1033,6 +1136,7 @@ def cmd_install(args) -> int:  # pylint: disable=unused-argument
         print(zsh_completion)
         print("\nFish completion script:")
         print(fish_completion)
+
     return 0 if success else 1
 
 
@@ -1280,86 +1384,167 @@ def cmd_doctor(args) -> int:  # pylint: disable=unused-argument
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        prog="wtd",
-        usage="wtd [OPTIONS] [-e ext1 ext2 ...] <owner>/<repo>[@<branch>][#<subfolder>] [command...]",
+        prog="worktree_docker",
+        usage="worktree_docker [OPTIONS] [-e ext1 ext2 ...] <owner>/<repo>[@<branch>][#<subfolder>] [command...]",
         description="""A development environment launcher using Docker, Git worktrees, and Buildx/Bake.
 
 Clones and manages repositories in isolated git worktrees, builds cached container environments using Docker Buildx + Bake, and launches fully configured shells or commands inside each branch-specific container workspace.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  wtd blooop/test_worktree_docker@main
-  wtd -e uv bloop
+  worktree_docker blooop/test_worktree_docker@main
+  worktree_docker -e uv blooop/test_worktree_docker@feature/foo
+  worktree_docker -e git uv blooop/test_worktree_docker@main#src
+  worktree_docker blooop/test_worktree_docker git status
+  worktree_docker -e pixi blooop/test_worktree_docker@dev "bash -c 'git pull && make test'"
+
+Commands:
+  launch       Launch container for the given repo and branch (default behavior)
+  list         Show active worktrees and running containers
+  prune        Remove unused containers and cached images
+  help         Show this help message
+
+Arguments:
+  -e, --extensions EXT [EXT ...]
+                   Extensions to enable (e.g. git, uv, pixi, nvidia, x11)
+  <owner>/<repo>[@<branch>][#<subfolder>]
+                   GitHub repository specifier:
+                   - owner/repo (default branch = main)
+                   - @branch    (e.g. main, feature/foo)
+                   - #subfolder (working directory after container start)
+  [command ...]    Command to run inside the container
+
+Environment:
+  worktree_docker_CACHE_DIR            Set custom cache directory (default: ~/.worktree_docker/)
+  worktree_docker_BASE_IMAGE           Override base image used for environments
+  worktree_docker_CACHE_REGISTRY       Push/pull extension build cache to a registry
+
+Notes:
+  - Worktrees are stored under ~/.worktree_docker/workspaces/<owner>/<repo>/worktree-<branch>
+  - Extensions can be configured via .worktree_docker.yml in the repo
+  - Extension images are hashed and reused across repos/branches automatically
+  - Supports Docker socket sharing (DOOD) and Docker-in-Docker (DinD) setups
 """,
     )
 
+    # Add extensions as a global option that comes before repo_spec
     parser.add_argument(
-        "-e",
         "--extensions",
-        nargs="+",
-        help="Specify extensions to use (overrides config/auto-detection)",
+        "-e",
+        action="append",
+        help="Extensions to enable (e.g. git, uv, pixi, nvidia, x11). Can be used multiple times.",
+    )
+
+    # Add special command flags
+    parser.add_argument(
+        "--list", action="store_true", help="Show active worktrees and running containers"
     )
     parser.add_argument(
-        "-c",
-        "--command",
-        nargs=argparse.REMAINDER,
-        help="Command to run in the environment (defaults to interactive shell)",
+        "--prune",
+        nargs="?",
+        const="all",
+        help="Remove unused containers and cached images (optionally for specific repo)",
+    )
+    parser.add_argument("--ext-list", action="store_true", help="List available extensions")
+    parser.add_argument("--doctor", action="store_true", help="Run diagnostics")
+
+    # Main positional arguments for the default launch behavior
+    parser.add_argument(
+        "repo_spec", nargs="?", help="Repository specification: owner/repo[@branch][#subfolder]"
+    )
+    parser.add_argument("command", nargs="*", help="Command to execute in the container")
+
+    # Build and runtime options
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Install shell auto-completion script (bash/zsh/fish)",
     )
     parser.add_argument(
         "--rebuild",
         action="store_true",
-        help="Force rebuild of the environment image",
+        help="Force rebuild of container and extensions, even if cached",
     )
     parser.add_argument(
         "--nocache",
         action="store_true",
-        help="Do not use cache when building the image",
+        help="Disable use of Buildx cache (useful for clean debugging)",
     )
     parser.add_argument(
-        "--no-gui",
-        action="store_true",
-        help="Disable GUI (X11) support",
+        "--no-gui", action="store_true", help="Disable X11 socket mounting and GUI support"
     )
     parser.add_argument(
-        "--no-gpu",
-        action="store_true",
-        help="Disable GPU (NVIDIA) support",
-    )
-    parser.add_argument(
-        "--platforms",
-        help="Comma-separated list of platforms for multi-arch builds",
+        "--no-gpu", action="store_true", help="Disable GPU passthrough and NVIDIA runtime"
     )
     parser.add_argument(
         "--builder",
-        default="wtd_builder",
-        help="Name of the Buildx builder to use",
+        default="worktree_docker_builder",
+        help="Use a custom Buildx builder name (default: worktree_docker_builder)",
     )
     parser.add_argument(
-        "repo_spec",
-        nargs="?",
-        help="GitHub repo specifier: <owner>/<repo>[@<branch>][#<subfolder>]",
+        "--platforms", help="Target platforms for Buildx (e.g. linux/amd64,linux/arm64)"
+    )
+    parser.add_argument(
+        "--log-level",
+        choices=["debug", "info", "warn", "error"],
+        default="info",
+        help="Set log verbosity: debug, info, warn, error (default: info)",
     )
 
-    args = parser.parse_args()
+    # Handle --install flag specially
+    if "--install" in sys.argv:
+        return cmd_install(argparse.Namespace())
 
-    # Command dispatch
-    if args.command_name == "launch":
-        return cmd_launch(args)
-    elif args.command_name == "list":
-        return cmd_list(args)
-    elif args.command_name == "install":
-        return cmd_install(args)
-    elif args.command_name == "prune":
-        return cmd_prune(args)
-    elif args.command_name == "ext":
-        return cmd_ext(args)
-    elif args.command_name == "doctor":
-        return cmd_doctor(args)
+    # Parse known args first to avoid conflicts with container command flags
+    parsed_args, unknown_args = parser.parse_known_args()
 
-    # Default to launch if no command given
-    if len(sys.argv) == 1 or (
-        len(sys.argv) == 2 and sys.argv[1] in ["-h", "--help"]
-    ):
+    # If we have unknown args and a repo_spec, treat unknown args as part of the command
+    if unknown_args and parsed_args.repo_spec:
+        # Combine existing command with unknown args
+        if parsed_args.command:
+            parsed_args.command.extend(unknown_args)
+        else:
+            parsed_args.command = unknown_args
+
+    # Set up logging
+    log_level = getattr(logging, parsed_args.log_level.upper())
+    logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
+
+    # Handle special command flags first
+    if parsed_args.list:
+        return cmd_list(parsed_args)
+
+    if parsed_args.prune is not None:
+        # Create a namespace with repo_spec for prune command
+        prune_args = argparse.Namespace()
+        prune_args.repo_spec = parsed_args.prune if parsed_args.prune != "all" else None
+        return cmd_prune(prune_args)
+
+    if parsed_args.ext_list:
+        return cmd_ext(argparse.Namespace(ext_action="list", ext_name=None))
+
+    if parsed_args.doctor:
+        return cmd_doctor(parsed_args)
+
+    # Default behavior - launch environment
+    if not parsed_args.repo_spec:
         parser.print_help()
-        return 0
+        return 1
 
-    return cmd_launch(args)
+    # Convert to launch command format
+    launch_args = argparse.Namespace()
+    launch_args.repo_spec = parsed_args.repo_spec
+    launch_args.command = parsed_args.command
+    # Flatten extensions list since they come from action="append"
+    launch_args.extensions = parsed_args.extensions if parsed_args.extensions else []
+    launch_args.rebuild = parsed_args.rebuild
+    launch_args.nocache = parsed_args.nocache
+    launch_args.no_gui = parsed_args.no_gui
+    launch_args.no_gpu = parsed_args.no_gpu
+    launch_args.builder = parsed_args.builder
+    launch_args.platforms = parsed_args.platforms
+
+    return cmd_launch(launch_args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

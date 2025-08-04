@@ -1,6 +1,6 @@
-# renv Extensions
+# worktree_docker Extensions
 
-This directory contains the built-in extensions for renv. Each extension is organized in its own directory with the following structure:
+This directory contains the built-in extensions for worktree_docker. Each extension is organized in its own directory with the following structure:
 
 ```
 extension-name/
@@ -11,7 +11,7 @@ extension-name/
 ## Built-in Extensions
 
 - **base**: Provides the foundational Ubuntu image with essential development tools
-- **user**: Sets up the renv user with proper permissions
+- **user**: Sets up the worktree_docker user with proper permissions
 - **git**: Configures Git and mounts host Git configuration
 - **x11**: Enables GUI application support with X11 forwarding
 - **nvidia**: Provides GPU acceleration support via NVIDIA runtime
@@ -21,11 +21,11 @@ extension-name/
 
 ## Custom Extensions
 
-You can create custom extensions in your repository by creating a `.renv/extensions/` directory:
+You can create custom extensions in your repository by creating a `.worktree_docker/extensions/` directory:
 
 ```
 your-repo/
-└── .renv/
+└── .worktree_docker/
     └── extensions/
         └── custom-extension/
             ├── Dockerfile
@@ -53,6 +53,6 @@ Extensions can be automatically loaded based on files detected in your repositor
 ## Extension Loading Order
 
 1. Built-in extensions from this directory
-2. Repository-local extensions from `.renv/extensions/`
+2. Repository-local extensions from `.worktree_docker/extensions/`
 3. Auto-detected extensions based on repository files
 4. Explicitly requested extensions via `-e` flag

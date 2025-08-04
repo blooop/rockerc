@@ -2,37 +2,37 @@
 set -e
 cd /tmp
 
-echo "=== TESTING RENV RECREATION AFTER DELETION ==="
-echo "This test verifies that renv works correctly after deleting the .renv folder"
+echo "=== TESTING worktree_docker RECREATION AFTER DELETION ==="
+echo "This test verifies that worktree_docker works correctly after deleting the .worktree_docker folder"
 echo
 
 # Step 1: Test normal operation
-echo "=== STEP 1: Normal renv operation ==="
-echo "Running: renv blooop/test_renv date"
-renv blooop/test_renv date
-echo "SUCCESS: Initial renv operation completed"
+echo "=== STEP 1: Normal worktree_docker operation ==="
+echo "Running: worktree_docker blooop/test_worktree_docker date"
+worktree_docker blooop/test_worktree_docker date
+echo "SUCCESS: Initial worktree_docker operation completed"
 echo
 
-# Step 2: Delete .renv folder completely
-echo "=== STEP 2: Deleting .renv folder ==="
-echo "Removing ~/.renv folder completely..."
-rm -rf ~/.renv
-echo "SUCCESS: .renv folder deleted"
+# Step 2: Delete .worktree_docker folder completely
+echo "=== STEP 2: Deleting .worktree_docker folder ==="
+echo "Removing ~/.worktree_docker folder completely..."
+rm -rf ~/.worktree_docker
+echo "SUCCESS: .worktree_docker folder deleted"
 echo
 
-# Step 3: Test renv recreation and operation
-echo "=== STEP 3: Testing renv recreation ==="
-echo "Running: renv blooop/test_renv date (should recreate everything)"
-renv blooop/test_renv date
-echo "SUCCESS: renv recreated and operated correctly"
+# Step 3: Test worktree_docker recreation and operation
+echo "=== STEP 3: Testing worktree_docker recreation ==="
+echo "Running: worktree_docker blooop/test_worktree_docker date (should recreate everything)"
+worktree_docker blooop/test_worktree_docker date
+echo "SUCCESS: worktree_docker recreated and operated correctly"
 echo
 
 # Step 4: Test that subsequent operations work normally
 echo "=== STEP 4: Testing subsequent operations ==="
-echo "Running: renv blooop/test_renv git status"
-renv blooop/test_renv git status
+echo "Running: worktree_docker blooop/test_worktree_docker git status"
+worktree_docker blooop/test_worktree_docker git status
 echo "SUCCESS: Subsequent operations work correctly"
 echo
 
 echo "=== ALL TESTS PASSED ==="
-echo "renv successfully handles .renv folder deletion and recreation"
+echo "worktree_docker successfully handles .worktree_docker folder deletion and recreation"

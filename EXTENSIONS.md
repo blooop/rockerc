@@ -1,6 +1,6 @@
-# renv Extensions System
+# worktree_docker Extensions System
 
-renv now features a modular extension system where each extension is organized in its own directory with standardized files. This allows for better organization, easier maintenance, and simpler custom extension development.
+worktree_docker now features a modular extension system where each extension is organized in its own directory with standardized files. This allows for better organization, easier maintenance, and simpler custom extension development.
 
 ## Architecture
 
@@ -44,7 +44,7 @@ You can create custom extensions in your repository:
 
 ```
 your-repo/
-└── .renv/
+└── .worktree_docker/
     └── extensions/
         └── my-extension/
             ├── Dockerfile
@@ -55,13 +55,13 @@ your-repo/
 
 Here's a simple example that installs a custom tool:
 
-**`.renv/extensions/my-tool/Dockerfile`:**
+**`.worktree_docker/extensions/my-tool/Dockerfile`:**
 ```dockerfile
 RUN apt-get update && apt-get install -y my-custom-tool && \
     rm -rf /var/lib/apt/lists/*
 ```
 
-**`.renv/extensions/my-tool/docker-compose.yml`:**
+**`.worktree_docker/extensions/my-tool/docker-compose.yml`:**
 ```yaml
 environment:
   MY_TOOL_CONFIG: "/workspace/config"
@@ -75,13 +75,13 @@ volumes:
 Extensions are loaded in the following order:
 
 1. **Built-in extensions** - From the `extensions/` directory
-2. **Repository-local extensions** - From `.renv/extensions/` in your repo
+2. **Repository-local extensions** - From `.worktree_docker/extensions/` in your repo
 3. **Auto-detected extensions** - Based on files in your repository
 4. **Explicitly requested extensions** - Via `-e` flag
 
 ### Auto-Detection Rules
 
-renv automatically detects extensions based on files in your repository:
+worktree_docker automatically detects extensions based on files in your repository:
 
 | File Pattern | Extension Loaded | Reason |
 |-------------|-----------------|---------|
@@ -98,8 +98,8 @@ renv automatically detects extensions based on files in your repository:
 
 Repository-local extensions are automatically discovered from:
 
-- **New structure**: `.renv/extensions/extension-name/`
-- **Legacy structure**: `.renv/exts/extension-name/` (backward compatibility)
+- **New structure**: `.worktree_docker/extensions/extension-name/`
+- **Legacy structure**: `.worktree_docker/exts/extension-name/` (backward compatibility)
 
 ## Migration from Hardcoded Extensions
 
@@ -143,37 +143,37 @@ Extensions are loaded from the filesystem, making them:
 ### Using Built-in Extensions
 ```bash
 # Automatically loads base, user, and uv (from pyproject.toml)
-renv owner/repo@branch
+worktree_docker owner/repo@branch
 
 # Explicitly load additional extensions
-renv -e git nvidia owner/repo@branch
+worktree_docker -e git nvidia owner/repo@branch
 ```
 
 ### Using Custom Extensions
 ```bash
 # Custom extensions are automatically discovered
 cd my-project-with-custom-extensions
-renv owner/repo@branch  # Loads built-in + auto-detected + custom extensions
+worktree_docker owner/repo@branch  # Loads built-in + auto-detected + custom extensions
 ```
 
 ### Creating a Custom Extension
 ```bash
 # 1. Create extension directory
-mkdir -p .renv/extensions/my-extension
+mkdir -p .worktree_docker/extensions/my-extension
 
 # 2. Create Dockerfile
-cat > .renv/extensions/my-extension/Dockerfile << 'EOF'
+cat > .worktree_docker/extensions/my-extension/Dockerfile << 'EOF'
 RUN pip install my-custom-package
 EOF
 
 # 3. Create compose configuration
-cat > .renv/extensions/my-extension/docker-compose.yml << 'EOF'
+cat > .worktree_docker/extensions/my-extension/docker-compose.yml << 'EOF'
 environment:
   MY_VAR: "custom-value"
 EOF
 
 # 4. Test the extension
-renv owner/repo@branch
+worktree_docker owner/repo@branch
 ```
 
 ## Built-in Extension Details
@@ -184,7 +184,7 @@ renv owner/repo@branch
 - **Required**: Always loaded first
 
 ### user  
-- **Purpose**: Sets up the renv user with proper permissions
+- **Purpose**: Sets up the worktree_docker user with proper permissions
 - **Features**: Creates user, adds to sudoers, sets working directory
 - **Required**: Always loaded (after base)
 
@@ -215,7 +215,7 @@ renv owner/repo@branch
 
 ### fzf
 - **Purpose**: Command-line fuzzy finder
-- **Installation**: Clones from GitHub and installs for renv user
+- **Installation**: Clones from GitHub and installs for worktree_docker user
 
 ## Troubleshooting
 
@@ -223,7 +223,7 @@ renv owner/repo@branch
 1. Check extension directory structure
 2. Verify Dockerfile syntax
 3. Check docker-compose.yml format
-4. Look for error messages in renv output
+4. Look for error messages in worktree_docker output
 
 ### Extension Conflicts
 1. Check for conflicting environment variables

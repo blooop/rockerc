@@ -12,8 +12,8 @@ def test_workflow_1_pwd():
     # Add custom asserts for this workflow as needed
     assert result.returncode in (0, 1), f"Workflow 1 pwd failed: {output}"
     assert (
-        "/workspace/test_renv" in output
-    ), "Expected working directory '/workspace/test_renv' not found in workflow 1 output"
+        "/workspace/test_worktree_docker" in output
+    ), "Expected working directory '/workspace/test_worktree_docker' not found in workflow 1 output"
 
 
 def test_workflow_2_git():
@@ -45,8 +45,8 @@ def test_workflow_3_cmd():
     assert result.returncode in (0, 1), f"Workflow 3 cmd failed: {output}"
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 3 output"
     assert (
-        "/tmp/test_renv" in output or "test_renv" in output
-    ), "Expected working directory 'test_renv' not found in workflow 3 output"
+        "/tmp/test_worktree_docker" in output or "test_worktree_docker" in output
+    ), "Expected working directory 'test_worktree_docker' not found in workflow 3 output"
 
 
 def test_workflow_4_persistent():
@@ -127,18 +127,18 @@ def test_workflow_6_clean_git():
     assert result.returncode == 0, f"Workflow 6 clean git failed: {output}"
 
 
-def test_workflow_7_renv_recreation():
-    """Test that renv works correctly after deleting .renv folder"""
-    script = os.path.join(WORKFLOWS_DIR, "test_workflow_7_renv_recreation.sh")
+def test_workflow_7_worktree_docker_recreation():
+    """Test that worktree_docker works correctly after deleting .worktree_docker folder"""
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_7_worktree_docker_recreation.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
-    assert result.returncode == 0, f"Workflow 7 renv recreation failed: {output}"
+    assert result.returncode == 0, f"Workflow 7 worktree_docker recreation failed: {output}"
 
     # Check that all test steps completed successfully
-    assert "=== STEP 1: Normal renv operation ===" in output, "Step 1 not found"
-    assert "=== STEP 2: Deleting .renv folder ===" in output, "Step 2 not found"
-    assert "=== STEP 3: Testing renv recreation ===" in output, "Step 3 not found"
+    assert "=== STEP 1: Normal worktree_docker operation ===" in output, "Step 1 not found"
+    assert "=== STEP 2: Deleting .worktree_docker folder ===" in output, "Step 2 not found"
+    assert "=== STEP 3: Testing worktree_docker recreation ===" in output, "Step 3 not found"
     assert "=== STEP 4: Testing subsequent operations ===" in output, "Step 4 not found"
     assert "=== ALL TESTS PASSED ===" in output, "Final success message not found"
 
@@ -148,7 +148,7 @@ def test_workflow_7_renv_recreation():
 
 
 def test_workflow_8_prune():
-    """Test renv prune functionality for both selective and full cleanup"""
+    """Test worktree_docker prune functionality for both selective and full cleanup"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_8_prune.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -174,15 +174,15 @@ def test_workflow_8_prune():
         "✓ Worktree correctly removed by selective prune" in output
     ), "Selective prune did not remove worktree"
     assert (
-        "✓ All renv containers correctly removed by full prune" in output
-    ), "Full prune did not remove all renv containers"
+        "✓ All worktree_docker containers correctly removed by full prune" in output
+    ), "Full prune did not remove all worktree_docker containers"
     assert (
-        "✓ .renv directory correctly removed by full prune" in output
-    ), "Full prune did not remove .renv directory"
+        "✓ .worktree_docker directory correctly removed by full prune" in output
+    ), "Full prune did not remove .worktree_docker directory"
 
 
 def test_workflow_9_container_reuse():
-    """Test renv container reuse functionality"""
+    """Test worktree_docker container reuse functionality"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_9_container_reuse.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -234,7 +234,7 @@ def test_workflow_9_container_reuse():
 
 
 def test_workflow_10_new_branch():
-    """Test renv workflow for creating new branches that don't exist yet with prune functionality"""
+    """Test worktree_docker workflow for creating new branches that don't exist yet with prune functionality"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_10_new_branch.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -279,10 +279,10 @@ def test_workflow_10_new_branch():
     assert "✓ Selective prune completed" in output, "Selective prune not completed"
     assert "✓ Full prune completed" in output, "Full prune not completed"
     assert (
-        "✓ All renv containers correctly removed by full prune" in output
+        "✓ All worktree_docker containers correctly removed by full prune" in output
     ), "Full prune container removal not confirmed"
     assert (
-        "✓ .renv directory correctly removed by full prune" in output
+        "✓ .worktree_docker directory correctly removed by full prune" in output
     ), "Full prune directory removal not confirmed"
 
     # Check that workflow still works after full prune
@@ -298,7 +298,7 @@ def test_workflow_10_new_branch():
 
 
 def test_workflow_11_install_completion():
-    """Test renv --install shell completion feature"""
+    """Test worktree_docker --install shell completion feature"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_11_install_completion.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -335,7 +335,7 @@ def test_workflow_11_install_completion():
 
 
 def test_workflow_12_nocache():
-    """Test renv --nocache feature for disabling build cache"""
+    """Test worktree_docker --nocache feature for disabling build cache"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_12_nocache.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -365,7 +365,7 @@ def test_workflow_12_nocache():
 
 
 def test_workflow_13_uv():
-    """Test renv uv extension for Python package management"""
+    """Test worktree_docker uv extension for Python package management"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_13_uv.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -407,7 +407,7 @@ def test_workflow_13_uv():
 
 
 def test_workflow_14_pixi():
-    """Test renv pixi extension for package management"""
+    """Test worktree_docker pixi extension for package management"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_14_pixi.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
