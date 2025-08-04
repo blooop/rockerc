@@ -11,7 +11,7 @@ The main workflow to support is the user can type a `wtd repo_owner/repo_name` a
 
 `worktree_docker` manages the building of Dockerfiles via extensions. It automatically loads some default extensions to provide a base level of developer experience such as ssh, git, etc. The user can add their own development tools by creating an extension for it. The aim is that you only have to write a Dockerfile for your tools once, and then you can bring it along to any development environment you want via a flag.  When the user runs the `wtd` command on a repo, the user will enter a fully set up development container directly inside that git repository.
 
-`worktree_docker` automatically names the containers based on the repo name and branch name. So `wtd blooop/test_worktree_docker@feature1` creates a docker image and container named `test_worktree_docker-feature1` and enters a folder called `test_worktree_docker` as that is the repo name.
+`worktree_docker` automatically names the containers based on the repo name and branch name. So `wtd blooop/test_wtd@feature1` creates a docker image and container named `test_worktree_docker-feature1` and enters a folder called `test_worktree_docker` as that is the repo name.
 
 You can also use `wtd` to run commands directly in the container and branch. The last arguments are passed on directly to Docker. The behavior between entering a container and running a command is identical to running that command inline.
 
@@ -33,11 +33,11 @@ A development environment launcher using Docker, Git worktrees, and Buildx/Bake.
 Clones and manages repositories in isolated git worktrees, builds cached container environments using Docker Buildx + Bake, and launches fully configured shells or commands inside each branch-specific container workspace.
 
 Examples:
-  wtd blooop/test_worktree_docker@main
-  wtd blooop/test_worktree_docker@feature/foo
-  wtd blooop/test_worktree_docker@main#src
-  wtd blooop/test_worktree_docker git status
-  wtd blooop/test_worktree_docker@dev "bash -c 'git pull && make test'"
+  wtd blooop/test_wtd@main
+  wtd blooop/test_wtd@feature/foo
+  wtd blooop/test_wtd@main#src
+  wtd blooop/test_wtd git status
+  wtd blooop/test_wtd@dev "bash -c 'git pull && make test'"
 
 Commands:
   launch       Launch container for the given repo and branch (default behavior)
@@ -82,16 +82,16 @@ Notes:
 
 #### 1. Clone and Work on a Repo
 ```bash
-wtd blooop/test_worktree_docker@main
+wtd blooop/test_wtd@main
 ```
-- Clones as bare repo to `~/wtd/blooop/test_worktree_docker`
-- Creates worktree for `main` at `~/wtd/blooop/test_worktree_docker/worktree-main`
+- Clones as bare repo to `~/wtd/blooop/test_wtd`
+- Creates worktree for `main` at `~/wtd/blooop/test_wtd/worktree-main`
 - Launches a container in that worktree
 - git commands work immediately on entering (i.e., enter into the correct folder for git to work with worktrees, and bare repo is mounted properly)
 
 #### 2. Switch Branches (Isolated Worktrees)
 ```bash
-wtd blooop/test_worktree_docker@feature/new-feature
+wtd blooop/test_wtd@feature/new-feature
 ```
 - Creates new worktree for the branch
 - Launches container in the new worktree
@@ -99,27 +99,27 @@ wtd blooop/test_worktree_docker@feature/new-feature
 
 #### 3. Switch Back to Main
 ```bash
-wtd blooop/test_worktree_docker@main
+wtd blooop/test_wtd@main
 ```
 - Re-attaches to the main branch worktree and container. Does not need to rebuild
 
 #### 4. Work on Multiple Repos
 ```bash
-wtd osrf/rocker@main
+wtd blooop/bencher
 ```
 - Sets up and launches a container for another repo while retaining access to existing repos and branches
 
 #### 5. Run a command in a container
 
 ```bash
-wtd blooop/test_worktree_docker git status
+wtd blooop/test_wtd git status
 ```
 - Runs git status command and exits the container immediately
 
 #### 5. Run a command in a container on a branch
 
 ```bash
-wtd blooop/test_worktree_docker@main git status
+wtd blooop/test_wtd@main git status
 ```
 
 - Runs git status command and exits the container immediately
@@ -127,7 +127,7 @@ wtd blooop/test_worktree_docker@main git status
 #### 5. Run a multi-stage command in a container
 
 ```bash
-wtd blooop/test_worktree_docker "bash -c 'git status; pwd; ls -l'"
+wtd blooop/test_wtd "bash -c 'git status; pwd; ls -l'"
 
 ```
 
@@ -135,7 +135,7 @@ wtd blooop/test_worktree_docker "bash -c 'git status; pwd; ls -l'"
 
 #### 5. Debug or Manual Management
 ```bash
-wtd blooop/test_worktree_docker@main --no-container
+wtd blooop/test_wtd@main --no-container
 ```
 - Sets up worktree but does not launch container
 
@@ -198,15 +198,15 @@ Shows all active worktrees and running containers.
 ### Cleanup Commands
 ```bash
 wtd prune                    # Remove all unused containers and images
-wtd prune blooop/test_worktree_docker   # Remove specific repo's resources
+wtd prune blooop/test_wtd   # Remove specific repo's resources
 ```
 
 ### Advanced Options
 ```bash
-wtd blooop/test_worktree_docker --rebuild    # Force rebuild even if cached
-wtd blooop/test_worktree_docker --nocache    # Disable Buildx cache for debugging
-wtd blooop/test_worktree_docker --no-gui     # Disable X11/GUI support
-wtd blooop/test_worktree_docker --no-gpu     # Disable GPU passthrough
+wtd blooop/test_wtd --rebuild    # Force rebuild even if cached
+wtd blooop/test_wtd --nocache    # Disable Buildx cache for debugging
+wtd blooop/test_wtd --no-gui     # Disable X11/GUI support
+wtd blooop/test_wtd --no-gpu     # Disable GPU passthrough
 ```
 
 
@@ -214,20 +214,20 @@ wtd blooop/test_worktree_docker --no-gpu     # Disable GPU passthrough
 
 When running `wtd` without arguments, or with partial input, interactive fuzzy finding is enabled using `iterfzf`:
 
-- **Partial Matching**: As you type, `iterfzf` matches any part of the repo or branch name. For example, typing `bl tes ma` will match `blooop/test_worktree_docker@main`.
+- **Partial Matching**: As you type, `iterfzf` matches any part of the repo or branch name. For example, typing `bl tes ma` will match `blooop/test_wtd@main`.
   - You can type fragments separated by spaces to quickly narrow down results.
-  - Example prompt: `Select repo@branch (type 'bl tes ma' for blooop/test_worktree_docker@main):`
+  - Example prompt: `Select repo@branch (type 'bl tes ma' for blooop/test_wtd@main):`
 - **User Completion**: Type a partial username and press TAB to complete based on existing directories in `~/wtd/`.
   ```bash
   wtd blo<TAB>    # Completes to blooop/ if ~/wtd/blooop/ exists
   ```
 - **Repository Completion**: After a username and `/`, TAB completes repository names.
   ```bash
-  wtd blooop/tes<TAB>    # Completes to blooop/test_worktree_docker if ~/wtd/blooop/test_worktree_docker exists
+  wtd blooop/tes<TAB>    # Completes to blooop/test_wtd if ~/wtd/blooop/test_wtd exists
   ```
 - **Branch Completion**: After a repository and `@`, TAB completes branch names using git.
   ```bash
-  wtd blooop/test_worktree_docker@fea<TAB>    # Completes to available branches like feature/xyz
+  wtd blooop/test_wtd@fea<TAB>    # Completes to available branches like feature/xyz
   ```
 - **Interactive Selection**: If no argument is provided, a fuzzy finder UI appears, allowing you to search and select from all available repo@branch combinations. You can use partial words and space-separated fragments for fast selection.
 

@@ -1287,7 +1287,7 @@ def main() -> int:
 Clones and manages repositories in isolated git worktrees, builds cached container environments using Docker Buildx + Bake, and launches fully configured shells or commands inside each branch-specific container workspace.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  wtd blooop/test_worktree_docker@main
+  wtd blooop/test_wtd@main
   wtd -e uv bloop
 """,
     )

@@ -44,7 +44,7 @@ class TestRepoSpec:
 
     def test_parse_simple(self):
         """Test simple repo specification parsing."""
-        spec = RepoSpec.parse("blooop/test_worktree_docker")
+        spec = RepoSpec.parse("blooop/test_wtd")
         assert spec.owner == "blooop"
         assert spec.repo == "test_worktree_docker"
         assert spec.branch == "main"
@@ -52,7 +52,7 @@ class TestRepoSpec:
 
     def test_parse_with_branch(self):
         """Test repo specification with branch."""
-        spec = RepoSpec.parse("blooop/test_worktree_docker@feature/new")
+        spec = RepoSpec.parse("blooop/test_wtd@feature/new")
         assert spec.owner == "blooop"
         assert spec.repo == "test_worktree_docker"
         assert spec.branch == "feature/new"
@@ -60,7 +60,7 @@ class TestRepoSpec:
 
     def test_parse_with_subfolder(self):
         """Test repo specification with subfolder."""
-        spec = RepoSpec.parse("blooop/test_worktree_docker#src/core")
+        spec = RepoSpec.parse("blooop/test_wtd#src/core")
         assert spec.owner == "blooop"
         assert spec.repo == "test_worktree_docker"
         assert spec.branch == "main"
@@ -68,7 +68,7 @@ class TestRepoSpec:
 
     def test_parse_with_branch_and_subfolder(self):
         """Test repo specification with both branch and subfolder."""
-        spec = RepoSpec.parse("blooop/test_worktree_docker@feature/new#src/core")
+        spec = RepoSpec.parse("blooop/test_wtd@feature/new#src/core")
         assert spec.owner == "blooop"
         assert spec.repo == "test_worktree_docker"
         assert spec.branch == "feature/new"
@@ -77,7 +77,7 @@ class TestRepoSpec:
     def test_str_representation(self):
         """Test string representation."""
         spec = RepoSpec("blooop", "test_worktree_docker", "feature/new", "src")
-        assert str(spec) == "blooop/test_worktree_docker@feature/new#src"
+        assert str(spec) == "blooop/test_wtd@feature/new#src"
 
     def test_compose_project_name(self):
         """Test Docker Compose project name generation."""
@@ -712,7 +712,7 @@ class TestCommands:
 class TestMainFunction:
     """Test main entry point."""
 
-    @patch("sys.argv", ["worktree_docker", "blooop/test_worktree_docker@main"])
+    @patch("sys.argv", ["worktree_docker", "blooop/test_wtd@main"])
     @patch("worktree_docker.worktree_docker.cmd_launch")
     def test_main_launch_command(self, mock_cmd_launch):
         """Test main function with launch command."""
@@ -852,7 +852,7 @@ version = "0.1.0"
             # Check that PATH includes both locations
             assert "/root/.pixi/bin:/home/worktree_docker/.pixi/bin" in pixi_ext.dockerfile_content
 
-    @patch("sys.argv", ["worktree_docker", "blooop/test_worktree_docker", "pixi", "--version"])
+    @patch("sys.argv", ["worktree_docker", "blooop/test_wtd", "pixi", "--version"])
     @patch("worktree_docker.worktree_docker.cmd_launch")
     def test_command_line_parsing_with_flags(self, mock_cmd_launch):
         """Test that flags in container commands are not parsed as worktree_docker flags."""
@@ -865,7 +865,7 @@ version = "0.1.0"
         # Check that the command includes both pixi and --version
         call_args = mock_cmd_launch.call_args[0][0]  # First positional argument (config)
         assert call_args.command == ["pixi", "--version"]
-        assert call_args.repo_spec == "blooop/test_worktree_docker"
+        assert call_args.repo_spec == "blooop/test_wtd"
 
 
 if __name__ == "__main__":

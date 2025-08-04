@@ -8,8 +8,8 @@ echo
 
 # Step 1: Test normal operation
 echo "=== STEP 1: Normal worktree_docker operation ==="
-echo "Running: worktree_docker blooop/test_worktree_docker date"
-worktree_docker blooop/test_worktree_docker date
+echo "Running: worktree_docker blooop/test_wtd date"
+worktree_docker blooop/test_wtd date
 echo "SUCCESS: Initial worktree_docker operation completed"
 echo
 
@@ -22,15 +22,15 @@ echo
 
 # Step 3: Test worktree_docker recreation and operation
 echo "=== STEP 3: Testing worktree_docker recreation ==="
-echo "Running: worktree_docker blooop/test_worktree_docker date (should recreate everything)"
-worktree_docker blooop/test_worktree_docker date
+echo "Running: worktree_docker blooop/test_wtd date (should recreate everything)"
+worktree_docker blooop/test_wtd date
 echo "SUCCESS: worktree_docker recreated and operated correctly"
 echo
 
 # Step 4: Test that subsequent operations work normally
 echo "=== STEP 4: Testing subsequent operations ==="
-echo "Running: worktree_docker blooop/test_worktree_docker git status"
-worktree_docker blooop/test_worktree_docker git status
+echo "Running: worktree_docker blooop/test_wtd git status"
+worktree_docker blooop/test_wtd git status
 echo "SUCCESS: Subsequent operations work correctly"
 echo
 

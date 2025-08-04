@@ -1391,11 +1391,11 @@ def main() -> int:
 Clones and manages repositories in isolated git worktrees, builds cached container environments using Docker Buildx + Bake, and launches fully configured shells or commands inside each branch-specific container workspace.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  worktree_docker blooop/test_worktree_docker@main
-  worktree_docker -e uv blooop/test_worktree_docker@feature/foo
-  worktree_docker -e git uv blooop/test_worktree_docker@main#src
-  worktree_docker blooop/test_worktree_docker git status
-  worktree_docker -e pixi blooop/test_worktree_docker@dev "bash -c 'git pull && make test'"
+  worktree_docker blooop/test_wtd@main
+  worktree_docker -e uv blooop/test_wtd@feature/foo
+  worktree_docker -e git uv blooop/test_wtd@main#src
+  worktree_docker blooop/test_wtd git status
+  worktree_docker -e pixi blooop/test_wtd@dev "bash -c 'git pull && make test'"
 
 Commands:
   launch       Launch container for the given repo and branch (default behavior)

@@ -13,7 +13,7 @@ echo "Cleaned up existing test environment"
 
 # Test 1: Create initial environment
 echo "=== TEST 1: CREATE INITIAL ENVIRONMENT ==="
-wtd blooop/test_worktree_docker pwd
+wtd blooop/test_wtd pwd
 echo "✓ Initial environment created"
 
 # Get the container ID for later comparison
@@ -22,7 +22,7 @@ echo "Initial container ID: $CONTAINER_ID_1"
 
 # Test 2: Run another command - should reuse the same container
 echo "=== TEST 2: TEST CONTAINER REUSE ==="
-wtd blooop/test_worktree_docker pwd
+wtd blooop/test_wtd pwd
 echo "✓ Second command executed"
 
 # Get the container ID again
@@ -42,7 +42,7 @@ echo "=== TEST 3: TEST CONTAINER RECREATION AFTER STOP ==="
 docker stop test_worktree_docker-main
 echo "Manually stopped container"
 
-wtd blooop/test_worktree_docker pwd
+wtd blooop/test_wtd pwd
 echo "✓ Command executed after manual stop"
 
 # Get the container ID after recreation
@@ -59,7 +59,7 @@ fi
 
 # Test 4: Run another command - should reuse the new container
 echo "=== TEST 4: TEST REUSE OF RECREATED CONTAINER ==="
-wtd blooop/test_worktree_docker pwd
+wtd blooop/test_wtd pwd
 echo "✓ Command executed on recreated container"
 
 # Get the container ID again
