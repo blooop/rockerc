@@ -674,7 +674,8 @@ def build_image_with_bake(
             cmd.append("--no-cache")
         # Always build the 'final' target, never 'default'
         cmd.append("final")
-        print(f"Building with bake: {' '.join(cmd)}", flush=True)
+        # Always print the buildx bake command to stdout for test capture
+        print(f"buildx bake command: {' '.join(cmd)}", flush=True)
         logging.info(f"Building with bake: {' '.join(cmd)}")
         result = subprocess.run(cmd, cwd=build_dir, check=True)
         return result.returncode == 0
