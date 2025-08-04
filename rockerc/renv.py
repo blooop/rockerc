@@ -525,6 +525,7 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
             "REPO_NAME": config.repo_spec.repo,
             "BRANCH_NAME": config.repo_spec.branch.replace("/", "-"),
         },
+        "labels": {"renv.managed": "true"},
         "stdin_open": True,
         "tty": True,
         "command": ["tail", "-f", "/dev/null"],
@@ -1243,9 +1244,9 @@ def prune_all() -> int:
 
         # Get all renv-related containers and remove them
         try:
-            # Find all containers
+            # Only prune containers with the renv.managed label
             result = subprocess.run(
-                ["docker", "ps", "-aq"],
+                ["docker", "ps", "-aq", "--filter", "label=renv.managed=true"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1261,25 +1262,16 @@ def prune_all() -> int:
                     )
                     if inspect_result.stdout.strip():
                         container_name = inspect_result.stdout.strip().lstrip("/")
-                        # Remove containers that match renv/test naming patterns
-                        if (
-                            container_name.startswith("renv-")
-                            or container_name.startswith("test_renv-")
-                            or container_name.startswith("test_wtd-")
-                            or container_name.endswith("-main")
-                            or container_name.endswith("-dev")
-                            or "renv" in container_name
-                        ):
-                            print(f"Removing container: {container_name}")
-                            subprocess.run(
-                                ["docker", "stop", container_id], check=False, capture_output=True
-                            )
-                            subprocess.run(
-                                ["docker", "rm", "-f", container_id],
-                                check=False,
-                                capture_output=True,
-                            )
-                            removed_containers.append(container_name)
+                        print(f"Removing container: {container_name}")
+                        subprocess.run(
+                            ["docker", "stop", container_id], check=False, capture_output=True
+                        )
+                        subprocess.run(
+                            ["docker", "rm", "-f", container_id],
+                            check=False,
+                            capture_output=True,
+                        )
+                        removed_containers.append(container_name)
         except subprocess.CalledProcessError:
             pass
 
