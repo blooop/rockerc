@@ -1298,7 +1298,7 @@ def prune_all() -> int:
                         # Remove images that match renv/test naming patterns
                         if (
                             "renv/" in image_tags
-                            or "test_renv" in image_tags
+                            or "test_wtd" in image_tags
                             or "test_wtd" in image_tags
                         ):
                             print(f"Removing image: {image_tags}")

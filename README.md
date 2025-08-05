@@ -11,7 +11,7 @@ The main workflow to support is the user can type a `wtd repo_owner/repo_name` a
 
 `worktree_docker` manages the building of Dockerfiles via extensions. It automatically loads some default extensions to provide a base level of developer experience such as ssh, git, etc. The user can add their own development tools by creating an extension for it. The aim is that you only have to write a Dockerfile for your tools once, and then you can bring it along to any development environment you want via a flag.  When the user runs the `wtd` command on a repo, the user will enter a fully set up development container directly inside that git repository.
 
-`worktree_docker` automatically names the containers based on the repo name and branch name. So `wtd blooop/test_wtd@feature1` creates a docker image and container named `test_renv-feature1` and enters a folder called `test_renv` as that is the repo name.
+`worktree_docker` automatically names the containers based on the repo name and branch name. So `wtd blooop/test_wtd@feature1` creates a docker image and container named `test_wtd-feature1` and enters a folder called `test_wtd` as that is the repo name.
 
 You can also use `wtd` to run commands directly in the container and branch. The last arguments are passed on directly to Docker. The behavior between entering a container and running a command is identical to running that command inline.
 
@@ -152,7 +152,7 @@ Some of these workflows have been set up as scripts that must get run as part of
 │       ├── HEAD
 │       ├── config
 │       ├── worktrees
-│   └── test_renv/
+│   └── test_wtd/
 │       ├── HEAD
 │       ├── config
 │       ├── worktrees

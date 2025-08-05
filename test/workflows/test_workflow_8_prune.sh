@@ -7,8 +7,8 @@ echo "Testing both selective and full prune operations"
 # Clean up any existing test containers and cache
 echo "=== INITIAL CLEANUP ==="
 rm -rf ~/.renv || true
-docker container stop test_renv-main 2>/dev/null || true
-docker rm -f test_renv-main 2>/dev/null || true
+docker container stop test_wtd-main 2>/dev/null || true
+docker rm -f test_wtd-main 2>/dev/null || true
 echo "Cleaned up existing test environment"
 
 # Test 1: Set up test environment
@@ -17,7 +17,7 @@ renv blooop/test_wtd git status
 echo "✓ Test environment created"
 
 # Verify container exists
-docker ps | grep test_renv-main
+docker ps | grep test_wtd-main
 echo "✓ Container is running"
 
 # Test 2: Selective prune - should remove only blooop/test_wtd environment
@@ -26,7 +26,7 @@ renv --prune blooop/test_wtd
 echo "✓ Selective prune completed"
 
 # Verify specific container is gone (check exact name)
-if docker ps --format "table {{.Names}}" | grep "^test_renv-main$"; then
+if docker ps --format "table {{.Names}}" | grep "^test_wtd-main$"; then
     echo "✗ Container should have been removed by selective prune"
     exit 1
 else
@@ -53,7 +53,7 @@ renv --prune
 echo "✓ Full prune completed"
 
 # Verify renv-related containers are gone
-if docker ps --format "table {{.Names}}" | grep -E "(test_renv|renv-)"; then
+if docker ps --format "table {{.Names}}" | grep -E "(test_wtd|renv-)"; then
     echo "✗ No renv containers should exist after full prune"
     exit 1
 else

@@ -5,7 +5,7 @@ cd /tmp
 
 # Clean up test container for fresh start
 echo "=== CLEANING TEST ENVIRONMENT ==="
-docker rm -f test_renv-main >/dev/null 2>&1 || true
+docker rm -f test_wtd-main >/dev/null 2>&1 || true
 echo "Starting cache performance test..."
 echo
 

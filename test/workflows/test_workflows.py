@@ -12,8 +12,8 @@ def test_workflow_1_pwd():
     # Add custom asserts for this workflow as needed
     assert result.returncode in (0, 1), f"Workflow 1 pwd failed: {output}"
     assert (
-        "/workspace/test_renv" in output
-    ), "Expected working directory '/workspace/test_renv' not found in workflow 1 output"
+        "/workspace/test_wtd" in output
+    ), "Expected working directory '/workspace/test_wtd' not found in workflow 1 output"
 
 
 def test_workflow_2_git():
@@ -45,8 +45,8 @@ def test_workflow_3_cmd():
     assert result.returncode in (0, 1), f"Workflow 3 cmd failed: {output}"
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 3 output"
     assert (
-        "/tmp/test_renv" in output or "test_renv" in output
-    ), "Expected working directory 'test_renv' not found in workflow 3 output"
+        "/tmp/test_wtd" in output or "test_wtd" in output
+    ), "Expected working directory 'test_wtd' not found in workflow 3 output"
 
 
 def test_workflow_4_persistent():

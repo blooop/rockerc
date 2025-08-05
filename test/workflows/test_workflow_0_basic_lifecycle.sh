@@ -8,8 +8,8 @@ echo "Testing core container state transitions"
 
 # Clean up any existing test containers
 echo "=== INITIAL CLEANUP ==="
-docker container stop test_renv-main
-docker rm -f test_renv-main 
+docker container stop test_wtd-main
+docker rm -f test_wtd-main 
 echo "Cleaned up existing test containers"
 
 # Test 1: Fresh start - no container exists
@@ -18,10 +18,10 @@ renv blooop/test_wtd git status
 echo "✓ Fresh container test completed"
 
 #stop existing container and run renv again (should start a new one)
-docker container stop test_renv-main
+docker container stop test_wtd-main
 renv blooop/test_wtd git status
 
 
 #delete container and run renv again (should start a new one)
-docker rm -f test_renv-main 
+docker rm -f test_wtd-main 
 renv blooop/test_wtd git status

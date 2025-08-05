@@ -62,7 +62,7 @@ fi
 
 # Verify container exists
 echo "=== STEP 4: VERIFY CONTAINER EXISTS ==="
-if docker ps --format "table {{.Names}}" | grep "test_renv-new-branch"; then
+if docker ps --format "table {{.Names}}" | grep "test_wtd-new-branch"; then
     echo "✓ Container for new branch environment is running"
 else
     echo "✗ Container for new branch environment not found"
@@ -76,7 +76,7 @@ renv --prune blooop/test_wtd@new_branch
 echo "✓ Selective prune completed"
 
 # Verify specific container is gone
-if docker ps --format "table {{.Names}}" | grep "test_renv-new-branch"; then
+if docker ps --format "table {{.Names}}" | grep "test_wtd-new-branch"; then
     echo "✗ Container should have been removed by selective prune"
     docker ps
     exit 1
@@ -103,7 +103,7 @@ renv --prune
 echo "✓ Full prune completed"
 
 # Verify all renv containers are gone
-if docker ps --format "table {{.Names}}" | grep -E "(test_renv|renv-)"; then
+if docker ps --format "table {{.Names}}" | grep -E "(test_wtd|renv-)"; then
     echo "✗ No renv containers should exist after full prune"
     docker ps
     exit 1
