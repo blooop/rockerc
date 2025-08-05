@@ -1362,7 +1362,7 @@ packages:
 - pypi: ./
   name: worktree-docker
   version: 0.7.1
-  sha256: 5abecf4b8867883ff4277c942bfecf46254e208ea869f3495c6664e362558444
+  sha256: 4e7519930d8e53565b5caa04cd77e4fd453849b278b5e252b01826a4dd8b11a4
   requires_dist:
   - rocker>=0.2.17
   - deps-rocker>=0.10

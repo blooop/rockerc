@@ -11,8 +11,8 @@ worktree_docker (CLI: `wtd`) is a development environment launcher that combines
 This project uses [Pixi](https://pixi.sh) for package and environment management. All commands are defined in `pyproject.toml` under `[tool.pixi.tasks]`.
 
 ### Core Development Commands
-- `pixi run test` - Run pytest test suite
-- `pixi run coverage` - Run tests with coverage and generate XML report
+- `pixi run test` - Run pytest test suite in verbose mode
+- `pixi run coverage` - Run tests with coverage in verbose mode and generate XML report
 - `pixi run format` - Format code with black
 - `pixi run lint` - Run both ruff and pylint linters
 - `pixi run style` - Run formatting and linting together
