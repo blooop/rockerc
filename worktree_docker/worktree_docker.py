@@ -122,124 +122,55 @@ class ExtensionManager:
         self.cache_dir = cache_dir
         self.extensions_dir = cache_dir / "extensions"
         self.extensions_dir.mkdir(parents=True, exist_ok=True)
+        # Load extensions from global extensions directory
+        self.global_extensions_dir = Path(__file__).parent.parent / "extensions"
         self._builtin_extensions = self._load_builtin_extensions()
 
     def _load_builtin_extensions(self) -> Dict[str, Extension]:
-        """Load built-in extension definitions."""
+        """Load built-in extension definitions from the global extensions directory."""
         extensions = {}
 
-        # Base development tools
-        extensions["base"] = Extension(
-            name="base",
-            dockerfile_content="""
-FROM ubuntu:22.04
-RUN apt-get update && apt-get install -y \\
-    git curl wget unzip build-essential \\
-    ca-certificates gnupg lsb-release \\
-    && rm -rf /var/lib/apt/lists/*
-""",
-            compose_fragment={},
-        )
+        if not self.global_extensions_dir.exists():
+            print(f"Warning: Global extensions directory not found: {self.global_extensions_dir}")
+            return extensions
 
-        # Git configuration
-        extensions["git"] = Extension(
-            name="git",
-            dockerfile_content="""
-# Git is already installed in base, just configure
-RUN git config --global --add safe.directory '*'
-""",
-            compose_fragment={
-                "volumes": ["~/.gitconfig:/home/wtd/.gitconfig:ro", "~/.ssh:/home/wtd/.ssh:ro"]
-            },
-        )
-
-        # User setup
-        extensions["user"] = Extension(
-            name="user",
-            dockerfile_content="""
-ARG USER_ID=1000
-ARG GROUP_ID=1000
-RUN groupadd -g ${GROUP_ID} wtd && \\
-    useradd -u ${USER_ID} -g wtd -m -s /bin/bash wtd && \\
-    echo 'wtd ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-USER wtd
-WORKDIR /workspace
-""",
-            compose_fragment={
-                "build": {"args": {"USER_ID": "${USER_ID:-1000}", "GROUP_ID": "${GROUP_ID:-1000}"}},
-                "environment": {"USER": "wtd", "HOME": "/home/wtd"},
-            },
-        )
-
-        # X11 GUI support
-        extensions["x11"] = Extension(
-            name="x11",
-            dockerfile_content="""
-RUN apt-get update && apt-get install -y \\
-    xauth x11-apps libgl1-mesa-glx libgl1-mesa-dri \\
-    && rm -rf /var/lib/apt/lists/*
-""",
-            compose_fragment={
-                "environment": {"DISPLAY": "${DISPLAY}", "XAUTHORITY": "/tmp/.Xauth"},
-                "volumes": ["/tmp/.X11-unix:/tmp/.X11-unix:rw", "/tmp/.Xauth:/tmp/.Xauth:rw"],
-                "network_mode": "host",
-            },
-        )
-
-        # NVIDIA GPU support
-        extensions["nvidia"] = Extension(
-            name="nvidia",
-            dockerfile_content="""
-# NVIDIA runtime will be handled by Docker Compose
-""",
-            compose_fragment={
-                "runtime": "nvidia",
-                "environment": {
-                    "NVIDIA_VISIBLE_DEVICES": "all",
-                    "NVIDIA_DRIVER_CAPABILITIES": "all",
-                },
-            },
-        )
-
-        # Python/UV package manager
-        extensions["uv"] = Extension(
-            name="uv",
-            dockerfile_content="""
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \\
-    mv /root/.local/bin/uv /usr/local/bin/uv && \\
-    mv /root/.local/bin/uvx /usr/local/bin/uvx
-""",
-            compose_fragment={},
-        )
-
-        # Pixi package manager
-        extensions["pixi"] = Extension(
-            name="pixi",
-            dockerfile_content="""
-# Install pixi as the wtd user if user exists, otherwise as root
-RUN if id wtd >/dev/null 2>&1; then \\
-        su - wtd -c "curl -fsSL https://pixi.sh/install.sh | bash"; \\
-    else \\
-        curl -fsSL https://pixi.sh/install.sh | bash; \\
-    fi
-# Add pixi to PATH for both root and wtd user
-ENV PATH="/root/.pixi/bin:/home/wtd/.pixi/bin:$PATH"
-""",
-            compose_fragment={},
-        )
-
-        # Fuzzy finder
-        extensions["fzf"] = Extension(
-            name="fzf",
-            dockerfile_content="""
-RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/wtd/.fzf && \\
-    chown -R wtd:wtd /home/wtd/.fzf && \\
-    /home/wtd/.fzf/install --all
-""",
-            compose_fragment={},
-        )
+        for ext_dir in self.global_extensions_dir.iterdir():
+            if ext_dir.is_dir():
+                try:
+                    extension = self._load_extension_from_dir(ext_dir.name, ext_dir)
+                    extensions[ext_dir.name] = extension
+                except Exception as e:
+                    print(f"Warning: Failed to load extension {ext_dir.name}: {e}")
 
         return extensions
+
+    def _load_extension_from_dir(self, name: str, ext_dir: Path) -> Extension:
+        """Load extension from directory (used for global extensions)."""
+        dockerfile_path = ext_dir / "Dockerfile"
+        compose_path = ext_dir / "docker-compose.yml"
+
+        dockerfile_content = ""
+        if dockerfile_path.exists():
+            dockerfile_content = dockerfile_path.read_text(encoding="utf-8")
+
+        compose_fragment = {}
+        if compose_path.exists():
+            with open(compose_path, "r", encoding="utf-8") as f:
+                compose_fragment = yaml.safe_load(f) or {}
+
+        # Load any additional files (including test.sh)
+        files = {}
+        for file_path in ext_dir.glob("*"):
+            if file_path.name not in ["Dockerfile", "docker-compose.yml"]:
+                if file_path.is_file():
+                    files[file_path.name] = file_path.read_text(encoding="utf-8")
+
+        return Extension(
+            name=name,
+            dockerfile_content=dockerfile_content,
+            compose_fragment=compose_fragment,
+            files=files,
+        )
 
     def get_extension(self, name: str, repo_path: Optional[Path] = None) -> Optional[Extension]:
         """Get extension by name, checking repo-local first, then built-in."""

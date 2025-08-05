@@ -372,30 +372,10 @@ def test_workflow_13_uv():
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode == 0, f"Workflow 13 uv extension failed: {output}"
 
-    # Check that the test completed successfully
-    assert "=== TEST: UV EXTENSION ===" in output, "Test start not found"
+    # Check that the test completed successfully using generic test runner
+    assert "=== TEST: UV EXTENSION" in output, "Test start not found"
     assert "=== UV EXTENSION TEST PASSED ===" in output, "Test completion not found"
-
-    # Check that uv extension appears in extension list
-    assert (
-        "✓ uv extension appears in extension list" in output
-    ), "UV extension in list not confirmed"
-
-    # Check that uv extension loads correctly
-    assert "✓ uv extension loaded successfully" in output, "UV extension loading not confirmed"
-
-    # Check that command executes with uv extension
-    assert (
-        "✓ Command executed successfully with uv extension" in output
-    ), "UV command execution not confirmed"
-
-    # Check that uv is available in container
-    assert (
-        "✓ uv is available in container and shows version" in output
-    ), "UV availability not confirmed"
-
-    # Check that uv help works
-    assert "✓ uv help command works correctly" in output, "UV help functionality not confirmed"
+    assert "🎉 All tests passed for uv extension!" in output, "Final success message not found"
 
     # Check that uv works with other extensions
     assert (
@@ -414,30 +394,10 @@ def test_workflow_14_pixi():
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode == 0, f"Workflow 14 pixi extension failed: {output}"
 
-    # Check that the test completed successfully
-    assert "=== TEST: PIXI EXTENSION ===" in output, "Test start not found"
+    # Check that the test completed successfully using generic test runner
+    assert "=== TEST: PIXI EXTENSION" in output, "Test start not found"
     assert "=== PIXI EXTENSION TEST PASSED ===" in output, "Test completion not found"
-
-    # Check that pixi extension appears in extension list
-    assert (
-        "✓ pixi extension appears in extension list" in output
-    ), "Pixi extension in list not confirmed"
-
-    # Check that pixi extension loads correctly
-    assert "✓ pixi extension loaded successfully" in output, "Pixi extension loading not confirmed"
-
-    # Check that command executes with pixi extension
-    assert (
-        "✓ Command executed successfully with pixi extension" in output
-    ), "Pixi command execution not confirmed"
-
-    # Check that pixi is available in container
-    assert (
-        "✓ pixi is available in container and shows version" in output
-    ), "Pixi availability not confirmed"
-
-    # Check that pixi help works
-    assert "✓ pixi help command works correctly" in output, "Pixi help functionality not confirmed"
+    assert "🎉 All tests passed for pixi extension!" in output, "Final success message not found"
 
     # Check that pixi works with other extensions
     assert (
