@@ -1,5 +1,5 @@
 """
-renv - Development environment launcher using Docker, Git worktrees, and Buildx/Bake
+wtd - Development environment launcher using Docker, Git worktrees, and Buildx/Bake
 
 A tool that combines git worktrees with Docker Compose and Buildx to provide
 isolated development environments for each repository branch.
@@ -62,7 +62,7 @@ class RepoSpec:
 
 @dataclass
 class Extension:
-    """Represents a renv extension with its configuration."""
+    """Represents a wtd extension with its configuration."""
 
     name: str
     dockerfile_content: str
@@ -79,7 +79,7 @@ class Extension:
 
 
 class RenvConfig:
-    """Manages renv configuration from .renv.yml/.renv.json files."""
+    """Manages wtd configuration from .wtd.yml/.wtd.json files."""
 
     def __init__(self, repo_path: Path):
         self.repo_path = repo_path
@@ -87,7 +87,7 @@ class RenvConfig:
 
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from repo directory."""
-        for config_file in [".renv.yml", ".renv.yaml", ".renv.json"]:
+        for config_file in [".wtd.yml", ".wtd.yaml", ".wtd.json"]:
             config_path = self.repo_path / config_file
             if config_path.exists():
                 try:
@@ -149,7 +149,7 @@ RUN apt-get update && apt-get install -y \\
 RUN git config --global --add safe.directory '*'
 """,
             compose_fragment={
-                "volumes": ["~/.gitconfig:/home/renv/.gitconfig:ro", "~/.ssh:/home/renv/.ssh:ro"]
+                "volumes": ["~/.gitconfig:/home/wtd/.gitconfig:ro", "~/.ssh:/home/wtd/.ssh:ro"]
             },
         )
 
@@ -159,15 +159,15 @@ RUN git config --global --add safe.directory '*'
             dockerfile_content="""
 ARG USER_ID=1000
 ARG GROUP_ID=1000
-RUN groupadd -g ${GROUP_ID} renv && \\
-    useradd -u ${USER_ID} -g renv -m -s /bin/bash renv && \\
-    echo 'renv ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-USER renv
+RUN groupadd -g ${GROUP_ID} wtd && \\
+    useradd -u ${USER_ID} -g wtd -m -s /bin/bash wtd && \\
+    echo 'wtd ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+USER wtd
 WORKDIR /workspace
 """,
             compose_fragment={
                 "build": {"args": {"USER_ID": "${USER_ID:-1000}", "GROUP_ID": "${GROUP_ID:-1000}"}},
-                "environment": {"USER": "renv", "HOME": "/home/renv"},
+                "environment": {"USER": "wtd", "HOME": "/home/wtd"},
             },
         )
 
@@ -216,14 +216,14 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \\
         extensions["pixi"] = Extension(
             name="pixi",
             dockerfile_content="""
-# Install pixi as the renv user if user exists, otherwise as root
-RUN if id renv >/dev/null 2>&1; then \\
-        su - renv -c "curl -fsSL https://pixi.sh/install.sh | bash"; \\
+# Install pixi as the wtd user if user exists, otherwise as root
+RUN if id wtd >/dev/null 2>&1; then \\
+        su - wtd -c "curl -fsSL https://pixi.sh/install.sh | bash"; \\
     else \\
         curl -fsSL https://pixi.sh/install.sh | bash; \\
     fi
-# Add pixi to PATH for both root and renv user
-ENV PATH="/root/.pixi/bin:/home/renv/.pixi/bin:$PATH"
+# Add pixi to PATH for both root and wtd user
+ENV PATH="/root/.pixi/bin:/home/wtd/.pixi/bin:$PATH"
 """,
             compose_fragment={},
         )
@@ -232,9 +232,9 @@ ENV PATH="/root/.pixi/bin:/home/renv/.pixi/bin:$PATH"
         extensions["fzf"] = Extension(
             name="fzf",
             dockerfile_content="""
-RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/renv/.fzf && \\
-    chown -R renv:renv /home/renv/.fzf && \\
-    /home/renv/.fzf/install --all
+RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/wtd/.fzf && \\
+    chown -R wtd:wtd /home/wtd/.fzf && \\
+    /home/wtd/.fzf/install --all
 """,
             compose_fragment={},
         )
@@ -245,7 +245,7 @@ RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/renv/.fzf && \
         """Get extension by name, checking repo-local first, then built-in."""
         # Check repo-local extensions first
         if repo_path:
-            local_ext_dir = repo_path / ".renv" / "exts" / name
+            local_ext_dir = repo_path / ".wtd" / "exts" / name
             if local_ext_dir.exists():
                 return self._load_local_extension(name, local_ext_dir)
 
@@ -284,7 +284,7 @@ RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/renv/.fzf && \
         extensions = set(self._builtin_extensions.keys())
 
         if repo_path:
-            local_exts_dir = repo_path / ".renv" / "exts"
+            local_exts_dir = repo_path / ".wtd" / "exts"
             if local_exts_dir.exists():
                 extensions.update(d.name for d in local_exts_dir.iterdir() if d.is_dir())
 
@@ -292,11 +292,11 @@ RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/renv/.fzf && \
 
 
 def get_cache_dir() -> Path:
-    """Get renv cache directory."""
-    cache_dir = os.getenv("RENV_CACHE_DIR")
+    """Get wtd cache directory."""
+    cache_dir = os.getenv("WTD_CACHE_DIR")
     if cache_dir:
         return Path(cache_dir)
-    return Path.home() / ".renv"
+    return Path.home() / ".wtd"
 
 
 def get_workspaces_dir() -> Path:
@@ -428,7 +428,7 @@ def setup_worktree(repo_spec: RepoSpec) -> Path:
     return worktree_dir
 
 
-def ensure_buildx_builder(builder_name: str = "renv_builder") -> bool:
+def ensure_buildx_builder(builder_name: str = "wtd_builder") -> bool:
     """Ensure Buildx builder exists and is active."""
     try:
         # Check if builder exists
@@ -525,7 +525,7 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
             "REPO_NAME": config.repo_spec.repo,
             "BRANCH_NAME": config.repo_spec.branch.replace("/", "-"),
         },
-        "labels": {"renv.managed": "true"},
+        "labels": {"wtd.managed": "true"},
         "stdin_open": True,
         "tty": True,
         "command": ["tail", "-f", "/dev/null"],
@@ -603,7 +603,7 @@ def generate_bake_file(
 target "{target_name}" {{
     context = "."
     dockerfile = "Dockerfile.{ext.name}"
-    tags = ["renv/{ext.name}:{ext.hash}"]
+    tags = ["wtd/{ext.name}:{ext.hash}"]
     platforms = {platforms_hcl}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
@@ -618,14 +618,14 @@ target "{target_name}" {{
         dockerfile_path = build_dir / f"Dockerfile.{ext.name}"
         dockerfile_path.write_text(ext_dockerfile, encoding="utf-8")
 
-        current_image = f"renv/{ext.name}:{ext.hash}"
+        current_image = f"wtd/{ext.name}:{ext.hash}"
 
     # Final target combining all extensions
     final_target = f"""
 target "final" {{
     context = "."
     dockerfile = "Dockerfile"
-    tags = ["renv/final:{'-'.join(ext.hash for ext in extensions)}"]
+    tags = ["wtd/final:{'-'.join(ext.hash for ext in extensions)}"]
     platforms = {platforms_hcl}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
@@ -663,7 +663,7 @@ def should_rebuild_image(
 
 
 def build_image_with_bake(
-    build_dir: Path, builder_name: str = "renv_builder", load: bool = True, nocache: bool = False
+    build_dir: Path, builder_name: str = "wtd_builder", load: bool = True, nocache: bool = False
 ) -> bool:
     """Build images using docker buildx bake."""
     try:
@@ -805,7 +805,7 @@ def run_compose_service(
 
 
 def list_active_containers() -> List[Dict[str, str]]:
-    """List active renv containers."""
+    """List active wtd containers."""
     try:
         result = subprocess.run(
             [
@@ -863,7 +863,7 @@ class LaunchConfig:
     no_gui: bool = False
     no_gpu: bool = False
     platforms: Optional[List[str]] = None
-    builder_name: str = "renv_builder"
+    builder_name: str = "wtd_builder"
 
 
 def launch_environment(config: LaunchConfig) -> int:
@@ -918,7 +918,7 @@ def launch_environment(config: LaunchConfig) -> int:
         "".join(ext.hash for ext in loaded_extensions).encode()
     ).hexdigest()[:12]
 
-    image_name = f"renv/{config.repo_spec.repo}:{combined_hash}"
+    image_name = f"wtd/{config.repo_spec.repo}:{combined_hash}"
     base_image = repo_config.base_image
 
     # Check if rebuild needed: always rebuild if --rebuild or --nocache is set
@@ -1145,7 +1145,7 @@ end
 
 
 def cmd_prune(args) -> int:
-    """Prune containers, images, volumes, and renv folders."""
+    """Prune containers, images, volumes, and wtd folders."""
     try:
         if hasattr(args, "repo_spec") and args.repo_spec:
             # Selective pruning for specific repo spec
@@ -1169,11 +1169,11 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
         subprocess.run(["docker", "stop", container_name], check=False, capture_output=True)
         subprocess.run(["docker", "rm", container_name], check=False, capture_output=True)
 
-        # Remove associated images (renv images for this repo)
+        # Remove associated images (wtd images for this repo)
         removed_images = []
         try:
             result = subprocess.run(
-                ["docker", "images", "--filter", f"reference=renv/{repo_spec.repo}*", "-q"],
+                ["docker", "images", "--filter", f"reference=wtd/{repo_spec.repo}*", "-q"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1241,16 +1241,16 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
 
 
 def prune_all() -> int:
-    """Prune all renv-related containers, images, and folders."""
+    """Prune all wtd-related containers, images, and folders."""
     try:
         removed_containers = []
         removed_images = []
 
-        # Get all renv-related containers and remove them
+        # Get all wtd-related containers and remove them
         try:
-            # Only prune containers with the renv.managed label
+            # Only prune containers with the wtd.managed label
             result = subprocess.run(
-                ["docker", "ps", "-aq", "--filter", "label=renv.managed=true"],
+                ["docker", "ps", "-aq", "--filter", "label=wtd.managed=true"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1279,11 +1279,11 @@ def prune_all() -> int:
         except subprocess.CalledProcessError:
             pass
 
-        # Get renv-managed images and remove them
+        # Get wtd-managed images and remove them
         try:
-            # Only prune images with the renv.managed label
+            # Only prune images with the wtd.managed label
             result = subprocess.run(
-                ["docker", "images", "-q", "--filter", "label=renv.managed=true"],
+                ["docker", "images", "-q", "--filter", "label=wtd.managed=true"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1307,7 +1307,7 @@ def prune_all() -> int:
         except subprocess.CalledProcessError:
             pass
 
-        # Remove renv cache and workspaces folders
+        # Remove wtd cache and workspaces folders
         cache_dir = str(get_cache_dir())
         workspaces_dir = str(get_workspaces_dir())
         for folder in [cache_dir, workspaces_dir]:
@@ -1319,12 +1319,12 @@ def prune_all() -> int:
         if removed_containers or removed_images:
             print(f"Pruned {len(removed_containers)} containers and {len(removed_images)} images")
         else:
-            print("No renv resources found to prune")
+            print("No wtd resources found to prune")
 
-        logging.info("Pruned all renv-related containers, images, and folders")
+        logging.info("Pruned all wtd-related containers, images, and folders")
         return 0
     except Exception as e:
-        logging.error(f"Failed to prune all renv resources: {e}")
+        logging.error(f"Failed to prune all wtd resources: {e}")
         return 1
 
 
@@ -1382,18 +1382,18 @@ def cmd_doctor(args) -> int:  # pylint: disable=unused-argument
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        prog="renv",
-        usage="renv [OPTIONS] [-e ext1 ext2 ...] <owner>/<repo>[@<branch>][#<subfolder>] [command...]",
+        prog="wtd",
+        usage="wtd [OPTIONS] [-e ext1 ext2 ...] <owner>/<repo>[@<branch>][#<subfolder>] [command...]",
         description="""A development environment launcher using Docker, Git worktrees, and Buildx/Bake.
 
 Clones and manages repositories in isolated git worktrees, builds cached container environments using Docker Buildx + Bake, and launches fully configured shells or commands inside each branch-specific container workspace.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  renv blooop/test_wtd@main
-  renv -e uv blooop/test_wtd@feature/foo
-  renv -e git uv blooop/test_wtd@main#src
-  renv blooop/test_wtd git status
-  renv -e pixi blooop/test_wtd@dev "bash -c 'git pull && make test'"
+  wtd blooop/test_wtd@main
+  wtd -e uv blooop/test_wtd@feature/foo
+  wtd -e git uv blooop/test_wtd@main#src
+  wtd blooop/test_wtd git status
+  wtd -e pixi blooop/test_wtd@dev "bash -c 'git pull && make test'"
 
 Commands:
   launch       Launch container for the given repo and branch (default behavior)
@@ -1412,13 +1412,13 @@ Arguments:
   [command ...]    Command to run inside the container
 
 Environment:
-  RENV_CACHE_DIR            Set custom cache directory (default: ~/.renv/)
-  RENV_BASE_IMAGE           Override base image used for environments
-  RENV_CACHE_REGISTRY       Push/pull extension build cache to a registry
+  WTD_CACHE_DIR            Set custom cache directory (default: ~/.wtd/)
+  WTD_BASE_IMAGE           Override base image used for environments
+  WTD_CACHE_REGISTRY       Push/pull extension build cache to a registry
 
 Notes:
-  - Worktrees are stored under ~/.renv/workspaces/<owner>/<repo>/worktree-<branch>
-  - Extensions can be configured via .renv.yml in the repo
+  - Worktrees are stored under ~/.wtd/workspaces/<owner>/<repo>/worktree-<branch>
+  - Extensions can be configured via .wtd.yml in the repo
   - Extension images are hashed and reused across repos/branches automatically
   - Supports Docker socket sharing (DOOD) and Docker-in-Docker (DinD) setups
 """,
@@ -1475,8 +1475,8 @@ Notes:
     )
     parser.add_argument(
         "--builder",
-        default="renv_builder",
-        help="Use a custom Buildx builder name (default: renv_builder)",
+        default="wtd_builder",
+        help="Use a custom Buildx builder name (default: wtd_builder)",
     )
     parser.add_argument(
         "--platforms", help="Target platforms for Buildx (e.g. linux/amd64,linux/arm64)"

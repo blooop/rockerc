@@ -2,7 +2,7 @@
 set -e
 cd /tmp
 
-echo "=== TESTING RENV RECREATION AFTER DELETION ==="
+echo "=== TESTING WTD RECREATION AFTER DELETION ==="
 echo "This test verifies that wtd works correctly after deleting the .wtd folder"
 echo
 

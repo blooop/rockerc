@@ -1,5 +1,5 @@
 """
-Comprehensive test suite for the new renv implementation with Docker Compose + Buildx/Bake
+Comprehensive test suite for the new wtd implementation with Docker Compose + Buildx/Bake
 """
 
 import pytest
@@ -117,7 +117,7 @@ class TestRenvConfig:
     def test_load_yaml_config(self):
         """Test loading YAML configuration."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".renv.yml"
+            config_path = Path(tmpdir) / ".wtd.yml"
             config_data = {
                 "extensions": ["git", "x11"],
                 "base_image": "ubuntu:20.04",
@@ -137,7 +137,7 @@ class TestRenvConfig:
     def test_load_json_config(self):
         """Test loading JSON configuration."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".renv.json"
+            config_path = Path(tmpdir) / ".wtd.json"
             config_data = {"extensions": ["fzf", "uv"], "base_image": "debian:bullseye"}
 
             with open(config_path, "w", encoding="utf-8") as f:
@@ -179,7 +179,7 @@ class TestExtensionManager:
         """Test loading repo-local extensions."""
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_dir = Path(tmpdir) / "repo"
-            ext_dir = repo_dir / ".renv" / "exts" / "custom"
+            ext_dir = repo_dir / ".wtd" / "exts" / "custom"
             ext_dir.mkdir(parents=True)
 
             # Create extension files
@@ -212,7 +212,7 @@ class TestExtensionManager:
 class TestPathHelpers:
     """Test path helper functions."""
 
-    @patch.dict("os.environ", {"RENV_CACHE_DIR": "/custom/cache"})
+    @patch.dict("os.environ", {"WTD_CACHE_DIR": "/custom/cache"})
     def test_get_cache_dir_custom(self):
         """Test custom cache directory from environment."""
         assert get_cache_dir() == Path("/custom/cache")
@@ -220,7 +220,7 @@ class TestPathHelpers:
     @patch.dict("os.environ", {}, clear=True)
     def test_get_cache_dir_default(self):
         """Test default cache directory."""
-        assert get_cache_dir() == Path.home() / ".renv"
+        assert get_cache_dir() == Path.home() / ".wtd"
 
     def test_get_workspaces_dir(self):
         """Test workspaces directory."""
@@ -716,7 +716,7 @@ class TestCommands:
 class TestMainFunction:
     """Test main entry point."""
 
-    @patch("sys.argv", ["renv", "blooop/test_wtd@main"])
+    @patch("sys.argv", ["wtd", "blooop/test_wtd@main"])
     @patch("worktree_docker.worktree_docker.cmd_launch")
     def test_main_launch_command(self, mock_cmd_launch):
         """Test main function with launch command."""
@@ -726,7 +726,7 @@ class TestMainFunction:
         assert result == 0
         mock_cmd_launch.assert_called_once()
 
-    @patch("sys.argv", ["renv", "--list"])
+    @patch("sys.argv", ["wtd", "--list"])
     @patch("worktree_docker.worktree_docker.cmd_list")
     def test_main_list_command(self, mock_cmd_list):
         """Test main function with list command."""
@@ -736,7 +736,7 @@ class TestMainFunction:
         assert result == 0
         mock_cmd_list.assert_called_once()
 
-    @patch("sys.argv", ["renv", "--help"])
+    @patch("sys.argv", ["wtd", "--help"])
     def test_main_help(self):
         """Test main function with help."""
         with pytest.raises(SystemExit):
@@ -767,7 +767,7 @@ class TestIntegration:
             repo_dir.mkdir()
 
             # Create mock config
-            config_file = worktree_dir / ".renv.yml"
+            config_file = worktree_dir / ".wtd.yml"
             config_file.write_text("extensions: [git, x11]", encoding="utf-8")
 
             with patch("worktree_docker.worktree_docker.get_cache_dir", return_value=cache_dir):
@@ -855,15 +855,15 @@ version = "0.1.0"
             assert pixi_ext is not None
             assert pixi_ext.name == "pixi"
             # Check that the dockerfile includes logic to install as the right user
-            assert "if id renv" in pixi_ext.dockerfile_content
-            assert "su - renv -c" in pixi_ext.dockerfile_content
+            assert "if id wtd" in pixi_ext.dockerfile_content
+            assert "su - wtd -c" in pixi_ext.dockerfile_content
             # Check that PATH includes both locations
-            assert "/root/.pixi/bin:/home/renv/.pixi/bin" in pixi_ext.dockerfile_content
+            assert "/root/.pixi/bin:/home/wtd/.pixi/bin" in pixi_ext.dockerfile_content
 
-    @patch("sys.argv", ["renv", "blooop/test_wtd", "pixi", "--version"])
+    @patch("sys.argv", ["wtd", "blooop/test_wtd", "pixi", "--version"])
     @patch("worktree_docker.worktree_docker.cmd_launch")
     def test_command_line_parsing_with_flags(self, mock_cmd_launch):
-        """Test that flags in container commands are not parsed as renv flags."""
+        """Test that flags in container commands are not parsed as wtd flags."""
         mock_cmd_launch.return_value = 0
 
         result = main()

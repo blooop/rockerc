@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== RENV PRUNE FUNCTIONALITY TEST ==="
+echo "=== WTD PRUNE FUNCTIONALITY TEST ==="
 echo "Testing both selective and full prune operations"
 
 # Clean up any existing test containers and cache
