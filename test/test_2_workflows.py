@@ -1,7 +1,8 @@
 import subprocess
 import os
+from pathlib import Path
 
-WORKFLOWS_DIR = os.path.dirname(__file__)
+WORKFLOWS_DIR = Path(__file__).parent / "workflows"
 
 
 def run_workflow_script(script_name, allowed_returncodes=(0, 1)):
