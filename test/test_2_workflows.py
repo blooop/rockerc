@@ -252,4 +252,3 @@ def test_workflow_12_nocache():
     ), "Environment functionality not confirmed"
     assert "✓ Git status shows clean workspace" in output, "Clean workspace not confirmed"
     assert "✓ Global --nocache flag works" in output, "Global nocache flag not confirmed"
-
