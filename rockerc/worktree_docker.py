@@ -994,8 +994,8 @@ def cmd_install(args) -> int:  # pylint: disable=unused-argument
     import os  # pylint: disable=reimported,redefined-outer-name
 
     # Bash completion script
-    bash_completion = """# renv bash completion
-_renv_complete() {
+    bash_completion = """# wtd bash completion
+_wtd_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
     
@@ -1006,20 +1006,20 @@ _renv_complete() {
     fi
     
     # Complete repo specs from existing workspaces
-    if [[ -d ~/.renv/workspaces ]]; then
-        local repos=$(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+    if [[ -d ~/.wtd/workspaces ]]; then
+        local repos=$(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
                      sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
-        local branches=$(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+        local branches=$(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
                         sed 's|.*worktree-||' | sort -u)
         COMPREPLY=($(compgen -W "${repos} ${branches}" -- ${cur}))
     fi
 }
-complete -F _renv_complete renv
+complete -F _wtd_complete wtd
 """
 
     # Zsh completion script
-    zsh_completion = """#compdef renv
-_renv() {
+    zsh_completion = """#compdef wtd
+_wtd() {
     local context state line
     typeset -A opt_args
     
@@ -1031,51 +1031,51 @@ _renv() {
         commands)
             _alternative \\
                 'commands:commands:(launch list prune help)' \\
-                'repos:repositories:_renv_repos'
+                'repos:repositories:_wtd_repos'
             ;;
         args)
-            _renv_repos
+            _wtd_repos
             ;;
     esac
 }
 
-_renv_repos() {
-    if [[ -d ~/.renv/workspaces ]]; then
+_wtd_repos() {
+    if [[ -d ~/.wtd/workspaces ]]; then
         local repos branches
-        repos=($(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+        repos=($(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
                 sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u))
-        branches=($(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+        branches=($(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
                    sed 's|.*worktree-||' | sort -u))
         _describe 'repositories' repos
         _describe 'branches' branches  
     fi
 }
 
-_renv "$@"
+_wtd "$@"
 """
 
     # Fish completion script
-    fish_completion = """# renv fish completion
-complete -c renv -f
+    fish_completion = """# wtd fish completion
+complete -c wtd -f
 
 # Commands
-complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "launch" -d "Launch container for repo and branch"
-complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "list" -d "Show active worktrees and containers"  
-complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "prune" -d "Remove unused containers and images"
-complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "help" -d "Show help message"
+complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "launch" -d "Launch container for repo and branch"
+complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "list" -d "Show active worktrees and containers"  
+complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "prune" -d "Remove unused containers and images"
+complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "help" -d "Show help message"
 
 # Options
-complete -c renv -l install -d "Install shell auto-completion"
-complete -c renv -l rebuild -d "Force rebuild of container"
-complete -c renv -l nocache -d "Disable Buildx cache"
-complete -c renv -l no-gui -d "Disable X11/GUI support"
-complete -c renv -l no-gpu -d "Disable GPU passthrough"
-complete -c renv -l log-level -d "Set log level" -xa "debug info warn error"
+complete -c wtd -l install -d "Install shell auto-completion"
+complete -c wtd -l rebuild -d "Force rebuild of container"
+complete -c wtd -l nocache -d "Disable Buildx cache"
+complete -c wtd -l no-gui -d "Disable X11/GUI support"
+complete -c wtd -l no-gpu -d "Disable GPU passthrough"
+complete -c wtd -l log-level -d "Set log level" -xa "debug info warn error"
 
 # Dynamic repo completion
-if test -d ~/.renv/workspaces
-    for repo in (find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
-        complete -c renv -a "$repo" -d "Repository"
+if test -d ~/.wtd/workspaces
+    for repo in (find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
+        complete -c wtd -a "$repo" -d "Repository"
     end
 end
 """
@@ -1090,7 +1090,7 @@ end
         # Install bash completion
         bash_completion_dir = f"{home}/.bash_completion.d"
         os.makedirs(bash_completion_dir, exist_ok=True)
-        completion_file = f"{bash_completion_dir}/renv"
+        completion_file = f"{bash_completion_dir}/wtd"
 
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(bash_completion)
@@ -1103,7 +1103,7 @@ end
         # Install zsh completion
         zsh_completion_dir = f"{home}/.zsh/completions"
         os.makedirs(zsh_completion_dir, exist_ok=True)
-        completion_file = f"{zsh_completion_dir}/_renv"
+        completion_file = f"{zsh_completion_dir}/_wtd"
 
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(zsh_completion)
@@ -1117,7 +1117,7 @@ end
         # Install fish completion
         fish_completion_dir = f"{home}/.config/fish/completions"
         os.makedirs(fish_completion_dir, exist_ok=True)
-        completion_file = f"{fish_completion_dir}/renv.fish"
+        completion_file = f"{fish_completion_dir}/wtd.fish"
 
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(fish_completion)
