@@ -6,8 +6,8 @@ This checklist summarizes all requirements and features for building the `renv` 
 
 ## 1. General Requirements
 - [ ] Implement a Python CLI tool called `renv` (executable via `pyproject.toml`)
-- [ ] Use `rocker` directly for container management (not `rockerc`)
-- [ ] Must work on any repo, no `rockerc` file required
+- [ ] Use `rocker` directly for container management (not `worktree_docker`)
+- [ ] Must work on any repo, no `worktree_docker` file required
 - [ ] Use the `pixi` environment and tasks for tests and CI
 - [ ] Write comprehensive tests for all workflows (see provided bash scripts)
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-rockerc is a Python tool that provides a configuration-file approach to using [rocker](https://github.com/osrf/rocker) - a Docker container tool for robotics development. It reads `rockerc.yaml` configuration files and passes the arguments to rocker to simplify container management.
+worktree_docker is a Python tool that provides a configuration-file approach to using [rocker](https://github.com/osrf/rocker) - a Docker container tool for robotics development. It reads `worktree_docker.yaml` configuration files and passes the arguments to rocker to simplify container management.
 
 ## Development Commands
 
