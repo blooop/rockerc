@@ -61,7 +61,7 @@ def run_extension_test_generic(
         load_result = subprocess.run(
             [
                 "wtd",
-                "--rebuild",
+                # "--rebuild",
                 "-e",
                 extension_name,
                 test_repo,
