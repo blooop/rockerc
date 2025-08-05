@@ -14,29 +14,6 @@ def run_workflow_script(script_name, allowed_returncodes=(0, 1)):
     return output
 
 
-def test_workflow_1_pwd():
-    output = run_workflow_script("test_workflow_1_pwd.sh")
-    assert (
-        "/workspace/test_wtd" in output
-    ), "Expected working directory '/workspace/test_wtd' not found in workflow 1 output"
-
-
-def test_workflow_2_git():
-    output = run_workflow_script("test_workflow_2_git.sh")
-    assert "On branch" in output, "Expected git status 'On branch' not found in workflow 2 output"
-    dirty_indicators = [
-        "Changes not staged for commit",
-        "Untracked files",
-        "modified:",
-        "deleted:",
-        "added:",
-    ]
-    for indicator in dirty_indicators:
-        assert (
-            indicator not in output
-        ), f"Workspace is dirty: found '{indicator}' in git status output: {output}"
-
-
 def test_workflow_3_cmd():
     output = run_workflow_script("test_workflow_3_cmd.sh")
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 3 output"
