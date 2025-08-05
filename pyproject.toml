@@ -69,7 +69,6 @@ build-backend = "hatchling.build"
 include = ["worktree_docker"]
 
 [project.scripts]
-worktree_docker = "worktree_docker.worktree_docker:run_worktree_docker"
 wtd = "worktree_docker.worktree_docker:main"
 
 # Environments
