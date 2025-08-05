@@ -46,7 +46,7 @@ class TestRepoSpec:
         """Test simple repo specification parsing."""
         spec = RepoSpec.parse("blooop/test_wtd")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_wtd"
         assert spec.branch == "main"
         assert spec.subfolder is None
 
@@ -54,7 +54,7 @@ class TestRepoSpec:
         """Test repo specification with branch."""
         spec = RepoSpec.parse("blooop/test_wtd@feature/new")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_wtd"
         assert spec.branch == "feature/new"
         assert spec.subfolder is None
 
@@ -62,7 +62,7 @@ class TestRepoSpec:
         """Test repo specification with subfolder."""
         spec = RepoSpec.parse("blooop/test_wtd#src/core")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_wtd"
         assert spec.branch == "main"
         assert spec.subfolder == "src/core"
 
@@ -70,19 +70,19 @@ class TestRepoSpec:
         """Test repo specification with both branch and subfolder."""
         spec = RepoSpec.parse("blooop/test_wtd@feature/new#src/core")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_wtd"
         assert spec.branch == "feature/new"
         assert spec.subfolder == "src/core"
 
     def test_str_representation(self):
         """Test string representation."""
-        spec = RepoSpec("blooop", "test_renv", "feature/new", "src")
+        spec = RepoSpec("blooop", "test_wtd", "feature/new", "src")
         assert str(spec) == "blooop/test_wtd@feature/new#src"
 
     def test_compose_project_name(self):
         """Test Docker Compose project name generation."""
-        spec = RepoSpec("blooop", "test_renv", "feature/new")
-        assert spec.compose_project_name == "test_renv-feature-new"
+        spec = RepoSpec("blooop", "test_wtd", "feature/new")
+        assert spec.compose_project_name == "test_wtd-feature-new"
 
 
 class TestExtension:
