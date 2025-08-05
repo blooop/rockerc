@@ -13,7 +13,7 @@ def cleanup_containers():
     print("Cleaning up test environment...")
     try:
         # Use wtd prune to clean up properly
-        subprocess.run(["wtd", "--prune"], capture_output=True, timeout=30)
+        subprocess.run(["wtd", "--prune"], capture_output=True, timeout=30, check=False)
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
         pass
 
@@ -23,6 +23,7 @@ def cleanup_containers():
             ["docker", "container", "prune", "-f", "--filter", "label=wtd"],
             capture_output=True,
             timeout=30,
+            check=False,
         )
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
         pass
@@ -54,7 +55,9 @@ def test_extension_generic(extension_name: str, test_repo: str = "blooop/test_wt
     try:
         # Step 1: Test that extension appears in extension list
         print("=== STEP 1: TEST EXTENSION IN LIST ===")
-        result = subprocess.run(["wtd", "--ext-list"], capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            ["wtd", "--ext-list"], capture_output=True, text=True, timeout=30, check=False
+        )
 
         if extension_name not in result.stdout:
             print(f"✗ {extension_name} extension not found in extension list")
@@ -79,6 +82,7 @@ def test_extension_generic(extension_name: str, test_repo: str = "blooop/test_wt
             capture_output=True,
             text=True,
             timeout=120,
+            check=False,
         )
 
         output = load_result.stdout + load_result.stderr
@@ -114,6 +118,7 @@ def test_extension_generic(extension_name: str, test_repo: str = "blooop/test_wt
             capture_output=True,
             text=True,
             timeout=120,
+            check=False,
         )
 
         test_output = test_result.stdout + test_result.stderr
@@ -135,6 +140,7 @@ def test_extension_generic(extension_name: str, test_repo: str = "blooop/test_wt
             capture_output=True,
             text=True,
             timeout=120,
+            check=False,
         )
 
         multi_output = multi_result.stdout + multi_result.stderr
