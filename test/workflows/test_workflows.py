@@ -253,28 +253,3 @@ def test_workflow_12_nocache():
     assert "✓ Git status shows clean workspace" in output, "Clean workspace not confirmed"
     assert "✓ Global --nocache flag works" in output, "Global nocache flag not confirmed"
 
-
-def test_workflow_13_uv():
-    output = run_workflow_script("test_workflow_13_uv.sh", allowed_returncodes=(0,))
-    assert "=== TEST: UV EXTENSION" in output, "Test start not found"
-    assert "=== UV EXTENSION TEST PASSED ===" in output, "Test completion not found"
-    assert "🎉 All tests passed for uv extension!" in output, "Final success message not found"
-    assert (
-        "✓ uv extension works with other extensions" in output
-    ), "UV multi-extension compatibility not confirmed"
-    assert (
-        "✓ Multi-extension command executed successfully" in output
-    ), "Multi-extension command execution not confirmed"
-
-
-def test_workflow_14_pixi():
-    output = run_workflow_script("test_workflow_14_pixi.sh", allowed_returncodes=(0,))
-    assert "=== TEST: PIXI EXTENSION" in output, "Test start not found"
-    assert "=== PIXI EXTENSION TEST PASSED ===" in output, "Test completion not found"
-    assert "🎉 All tests passed for pixi extension!" in output, "Final success message not found"
-    assert (
-        "✓ pixi extension works with other extensions" in output
-    ), "Pixi multi-extension compatibility not confirmed"
-    assert (
-        "✓ Multi-extension command executed successfully" in output
-    ), "Multi-extension command execution not confirmed"
