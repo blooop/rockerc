@@ -127,18 +127,18 @@ def test_workflow_6_clean_git():
     assert result.returncode == 0, f"Workflow 6 clean git failed: {output}"
 
 
-def test_workflow_7_renv_recreation():
-    """Test that renv works correctly after deleting .renv folder"""
-    script = os.path.join(WORKFLOWS_DIR, "test_workflow_7_renv_recreation.sh")
+def test_workflow_7_wtd_recreation():
+    """Test that wtd works correctly after deleting .wtd folder"""
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_7_wtd_recreation.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
-    assert result.returncode == 0, f"Workflow 7 renv recreation failed: {output}"
+    assert result.returncode == 0, f"Workflow 7 wtd recreation failed: {output}"
 
     # Check that all test steps completed successfully
-    assert "=== STEP 1: Normal renv operation ===" in output, "Step 1 not found"
-    assert "=== STEP 2: Deleting .renv folder ===" in output, "Step 2 not found"
-    assert "=== STEP 3: Testing renv recreation ===" in output, "Step 3 not found"
+    assert "=== STEP 1: Normal wtd operation ===" in output, "Step 1 not found"
+    assert "=== STEP 2: Deleting .wtd folder ===" in output, "Step 2 not found"
+    assert "=== STEP 3: Testing wtd recreation ===" in output, "Step 3 not found"
     assert "=== STEP 4: Testing subsequent operations ===" in output, "Step 4 not found"
     assert "=== ALL TESTS PASSED ===" in output, "Final success message not found"
 
@@ -148,7 +148,7 @@ def test_workflow_7_renv_recreation():
 
 
 def test_workflow_8_prune():
-    """Test renv prune functionality for both selective and full cleanup"""
+    """Test wtd prune functionality for both selective and full cleanup"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_8_prune.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -174,15 +174,15 @@ def test_workflow_8_prune():
         "✓ Worktree correctly removed by selective prune" in output
     ), "Selective prune did not remove worktree"
     assert (
-        "✓ All renv containers correctly removed by full prune" in output
-    ), "Full prune did not remove all renv containers"
+        "✓ All wtd containers correctly removed by full prune" in output
+    ), "Full prune did not remove all wtd containers"
     assert (
-        "✓ .renv directory correctly removed by full prune" in output
-    ), "Full prune did not remove .renv directory"
+        "✓ .wtd directory correctly removed by full prune" in output
+    ), "Full prune did not remove .wtd directory"
 
 
 def test_workflow_9_container_reuse():
-    """Test renv container reuse functionality"""
+    """Test wtd container reuse functionality"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_9_container_reuse.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -234,7 +234,7 @@ def test_workflow_9_container_reuse():
 
 
 def test_workflow_10_new_branch():
-    """Test renv workflow for creating new branches that don't exist yet with prune functionality"""
+    """Test wtd workflow for creating new branches that don't exist yet with prune functionality"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_10_new_branch.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -279,10 +279,10 @@ def test_workflow_10_new_branch():
     assert "✓ Selective prune completed" in output, "Selective prune not completed"
     assert "✓ Full prune completed" in output, "Full prune not completed"
     assert (
-        "✓ All renv containers correctly removed by full prune" in output
+        "✓ All wtd containers correctly removed by full prune" in output
     ), "Full prune container removal not confirmed"
     assert (
-        "✓ .renv directory correctly removed by full prune" in output
+        "✓ .wtd directory correctly removed by full prune" in output
     ), "Full prune directory removal not confirmed"
 
     # Check that workflow still works after full prune
@@ -298,7 +298,7 @@ def test_workflow_10_new_branch():
 
 
 def test_workflow_11_install_completion():
-    """Test renv --install shell completion feature"""
+    """Test wtd --install shell completion feature"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_11_install_completion.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -335,7 +335,7 @@ def test_workflow_11_install_completion():
 
 
 def test_workflow_12_nocache():
-    """Test renv --nocache feature for disabling build cache"""
+    """Test wtd --nocache feature for disabling build cache"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_12_nocache.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -365,7 +365,7 @@ def test_workflow_12_nocache():
 
 
 def test_workflow_13_uv():
-    """Test renv uv extension for Python package management"""
+    """Test wtd uv extension for Python package management"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_13_uv.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -407,7 +407,7 @@ def test_workflow_13_uv():
 
 
 def test_workflow_14_pixi():
-    """Test renv pixi extension for package management"""
+    """Test wtd pixi extension for package management"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_14_pixi.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)

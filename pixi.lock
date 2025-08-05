@@ -1285,7 +1285,7 @@ packages:
 - pypi: ./
   name: rockerc
   version: 0.7.1
-  sha256: c730172a063ebd979dd068c196e6a7757f94868a892c89cc0e2efe3aca00545f
+  sha256: 1cf79724848f35ce72ae65756d11ab99f204133d4d549e2777d4874e74437a2b
   requires_dist:
   - rocker>=0.2.17
   - deps-rocker>=0.10

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Test workflow for --install shell completion feature
-# This test verifies that renv --install creates completion scripts
+# This test verifies that wtd --install creates completion scripts
 
 set -e
 
@@ -9,9 +9,9 @@ set -e
 cleanup() {
     echo "Cleaning up test environment..."
     # Remove test completion files
-    rm -f /tmp/test_bash_completion_renv 2>/dev/null || true
-    rm -f /tmp/test_zsh_completion_renv 2>/dev/null || true
-    rm -f /tmp/test_fish_completion_renv 2>/dev/null || true
+    rm -f /tmp/test_bash_completion_wtd 2>/dev/null || true
+    rm -f /tmp/test_zsh_completion_wtd 2>/dev/null || true
+    rm -f /tmp/test_fish_completion_wtd 2>/dev/null || true
 }
 
 # Set up cleanup trap
@@ -23,14 +23,14 @@ echo "=== TEST: SHELL COMPLETION INSTALLATION ==="
 echo "=== STEP 1: TEST BASH COMPLETION INSTALLATION ==="
 
 # Create a temporary directory for testing
-TEST_HOME="/tmp/renv_test_home"
+TEST_HOME="/tmp/wtd_test_home"
 mkdir -p "$TEST_HOME"
 
 # Run with modified HOME to avoid polluting user's actual completion
-HOME="$TEST_HOME" pixi run python -m rockerc.renv --install
+HOME="$TEST_HOME" pixi run python -m rockerc.worktree_docker --install
 
 # Check that bash completion was created
-if [ -f "$TEST_HOME/.bash_completion.d/renv" ]; then
+if [ -f "$TEST_HOME/.bash_completion.d/wtd" ]; then
     echo "✓ Bash completion file created successfully"
 else
     echo "✗ Bash completion file not found"
@@ -38,7 +38,7 @@ else
 fi
 
 # Check that the completion file contains expected content
-if grep -q "_renv_complete" "$TEST_HOME/.bash_completion.d/renv"; then
+if grep -q "_wtd_complete" "$TEST_HOME/.bash_completion.d/wtd"; then
     echo "✓ Bash completion contains expected function"
 else
     echo "✗ Bash completion doesn't contain expected function"
@@ -46,7 +46,7 @@ else
 fi
 
 # Check that it contains the right commands
-if grep -q "renv" "$TEST_HOME/.bash_completion.d/renv"; then
+if grep -q "wtd" "$TEST_HOME/.bash_completion.d/wtd"; then
     echo "✓ Bash completion contains correct commands (no destroy)"
 else
     echo "✗ Bash completion doesn't contain correct commands"
@@ -56,7 +56,7 @@ fi
 echo "=== STEP 2: VERIFY COMPLETION CONTENT ==="
 
 # Verify the completion script is syntactically valid bash
-if bash -n "$TEST_HOME/.bash_completion.d/renv"; then
+if bash -n "$TEST_HOME/.bash_completion.d/wtd"; then
     echo "✓ Bash completion script syntax is valid"
 else
     echo "✗ Bash completion script has syntax errors"
@@ -66,7 +66,7 @@ fi
 echo "=== STEP 3: TEST HELP SHOWS INSTALL OPTION ==="
 
 # Test that help shows the install option
-HELP_OUTPUT=$(pixi run python -m rockerc.renv --help 2>&1)
+HELP_OUTPUT=$(pixi run python -m rockerc.wtd --help 2>&1)
 
 if echo "$HELP_OUTPUT" | grep -q "Install shell auto-completion"; then
     echo "✓ Help shows --install option"
@@ -79,7 +79,7 @@ fi
 echo "=== STEP 4: TEST COMPLETION WITH UNSUPPORTED SHELL ==="
 
 # Test with an unsupported shell environment
-SHELL="/bin/unsupported_shell" HOME="$TEST_HOME" pixi run python -m rockerc.renv --install 2>&1 | tee /tmp/install_output
+SHELL="/bin/unsupported_shell" HOME="$TEST_HOME" pixi run python -m rockerc.wtd --install 2>&1 | tee /tmp/install_output
 
 if grep -q "Unknown shell: unsupported_shell" /tmp/install_output; then
     echo "✓ Handles unsupported shell gracefully"
