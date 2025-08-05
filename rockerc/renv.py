@@ -921,8 +921,8 @@ def launch_environment(config: LaunchConfig) -> int:
     image_name = f"renv/{config.repo_spec.repo}:{combined_hash}"
     base_image = repo_config.base_image
 
-    # Check if rebuild needed
-    if config.rebuild or should_rebuild_image(image_name, loaded_extensions):
+    # Check if rebuild needed: always rebuild if --rebuild or --nocache is set
+    if config.rebuild or config.nocache or should_rebuild_image(image_name, loaded_extensions):
         # Ensure Buildx builder
         if not ensure_buildx_builder(config.builder_name):
             return 1
@@ -939,6 +939,9 @@ def launch_environment(config: LaunchConfig) -> int:
             return 1
 
         logging.info(f"Built image: {image_name}")
+
+        # Always remove any existing container if rebuilding (for nocache or rebuild)
+        cleanup_stale_container(config.repo_spec)
 
     # Get build cache directory for compose file
     build_dir = get_build_cache_dir(config.repo_spec)
