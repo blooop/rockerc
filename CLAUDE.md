@@ -87,3 +87,5 @@ Supports Python 3.9 through 3.13 with separate Pixi environments for each versio
 - **iterfzf**: Interactive fuzzy finding for repository/branch selection
 
 When making any changes, keep this file up to date
+
+After every command always run `pixi run ci` to confirm all checks pass. If ci does not complete, fix the errors, to ensure the code is correct, and run ci until it passes.
