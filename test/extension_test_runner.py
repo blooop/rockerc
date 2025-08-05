@@ -39,7 +39,9 @@ def cleanup_containers():
         pass
 
 
-def test_extension_generic(extension_name: str, test_repo: str = "blooop/test_wtd@main") -> bool:
+def run_extension_test_generic(
+    extension_name: str, test_repo: str = "blooop/test_wtd@main"
+) -> bool:
     """
     Generic extension test runner that handles all the boilerplate.
 
@@ -185,7 +187,7 @@ def main():
     cleanup_containers()
 
     try:
-        success = test_extension_generic(extension_name)
+        success = run_extension_test_generic(extension_name)
         if success:
             print(f"\n🎉 All tests passed for {extension_name} extension!")
             sys.exit(0)
