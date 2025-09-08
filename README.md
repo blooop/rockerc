@@ -40,6 +40,21 @@ rockerc
 
 This will search recursively for rockerc.yaml and pass those arguments to rocker
 
+### Attach/Fork from a running container
+
+You can derive a new rocker-run container from an existing running Docker container, preserving its run options and adding your rockerc extensions:
+
+```
+rockerc --from-container <container-name-or-id>
+```
+
+rockerc will:
+- Inspect the container to extract image and relevant `docker run` options (volumes, ports, env, user, workdir, devices, caps, etc.).
+- Merge those options with your `rockerc.yaml` extensions.
+- Launch a new container (named `<original>-rockerc` by default) via `rocker` with both the original settings and your extensions. If the default name exists, a short suffix is added.
+
+Note: Docker cannot change mounts/devices of an already-running container. When needed, rockerc creates a new container that mirrors the original and applies extensions.
+
 ## Motivation
 
 [Rocker](https://github.com/osrf/rocker) is an alternative to docker-compose that makes it easier to run containers with access to features of the local environment and add extra capabilities to existing docker images.  However rocker has many configurable options and it can get hard to read or reuse those arguments.  This is a naive wrapper that read a rockerc.yaml file and passes them to rocker.  There are currently [no plans](https://github.com/osrf/rocker/issues/148) to integrate docker-compose like functionalty directly into rocker so I made this as a proof of concept to see what the ergonomics of it would be like. 

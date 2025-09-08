@@ -5,6 +5,9 @@ import yaml
 import shlex
 import os
 import logging
+import json
+import random
+import string
 
 
 def yaml_dict_to_args(d: dict) -> str:
@@ -158,6 +161,46 @@ def run_rockerc(path: str = "."):
         merged_dict["args"].remove("create-dockerfile")
         create_dockerfile = True
 
+    # Support creating a new rocker container from an existing running container
+    from_container = None
+    if "--from-container" in sys.argv:
+        try:
+            idx = sys.argv.index("--from-container")
+            from_container = sys.argv[idx + 1]
+            # remove both tokens so they aren't forwarded to rocker
+            del sys.argv[idx : idx + 2]
+        except (ValueError, IndexError):
+            logging.error("--from-container requires a container name or ID")
+            sys.exit(2)
+
+    if from_container:
+        try:
+            container_args = extract_docker_run_args_from_container(from_container)
+        except subprocess.CalledProcessError as e:
+            logging.error("Failed to inspect container '%s'", from_container)
+            logging.error("%s", e)
+            sys.exit(e.returncode)
+
+        # Prefer rockerc.yaml settings for name if present; otherwise use derived name
+        if "name" not in merged_dict and container_args.get("name"):
+            merged_dict["name"] = container_args["name"]
+
+        # Always take image from the container
+        if container_args.get("image"):
+            merged_dict["image"] = container_args["image"]
+
+        # Merge oyr-run-arg strings if present
+        def _strip_quotes(s: str) -> str:
+            return s.strip().strip('"').strip("'")
+
+        existing_oyr = merged_dict.get("oyr-run-arg", "")
+        derived_oyr = container_args.get("oyr-run-arg", "")
+        if existing_oyr and derived_oyr:
+            combined = f"{_strip_quotes(existing_oyr)} {_strip_quotes(derived_oyr)}".strip()
+            merged_dict["oyr-run-arg"] = f'"{combined}"'
+        elif derived_oyr:
+            merged_dict["oyr-run-arg"] = derived_oyr
+
     cmd_args = yaml_dict_to_args(merged_dict)
     if len(cmd_args) > 0:
         if len(sys.argv) > 1:
@@ -177,6 +220,162 @@ def run_rockerc(path: str = "."):
     else:
         logging.error("no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:")
         subprocess.call("rocker -h", shell=True)
+
+
+def _rand_suffix(n: int = 5) -> str:
+    return "".join(random.choices(string.ascii_lowercase + string.digits, k=n))
+
+
+def _container_exists(name: str) -> bool:
+    try:
+        out = subprocess.run(
+            ["docker", "ps", "-a", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+    except subprocess.CalledProcessError:
+        return False
+    return name in out
+
+
+def inspect_container(container: str) -> dict:
+    """Return docker inspect JSON for a container as a dict."""
+    cp = subprocess.run(
+        ["docker", "inspect", container], capture_output=True, text=True, check=True
+    )
+    data = json.loads(cp.stdout)
+    if isinstance(data, list):
+        return data[0]
+    return data
+
+
+def build_oyr_run_args_from_inspect(info: dict) -> str:
+    """Build a string of raw docker run args from docker inspect info.
+
+    This is intended to be passed via off-your-rocker as a single
+    --oyr-run-arg string.
+    """
+    parts: list[str] = []
+
+    host_cfg = info.get("HostConfig", {})
+    cfg = info.get("Config", {})
+
+    # network mode
+    net_mode = host_cfg.get("NetworkMode")
+    if net_mode and net_mode not in ("default",):
+        parts += ["--network", str(net_mode)]
+
+    # volumes/binds
+    binds = host_cfg.get("Binds") or []
+    for b in binds:
+        parts += ["-v", b]
+
+    # ports
+    port_bindings = host_cfg.get("PortBindings") or {}
+    for container_port, host_list in port_bindings.items():
+        for mapping in host_list or []:
+            host_ip = mapping.get("HostIp") or ""
+            host_port = mapping.get("HostPort") or ""
+            hp = f"{host_ip}:{host_port}" if host_ip else host_port
+            if hp:
+                parts += ["-p", f"{hp}:{container_port}"]
+
+    # env
+    envs = cfg.get("Env") or []
+    for e in envs:
+        parts += ["-e", e]
+
+    # user and workdir
+    user = cfg.get("User")
+    if user:
+        parts += ["--user", str(user)]
+    workdir = cfg.get("WorkingDir")
+    if workdir:
+        parts += ["--workdir", str(workdir)]
+
+    # runtime (e.g., nvidia)
+    runtime = host_cfg.get("Runtime")
+    if runtime:
+        parts += ["--runtime", str(runtime)]
+
+    # privileged
+    if host_cfg.get("Privileged"):
+        parts.append("--privileged")
+
+    # cap add
+    for cap in host_cfg.get("CapAdd") or []:
+        parts += ["--cap-add", cap]
+
+    # security opts
+    for so in host_cfg.get("SecurityOpt") or []:
+        parts += ["--security-opt", so]
+
+    # devices
+    for dev in host_cfg.get("Devices") or []:
+        host = dev.get("PathOnHost") or ""
+        ctr = dev.get("PathInContainer") or ""
+        perm = dev.get("CgroupPermissions") or ""
+        spec = ":".join([p for p in [host, ctr, perm] if p])
+        if spec:
+            parts += ["--device", spec]
+
+    # shm-size
+    shm = host_cfg.get("ShmSize")
+    if isinstance(shm, int) and shm > 0:
+        parts += ["--shm-size", str(shm)]
+
+    # tmpfs
+    tmpfs = host_cfg.get("Tmpfs") or {}
+    for path, opts in tmpfs.items():
+        val = path if not opts else f"{path}:{opts}"
+        parts += ["--tmpfs", val]
+
+    # sysctls
+    for k, v in (host_cfg.get("Sysctls") or {}).items():
+        parts += ["--sysctl", f"{k}={v}"]
+
+    # readonly root
+    if host_cfg.get("ReadonlyRootfs"):
+        parts.append("--read-only")
+
+    # extra hosts
+    for eh in host_cfg.get("ExtraHosts") or []:
+        parts += ["--add-host", eh]
+
+    return " ".join(parts)
+
+
+def extract_docker_run_args_from_container(container: str) -> dict:
+    """Extract image/name/run-args from a running container to recreate via rocker.
+
+    Returns a dictionary suitable to merge into rockerc's merged_dict with keys:
+    - image
+    - name
+    - oyr-run-arg (raw docker run args string)
+    """
+    info = inspect_container(container)
+
+    # image
+    image = info.get("Config", {}).get("Image")
+
+    # name for the new container
+    orig_name = (info.get("Name") or "").lstrip("/") or "rockerc"
+    candidate = f"{orig_name}-rockerc"
+    name = candidate
+    if _container_exists(candidate):
+        name = f"{candidate}-{_rand_suffix()}"
+
+    # build raw run args
+    oyr = build_oyr_run_args_from_inspect(info)
+
+    out = {"image": image}
+    if name:
+        out["name"] = f'"{name}"'
+    if oyr:
+        # Quote to preserve spaces through shlex.split
+        out["oyr-run-arg"] = f'"{oyr}"'
+    return out
 
 
 if __name__ == "__main__":
