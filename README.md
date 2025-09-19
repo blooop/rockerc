@@ -29,6 +29,11 @@ Then install rockerc and its dependencies globally with:
 pipx install --include-deps rockerc
 ```
 
+to develop run
+```
+pipx install --include-deps . --force
+```
+
 This will ensure that `rockerc` and `rocker` commands are available on your PATH.
 
 ## Usage
