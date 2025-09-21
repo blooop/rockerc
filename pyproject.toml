@@ -1,6 +1,6 @@
 [project]
 name = "rockerc"
-version = "0.8.1"
+version = "0.9.0"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
