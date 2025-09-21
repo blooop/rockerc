@@ -43,7 +43,17 @@ navigate to a directory with a `rockerc.yaml` file and run:
 rockerc 
 ```
 
-This will search recursively for rockerc.yaml and pass those arguments to rocker
+This will search for a `rockerc.yaml` in the current directory and pass those arguments to `rocker`.
+
+If no `rockerc.yaml` is found in the current directory, rockerc will look for a user-level config at `~/.rockerc.yaml` and use it if present.
+
+If neither is found, rockerc will not enable any extensions by default. You can still pass `rocker` arguments on the command line, for example:
+
+```
+rockerc ubuntu:22.04
+```
+
+which runs `rocker ubuntu:22.04` without any extensions.
 
 ## Motivation
 

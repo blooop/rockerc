@@ -39,21 +39,36 @@ def yaml_dict_to_args(d: dict) -> str:
 
 
 def collect_arguments(path: str = ".") -> dict:
-    """Search for rockerc.yaml files and return a merged dictionary
+    """Search for rockerc.yaml files and return a merged dictionary.
+
+    Behavior:
+    - Looks for `rockerc.yaml` in the provided path.
+    - If not found, falls back to `~/.rockerc.yaml`.
+    - If still not found, returns an empty dict (no extensions by default).
 
     Args:
-        path (str, optional): path to reach for files. Defaults to ".".
+        path (str, optional): Path to search for files. Defaults to ".".
 
     Returns:
         dict: A dictionary of merged rockerc arguments
     """
     search_path = pathlib.Path(path)
     merged_dict = {}
+
+    # Primary: local rockerc.yaml
     for p in search_path.glob("rockerc.yaml"):
         print(f"loading {p}")
-
         with open(p.as_posix(), "r", encoding="utf-8") as f:
             merged_dict.update(yaml.safe_load(f))
+
+    # Fallback: ~/.rockerc.yaml if none found locally
+    if not merged_dict:
+        home_rc = pathlib.Path.home() / ".rockerc.yaml"
+        if home_rc.exists():
+            print(f"loading {home_rc}")
+            with open(home_rc.as_posix(), "r", encoding="utf-8") as f:
+                merged_dict.update(yaml.safe_load(f))
+
     return merged_dict
 
 
@@ -136,13 +151,10 @@ def run_rockerc(path: str = "."):
     logging.basicConfig(level=logging.INFO)
     merged_dict = collect_arguments(path)
 
-    if not merged_dict:
-        logging.error("No rockerc.yaml found in the specified directory. Please create a rockerc.yaml file with rocker arguments. See 'rocker -h' for help.")
-        sys.exit(1)
-
+    # If no config found anywhere, continue with no extensions by default.
+    # If a config is found but has no 'args', treat as empty list (no extensions).
     if "args" not in merged_dict:
-        logging.error("No 'args' key found in rockerc.yaml. Please add an 'args' list with rocker arguments. See 'rocker -h' for help.")
-        sys.exit(1)
+        merged_dict["args"] = []
 
     if "dockerfile" in merged_dict:
         logging.info("Building dockerfile...")
@@ -159,15 +171,18 @@ def run_rockerc(path: str = "."):
         create_dockerfile = True
 
     cmd_args = yaml_dict_to_args(merged_dict)
-    if len(cmd_args) > 0:
-        if len(sys.argv) > 1:
-            # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
-            dockerfile_arg = "--create-dockerfile"
-            if dockerfile_arg in sys.argv:
-                sys.argv.remove(dockerfile_arg)
-                create_dockerfile = True
-            cmd_args += " " + " ".join(sys.argv[1:])
 
+    # Always allow passing through CLI args (e.g., image or rocker flags)
+    if len(sys.argv) > 1:
+        # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
+        dockerfile_arg = "--create-dockerfile"
+        if dockerfile_arg in sys.argv:
+            sys.argv.remove(dockerfile_arg)
+            create_dockerfile = True
+        extra_args = " ".join(sys.argv[1:])
+        cmd_args = (cmd_args + " " + extra_args).strip() if cmd_args else extra_args
+
+    if len(cmd_args) > 0:
         cmd = f"rocker {cmd_args}"
         logging.info(f"running cmd: {cmd}")
         split_cmd = shlex.split(cmd)
@@ -175,7 +190,9 @@ def run_rockerc(path: str = "."):
             save_rocker_cmd(split_cmd)
         subprocess.run(split_cmd, check=True)
     else:
-        logging.error("no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:")
+        logging.error(
+            "no rocker arguments provided. No rockerc.yaml found locally or in ~/.rockerc.yaml, and no CLI args given. Showing rocker help:"
+        )
         subprocess.call("rocker -h", shell=True)
 
 
