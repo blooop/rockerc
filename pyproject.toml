@@ -7,7 +7,7 @@ readme = "README.md"
 license = "MIT"
 
 dependencies = [
-  "rocker>=0.2.17",
+  "rocker>=0.2.19",
   "deps-rocker>=0.12",
   "off-your-rocker>=0.1.0",
   "pyyaml>=5",
