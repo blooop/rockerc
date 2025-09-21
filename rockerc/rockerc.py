@@ -111,24 +111,18 @@ def save_rocker_cmd(split_cmd: str):
         # Make the bash script executable
         os.chmod(bash_script_path, 0o755)
 
-        logging.info(
-            f"Files have been saved:\n - Dockerfile.rocker\n - {bash_script_path} (executable)"
-        )
+        logging.info(f"Files have been saved:\n - Dockerfile.rocker\n - {bash_script_path} (executable)")
     except subprocess.CalledProcessError as e:
         logging.error("[rockerc] Error: rocker dry-run failed.")
         logging.error(f"[rockerc] Command: {' '.join(dry_run)}")
         logging.error(f"[rockerc] Exit code: {e.returncode}")
         logging.error(f"[rockerc] Output:\n{e.stdout}")
         logging.error(f"[rockerc] Error output:\n{e.stderr}")
-        logging.error(
-            "[rockerc] This likely means rocker or one of its extensions failed to generate a Dockerfile. Please check your rockerc.yaml and rocker installation."
-        )
+        logging.error("[rockerc] This likely means rocker or one of its extensions failed to generate a Dockerfile. Please check your rockerc.yaml and rocker installation.")
         sys.exit(e.returncode)
     except ValueError as e:
         logging.error(f"[rockerc] Error processing the output from rocker dry-run: {e}")
-        logging.error(
-            "[rockerc] The output format may have changed or rocker failed to generate the expected output."
-        )
+        logging.error("[rockerc] The output format may have changed or rocker failed to generate the expected output.")
         sys.exit(1)
 
 
@@ -143,15 +137,11 @@ def run_rockerc(path: str = "."):
     merged_dict = collect_arguments(path)
 
     if not merged_dict:
-        logging.error(
-            "No rockerc.yaml found in the specified directory. Please create a rockerc.yaml file with rocker arguments. See 'rocker -h' for help."
-        )
+        logging.error("No rockerc.yaml found in the specified directory. Please create a rockerc.yaml file with rocker arguments. See 'rocker -h' for help.")
         sys.exit(1)
 
     if "args" not in merged_dict:
-        logging.error(
-            "No 'args' key found in rockerc.yaml. Please add an 'args' list with rocker arguments. See 'rocker -h' for help."
-        )
+        logging.error("No 'args' key found in rockerc.yaml. Please add an 'args' list with rocker arguments. See 'rocker -h' for help.")
         sys.exit(1)
 
     if "dockerfile" in merged_dict:
@@ -185,9 +175,7 @@ def run_rockerc(path: str = "."):
             save_rocker_cmd(split_cmd)
         subprocess.run(split_cmd, check=True)
     else:
-        logging.error(
-            "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
-        )
+        logging.error("no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:")
         subprocess.call("rocker -h", shell=True)
 
 
