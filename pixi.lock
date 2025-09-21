@@ -1291,7 +1291,7 @@ packages:
 - pypi: ./
   name: rockerc
   version: 0.9.0
-  sha256: 147d0f8d0fe65c5baf9cf137a60e12d22378a1b14d6f4af2d7b94e5acbd316df
+  sha256: a1b48c1f44f94c0c5f01d73fbf051dd1e72c6628abefed8e86666e9ff0a58d39
   requires_dist:
   - rocker>=0.2.17
   - deps-rocker>=0.11
@@ -1304,7 +1304,6 @@ packages:
   - hypothesis>=6.104.2,<=6.138.13 ; extra == 'test'
   - ruff>=0.5.0,<=0.12.11 ; extra == 'test'
   - coverage>=7.5.4,<=7.10.6 ; extra == 'test'
-  - pixi-rocker>=0.0.9 ; extra == 'extensions'
   - palanteer-rocker>=0.0.1 ; extra == 'extensions'
   - lazygit-rocker>=0.0.1 ; extra == 'extensions'
   - ghrocker==0.0.10 ; extra == 'extensions'

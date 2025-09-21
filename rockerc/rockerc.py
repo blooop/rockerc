@@ -7,14 +7,14 @@ import logging
 from typing import Tuple, List
 
 
-def yaml_dict_to_args(d: dict) -> List[str]:
-    """Given a dictionary of arguments turn it into an argument list to pass to rocker
+def yaml_dict_to_args(d: dict) -> str:
+    """Given a dictionary of arguments turn it into an argument string to pass to rocker
 
     Args:
         d (dict): rocker arguments dictionary
 
     Returns:
-        List[str]: rocker arguments list
+        str: rocker arguments string
     """
 
     cmd_list = []
@@ -36,7 +36,7 @@ def yaml_dict_to_args(d: dict) -> List[str]:
     if image is not None:
         cmd_list.append(str(image))
 
-    return cmd_list
+    return " ".join(cmd_list)
 
 
 def collect_arguments(path: str = ".") -> dict:
@@ -111,7 +111,7 @@ def build_docker(dockerfile_path: str = ".") -> str:
     return tag
 
 
-def save_rocker_cmd(split_cmd: str):
+def save_rocker_cmd(split_cmd: List[str]):
     dry_run = split_cmd + ["--mode", "dry-run"]
     try:
         s = subprocess.run(dry_run, capture_output=True, text=True, check=True)
@@ -225,15 +225,16 @@ def run_rockerc(path: str = "."):
     merged_dict["args"] = final_args
 
     # Get the arguments from the YAML config
-    cmd_args = yaml_dict_to_args(merged_dict)
+    cmd_args_str = yaml_dict_to_args(merged_dict)
 
-    if not cmd_args:
+    if not cmd_args_str:
         logging.error(
             "no rocker arguments provided. No rockerc.yaml found locally or in ~/.rockerc.yaml, and no CLI args given. Showing rocker help:"
         )
         subprocess.call("rocker -h", shell=True)
         return
 
+    cmd_args = cmd_args_str.split()
     cmd = ["rocker"] + cmd_args
     logging.info("running cmd: %r", cmd)
     if create_dockerfile:
