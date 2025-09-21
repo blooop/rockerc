@@ -4,7 +4,7 @@ import pathlib
 import yaml
 import os
 import logging
-from typing import Tuple, List
+from typing import List
 
 
 def yaml_dict_to_args(d: dict) -> str:
@@ -170,63 +170,6 @@ def save_rocker_cmd(split_cmd: List[str]):
         sys.exit(1)
 
 
-def merge_cli_args(cfg_args: List[str], argv: List[str]) -> Tuple[List[str], bool]:
-    """
-    Returns (final_args, create_dockerfile_flag).
-    - Takes the args list from your YAML.
-    - Removes & detects '--create-dockerfile' anywhere.
-    - Converts CLI extension flags (like --gemini) to extension names (gemini).
-    - Appends any user-passed argv elements.
-    """
-    final = cfg_args.copy()
-    create = False
-    if "--create-dockerfile" in final:
-        final.remove("--create-dockerfile")
-        create = True
-
-    # Process CLI arguments
-    processed_argv = []
-    i = 0
-    while i < len(argv):
-        arg = argv[i]
-
-        # Check for --create-dockerfile first
-        if arg == "--create-dockerfile":
-            create = True
-            i += 1
-            continue
-
-        # Handle extension flags like --gemini, --x11, etc.
-        if arg.startswith("--") and len(arg) > 2:
-            # Known rocker key-value options that take parameters
-            key_value_options = {
-                "--user",
-                "--home",
-                "--mount",
-                "--volume",
-                "--env",
-                "--network",
-                "--device",
-            }
-
-            if arg in key_value_options and i + 1 < len(argv):
-                # This is a key-value pair, keep as is
-                processed_argv.extend([arg, argv[i + 1]])
-                i += 2
-            else:
-                # This is an extension flag, convert --flag to flag
-                extension_name = arg[2:]  # Remove --
-                final.append(extension_name)
-                i += 1
-        else:
-            # Regular argument (image name, etc.)
-            processed_argv.append(arg)
-            i += 1
-
-    final.extend(processed_argv)
-    return final, create
-
-
 def run_rockerc(path: str = "."):
     """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
 
@@ -253,23 +196,35 @@ def run_rockerc(path: str = "."):
 
     args: List[str] = merged_dict.get("args", [])
 
-    # Merge CLI args and handle create-dockerfile flag
-    final_args, create_dockerfile = merge_cli_args(args, sys.argv[1:])
+    # Handle CLI args separately - filter out --create-dockerfile and pass rest through
+    cli_args = [arg for arg in sys.argv[1:] if arg != "--create-dockerfile"]
+    create_dockerfile = "--create-dockerfile" in sys.argv[1:]
 
-    # Update merged_dict with the final args (without create-dockerfile)
-    merged_dict["args"] = final_args
+    # Also check for --create-dockerfile in config args
+    if "--create-dockerfile" in args:
+        args = [arg for arg in args if arg != "--create-dockerfile"]
+        create_dockerfile = True
 
-    # Get the arguments from the YAML config
-    cmd_args_str = yaml_dict_to_args(merged_dict)
+    # Update merged_dict to only contain YAML args (for extensions from config)
+    merged_dict["args"] = args
 
-    if not cmd_args_str:
+    # Get the arguments from the YAML config (this handles config-based extensions)
+    yaml_cmd_args_str = yaml_dict_to_args(merged_dict)
+
+    # Combine YAML args with CLI args
+    if yaml_cmd_args_str:
+        yaml_cmd_args = yaml_cmd_args_str.split()
+        cmd_args = yaml_cmd_args + cli_args
+    else:
+        cmd_args = cli_args
+
+    if not cmd_args:
         logging.error(
             "no rocker arguments provided. No rockerc.yaml found locally or in ~/.rockerc.yaml, and no CLI args given. Showing rocker help:"
         )
         subprocess.call("rocker -h", shell=True)
         return
 
-    cmd_args = cmd_args_str.split()
     cmd = ["rocker"] + cmd_args
     logging.info("running cmd: %r", cmd)
     if create_dockerfile:
