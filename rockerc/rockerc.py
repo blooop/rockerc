@@ -40,40 +40,53 @@ def yaml_dict_to_args(d: dict) -> str:
 
 
 def collect_arguments(path: str = ".") -> dict:
-    """Search for rockerc.yaml files and return a merged dictionary.
+    """Search for rockerc.yaml files recursively upward and return a merged dictionary.
 
     Behavior:
-    - Looks for `rockerc.yaml` in the provided path.
-    - If not found, falls back to `~/.rockerc.yaml`.
+    - Searches recursively upward from the provided path for `rockerc.yaml` or `.rockerc.yaml`.
+    - Starts from the given path and moves up parent directories until a config file is found.
+    - If no config file is found during upward search, falls back to `~/.rockerc.yaml`.
     - If still not found, returns an empty dict (no extensions by default).
 
     Args:
-        path (str, optional): Path to search for files. Defaults to ".".
+        path (str, optional): Starting path to search from. Defaults to ".".
 
     Returns:
         dict: A dictionary of merged rockerc arguments
     """
-    search_path = pathlib.Path(path)
+    search_path = pathlib.Path(path).resolve()
     merged_dict = {}
 
-    # Primary: local rockerc.yaml
-    for p in search_path.glob("rockerc.yaml"):
-        print(f"loading {p}")
-        with open(p.as_posix(), "r", encoding="utf-8") as f:
-            try:
-                yaml_content = yaml.safe_load(f)
-                if yaml_content is not None and isinstance(yaml_content, dict):
-                    merged_dict.update(yaml_content)
-                elif yaml_content is not None:
-                    print(
-                        f"Error: YAML file {p} must contain a dictionary, not {type(yaml_content).__name__}"
-                    )
-                    sys.exit(1)
-            except yaml.YAMLError as e:
-                print(f"Error: Failed to parse YAML file {p}: {e}")
-                sys.exit(1)
+    # Search recursively upward for rockerc.yaml or .rockerc.yaml
+    current_path = search_path
+    while True:
+        # Check for both rockerc.yaml and .rockerc.yaml in current directory
+        for config_name in ["rockerc.yaml", ".rockerc.yaml"]:
+            config_file = current_path / config_name
+            if config_file.exists():
+                print(f"loading {config_file}")
+                with open(config_file.as_posix(), "r", encoding="utf-8") as f:
+                    try:
+                        yaml_content = yaml.safe_load(f)
+                        if yaml_content is not None and isinstance(yaml_content, dict):
+                            merged_dict.update(yaml_content)
+                            return merged_dict
+                        elif yaml_content is not None:
+                            print(
+                                f"Error: YAML file {config_file} must contain a dictionary, not {type(yaml_content).__name__}"
+                            )
+                            sys.exit(1)
+                    except yaml.YAMLError as e:
+                        print(f"Error: Failed to parse YAML file {config_file}: {e}")
+                        sys.exit(1)
 
-    # Fallback: ~/.rockerc.yaml if none found locally
+        # Move to parent directory
+        parent = current_path.parent
+        if parent == current_path:  # Reached filesystem root
+            break
+        current_path = parent
+
+    # Fallback: ~/.rockerc.yaml if none found during upward search
     if not merged_dict:
         home_rc = pathlib.Path.home() / ".rockerc.yaml"
         if home_rc.exists():
