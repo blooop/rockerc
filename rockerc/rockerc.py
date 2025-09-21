@@ -5,37 +5,39 @@ import yaml
 import shlex
 import os
 import logging
+from typing import Tuple, List
 
 
-def yaml_dict_to_args(d: dict) -> str:
-    """Given a dictionary of arguments turn it into an argument string to pass to rocker
+def yaml_dict_to_args(d: dict) -> List[str]:
+    """Given a dictionary of arguments turn it into an argument list to pass to rocker
 
     Args:
         d (dict): rocker arguments dictionary
 
     Returns:
-        str: rocker arguments string
+        List[str]: rocker arguments list
     """
 
-    cmd_str = ""
+    cmd_list = []
 
     image = d.pop("image", None)  # special value
-    # image = d.pop("create-dockerfile", None)  # special value
 
     if "args" in d:
         args = d.pop("args")
+        # Remove whitespace-only arguments
+        args = [arg.strip() for arg in args if arg.strip()]
         for a in args:
-            cmd_str += f"--{a} "
+            cmd_list.extend([f"--{a}"])
 
     # the rest of the named arguments
     for k, v in d.items():
-        cmd_str += f"--{k} {v} "
+        cmd_list.extend([f"--{k}", str(v)])
 
     # last argument is the image name
     if image is not None:
-        cmd_str += image
+        cmd_list.append(str(image))
 
-    return cmd_str
+    return cmd_list
 
 
 def collect_arguments(path: str = ".") -> dict:
@@ -59,7 +61,16 @@ def collect_arguments(path: str = ".") -> dict:
     for p in search_path.glob("rockerc.yaml"):
         print(f"loading {p}")
         with open(p.as_posix(), "r", encoding="utf-8") as f:
-            merged_dict.update(yaml.safe_load(f))
+            try:
+                yaml_content = yaml.safe_load(f)
+                if yaml_content is not None and isinstance(yaml_content, dict):
+                    merged_dict.update(yaml_content)
+                elif yaml_content is not None:
+                    print(f"Error: YAML file {p} must contain a dictionary, not {type(yaml_content).__name__}")
+                    sys.exit(1)
+            except yaml.YAMLError as e:
+                print(f"Error: Failed to parse YAML file {p}: {e}")
+                sys.exit(1)
 
     # Fallback: ~/.rockerc.yaml if none found locally
     if not merged_dict:
@@ -67,7 +78,16 @@ def collect_arguments(path: str = ".") -> dict:
         if home_rc.exists():
             print(f"loading {home_rc}")
             with open(home_rc.as_posix(), "r", encoding="utf-8") as f:
-                merged_dict.update(yaml.safe_load(f))
+                try:
+                    yaml_content = yaml.safe_load(f)
+                    if yaml_content is not None and isinstance(yaml_content, dict):
+                        merged_dict.update(yaml_content)
+                    elif yaml_content is not None:
+                        print(f"Error: YAML file {home_rc} must contain a dictionary, not {type(yaml_content).__name__}")
+                        sys.exit(1)
+                except yaml.YAMLError as e:
+                    print(f"Error: Failed to parse YAML file {home_rc}: {e}")
+                    sys.exit(1)
 
     return merged_dict
 
@@ -141,6 +161,28 @@ def save_rocker_cmd(split_cmd: str):
         sys.exit(1)
 
 
+def merge_cli_args(cfg_args: List[str], argv: List[str]) -> Tuple[List[str], bool]:
+    """
+    Returns (final_args, create_dockerfile_flag).
+    - Takes the args list from your YAML.
+    - Removes & detects '--create-dockerfile' anywhere.
+    - Appends any user-passed argv elements.
+    """
+    final = cfg_args.copy()
+    create = False
+    if "--create-dockerfile" in final:
+        final.remove("--create-dockerfile")
+        create = True
+
+    # now check CLI too
+    if "--create-dockerfile" in argv:
+        argv = [a for a in argv if a != "--create-dockerfile"]
+        create = True
+
+    final.extend(argv)
+    return final, create
+
+
 def run_rockerc(path: str = "."):
     """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
 
@@ -165,35 +207,29 @@ def run_rockerc(path: str = "."):
         # remove the dockerfile command as it does not need to be passed onto rocker
         merged_dict.pop("dockerfile")
 
-    create_dockerfile = False
-    if "create-dockerfile" in merged_dict["args"]:
-        merged_dict["args"].remove("create-dockerfile")
-        create_dockerfile = True
+    args: List[str] = merged_dict.get("args", [])
 
+    # Merge CLI args and handle create-dockerfile flag
+    final_args, create_dockerfile = merge_cli_args(args, sys.argv[1:])
+
+    # Update merged_dict with the final args (without create-dockerfile)
+    merged_dict["args"] = final_args
+
+    # Get the arguments from the YAML config
     cmd_args = yaml_dict_to_args(merged_dict)
 
-    # Always allow passing through CLI args (e.g., image or rocker flags)
-    if len(sys.argv) > 1:
-        # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
-        dockerfile_arg = "--create-dockerfile"
-        if dockerfile_arg in sys.argv:
-            sys.argv.remove(dockerfile_arg)
-            create_dockerfile = True
-        extra_args = " ".join(sys.argv[1:])
-        cmd_args = (cmd_args + " " + extra_args).strip() if cmd_args else extra_args
-
-    if len(cmd_args) > 0:
-        cmd = f"rocker {cmd_args}"
-        logging.info(f"running cmd: {cmd}")
-        split_cmd = shlex.split(cmd)
-        if create_dockerfile:
-            save_rocker_cmd(split_cmd)
-        subprocess.run(split_cmd, check=True)
-    else:
+    if not cmd_args:
         logging.error(
             "no rocker arguments provided. No rockerc.yaml found locally or in ~/.rockerc.yaml, and no CLI args given. Showing rocker help:"
         )
         subprocess.call("rocker -h", shell=True)
+        return
+
+    cmd = ["rocker"] + cmd_args
+    logging.info("running cmd: %r", cmd)
+    if create_dockerfile:
+        save_rocker_cmd(cmd)
+    subprocess.run(cmd, check=True)
 
 
 if __name__ == "__main__":
