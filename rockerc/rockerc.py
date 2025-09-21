@@ -2,7 +2,6 @@ import sys
 import subprocess
 import pathlib
 import yaml
-import shlex
 import os
 import logging
 from typing import Tuple, List
@@ -66,7 +65,9 @@ def collect_arguments(path: str = ".") -> dict:
                 if yaml_content is not None and isinstance(yaml_content, dict):
                     merged_dict.update(yaml_content)
                 elif yaml_content is not None:
-                    print(f"Error: YAML file {p} must contain a dictionary, not {type(yaml_content).__name__}")
+                    print(
+                        f"Error: YAML file {p} must contain a dictionary, not {type(yaml_content).__name__}"
+                    )
                     sys.exit(1)
             except yaml.YAMLError as e:
                 print(f"Error: Failed to parse YAML file {p}: {e}")
@@ -83,7 +84,9 @@ def collect_arguments(path: str = ".") -> dict:
                     if yaml_content is not None and isinstance(yaml_content, dict):
                         merged_dict.update(yaml_content)
                     elif yaml_content is not None:
-                        print(f"Error: YAML file {home_rc} must contain a dictionary, not {type(yaml_content).__name__}")
+                        print(
+                            f"Error: YAML file {home_rc} must contain a dictionary, not {type(yaml_content).__name__}"
+                        )
                         sys.exit(1)
                 except yaml.YAMLError as e:
                     print(f"Error: Failed to parse YAML file {home_rc}: {e}")
@@ -146,18 +149,24 @@ def save_rocker_cmd(split_cmd: str):
         # Make the bash script executable
         os.chmod(bash_script_path, 0o755)
 
-        logging.info(f"Files have been saved:\n - Dockerfile.rocker\n - {bash_script_path} (executable)")
+        logging.info(
+            f"Files have been saved:\n - Dockerfile.rocker\n - {bash_script_path} (executable)"
+        )
     except subprocess.CalledProcessError as e:
         logging.error("[rockerc] Error: rocker dry-run failed.")
         logging.error(f"[rockerc] Command: {' '.join(dry_run)}")
         logging.error(f"[rockerc] Exit code: {e.returncode}")
         logging.error(f"[rockerc] Output:\n{e.stdout}")
         logging.error(f"[rockerc] Error output:\n{e.stderr}")
-        logging.error("[rockerc] This likely means rocker or one of its extensions failed to generate a Dockerfile. Please check your rockerc.yaml and rocker installation.")
+        logging.error(
+            "[rockerc] This likely means rocker or one of its extensions failed to generate a Dockerfile. Please check your rockerc.yaml and rocker installation."
+        )
         sys.exit(e.returncode)
     except ValueError as e:
         logging.error(f"[rockerc] Error processing the output from rocker dry-run: {e}")
-        logging.error("[rockerc] The output format may have changed or rocker failed to generate the expected output.")
+        logging.error(
+            "[rockerc] The output format may have changed or rocker failed to generate the expected output."
+        )
         sys.exit(1)
 
 
