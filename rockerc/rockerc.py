@@ -67,7 +67,11 @@ def collect_arguments(path: str = ".") -> dict:
         if home_rc.exists():
             print(f"loading {home_rc}")
             with open(home_rc.as_posix(), "r", encoding="utf-8") as f:
-                merged_dict.update(yaml.safe_load(f))
+                try:
+                    merged_dict.update(yaml.safe_load(f))
+                except yaml.YAMLError as e:
+                    print(f"Error: Failed to parse YAML file {home_rc}: {e}")
+                    sys.exit(1)
 
     return merged_dict
 
