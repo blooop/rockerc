@@ -175,43 +175,73 @@ class TestMergeCliArgs(TestCase):
 
     def test_merge_cli_args_no_create_dockerfile(self):
         """Test merge_cli_args without --create-dockerfile flag"""
-        cfg_args = ["--x11", "--nvidia"]
-        argv = ["--user", "ubuntu:latest"]
+        cfg_args = ["x11", "nvidia"]
+        argv = ["--user", "test", "ubuntu:latest"]
 
         result_args, create_flag = merge_cli_args(cfg_args, argv)
 
-        assert result_args == ["--x11", "--nvidia", "--user", "ubuntu:latest"]
+        assert result_args == ["x11", "nvidia", "--user", "test", "ubuntu:latest"]
         assert create_flag is False
 
     def test_merge_cli_args_create_dockerfile_in_cfg(self):
         """Test merge_cli_args with --create-dockerfile in config"""
-        cfg_args = ["--x11", "--create-dockerfile", "--nvidia"]
-        argv = ["--user", "ubuntu:latest"]
+        cfg_args = ["x11", "--create-dockerfile", "nvidia"]
+        argv = ["--user", "test", "ubuntu:latest"]
 
         result_args, create_flag = merge_cli_args(cfg_args, argv)
 
-        assert result_args == ["--x11", "--nvidia", "--user", "ubuntu:latest"]
+        assert result_args == ["x11", "nvidia", "--user", "test", "ubuntu:latest"]
         assert create_flag is True
 
     def test_merge_cli_args_create_dockerfile_in_argv(self):
         """Test merge_cli_args with --create-dockerfile in CLI args"""
-        cfg_args = ["--x11", "--nvidia"]
-        argv = ["--create-dockerfile", "--user", "ubuntu:latest"]
+        cfg_args = ["x11", "nvidia"]
+        argv = ["--create-dockerfile", "--user", "test", "ubuntu:latest"]
 
         result_args, create_flag = merge_cli_args(cfg_args, argv)
 
-        assert result_args == ["--x11", "--nvidia", "--user", "ubuntu:latest"]
+        assert result_args == ["x11", "nvidia", "--user", "test", "ubuntu:latest"]
         assert create_flag is True
 
     def test_merge_cli_args_create_dockerfile_in_both(self):
         """Test merge_cli_args with --create-dockerfile in both"""
-        cfg_args = ["--x11", "--create-dockerfile", "--nvidia"]
-        argv = ["--create-dockerfile", "--user", "ubuntu:latest"]
+        cfg_args = ["x11", "--create-dockerfile", "nvidia"]
+        argv = ["--create-dockerfile", "--user", "test", "ubuntu:latest"]
 
         result_args, create_flag = merge_cli_args(cfg_args, argv)
 
-        assert result_args == ["--x11", "--nvidia", "--user", "ubuntu:latest"]
+        assert result_args == ["x11", "nvidia", "--user", "test", "ubuntu:latest"]
         assert create_flag is True
+
+    def test_merge_cli_args_extension_flags(self):
+        """Test merge_cli_args with extension flags like --gemini"""
+        cfg_args = ["x11"]
+        argv = ["--gemini", "--nvidia", "ubuntu:latest"]
+
+        result_args, create_flag = merge_cli_args(cfg_args, argv)
+
+        assert result_args == ["x11", "gemini", "nvidia", "ubuntu:latest"]
+        assert create_flag is False
+
+    def test_merge_cli_args_key_value_pairs(self):
+        """Test merge_cli_args with key-value pairs"""
+        cfg_args = ["x11"]
+        argv = ["--user", "testuser", "--gemini", "ubuntu:latest"]
+
+        result_args, create_flag = merge_cli_args(cfg_args, argv)
+
+        assert result_args == ["x11", "gemini", "--user", "testuser", "ubuntu:latest"]
+        assert create_flag is False
+
+    def test_merge_cli_args_bare_args_stay_bare(self):
+        """Test that bare CLI args (like image names) are passed through as-is"""
+        cfg_args = ["x11"]
+        argv = ["ubuntu:latest"]
+
+        result_args, create_flag = merge_cli_args(cfg_args, argv)
+
+        assert result_args == ["x11", "ubuntu:latest"]
+        assert create_flag is False
 
 
 class TestBuildDocker(TestCase):
@@ -408,4 +438,21 @@ class TestRunRockerc(TestCase):
 
         mock_save.assert_called_once()
         expected_cmd = ["rocker", "--x11", "ubuntu:latest"]
+        mock_subprocess.assert_called_once_with(expected_cmd, check=True)
+
+    @patch("rockerc.rockerc.collect_arguments")
+    @patch("subprocess.run")
+    @patch("logging.basicConfig")
+    @patch("logging.info")
+    def test_run_rockerc_cli_args_with_dashes(
+        self, _mock_log_info, _mock_log_config, mock_subprocess, mock_collect
+    ):
+        """Test run_rockerc with CLI args that have dashes like --gemini"""
+        mock_collect.return_value = {"image": "ubuntu:latest"}
+
+        with patch("sys.argv", ["rockerc", "--gemini"]):
+            run_rockerc()
+
+        # Should convert --gemini to gemini in the args
+        expected_cmd = ["rocker", "--gemini", "ubuntu:latest"]
         mock_subprocess.assert_called_once_with(expected_cmd, check=True)

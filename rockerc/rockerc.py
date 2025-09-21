@@ -175,6 +175,7 @@ def merge_cli_args(cfg_args: List[str], argv: List[str]) -> Tuple[List[str], boo
     Returns (final_args, create_dockerfile_flag).
     - Takes the args list from your YAML.
     - Removes & detects '--create-dockerfile' anywhere.
+    - Converts CLI extension flags (like --gemini) to extension names (gemini).
     - Appends any user-passed argv elements.
     """
     final = cfg_args.copy()
@@ -183,12 +184,46 @@ def merge_cli_args(cfg_args: List[str], argv: List[str]) -> Tuple[List[str], boo
         final.remove("--create-dockerfile")
         create = True
 
-    # now check CLI too
-    if "--create-dockerfile" in argv:
-        argv = [a for a in argv if a != "--create-dockerfile"]
-        create = True
+    # Process CLI arguments
+    processed_argv = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
 
-    final.extend(argv)
+        # Check for --create-dockerfile first
+        if arg == "--create-dockerfile":
+            create = True
+            i += 1
+            continue
+
+        # Handle extension flags like --gemini, --x11, etc.
+        if arg.startswith("--") and len(arg) > 2:
+            # Known rocker key-value options that take parameters
+            key_value_options = {
+                "--user",
+                "--home",
+                "--mount",
+                "--volume",
+                "--env",
+                "--network",
+                "--device",
+            }
+
+            if arg in key_value_options and i + 1 < len(argv):
+                # This is a key-value pair, keep as is
+                processed_argv.extend([arg, argv[i + 1]])
+                i += 2
+            else:
+                # This is an extension flag, convert --flag to flag
+                extension_name = arg[2:]  # Remove --
+                final.append(extension_name)
+                i += 1
+        else:
+            # Regular argument (image name, etc.)
+            processed_argv.append(arg)
+            i += 1
+
+    final.extend(processed_argv)
     return final, create
 
 
