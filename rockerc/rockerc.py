@@ -4,6 +4,7 @@ import pathlib
 import yaml
 import os
 import logging
+import argparse
 from typing import List
 
 
@@ -124,7 +125,7 @@ def build_docker(dockerfile_path: str = ".") -> str:
     return tag
 
 
-def save_rocker_cmd(split_cmd: List[str]):
+def save_rocker_cmd(split_cmd: List[str], show_dockerfile: bool = False):
     dry_run = split_cmd + ["--mode", "dry-run"]
     try:
         s = subprocess.run(dry_run, capture_output=True, text=True, check=True)
@@ -162,9 +163,16 @@ def save_rocker_cmd(split_cmd: List[str]):
         # Make the bash script executable
         os.chmod(bash_script_path, 0o755)
 
-        logging.info(
-            f"Files have been saved:\n - Dockerfile.rocker\n - {bash_script_path} (executable)"
-        )
+        if show_dockerfile:
+            logging.info(
+                f"Files have been saved:\n - Dockerfile.rocker\n - {bash_script_path} (executable)"
+            )
+            print("\nGenerated Dockerfile content:")
+            print("=" * 50)
+            print(section_to_save.strip())
+            print("=" * 50)
+        else:
+            logging.info(f"Files saved: Dockerfile.rocker, {bash_script_path} (executable)")
     except subprocess.CalledProcessError as e:
         logging.error("[rockerc] Error: rocker dry-run failed.")
         logging.error(f"[rockerc] Command: {' '.join(dry_run)}")
@@ -183,25 +191,89 @@ def save_rocker_cmd(split_cmd: List[str]):
         sys.exit(1)
 
 
+def parse_cli_args():
+    """Parse command line arguments for rockerc"""
+    parser = argparse.ArgumentParser(
+        description="rockerc - A tool to parse rockerc.yaml files and pass arguments to rocker",
+        add_help=False  # We'll handle help manually to pass through to rocker when needed
+    )
+
+    parser.add_argument("--show-dockerfile", action="store_true",
+                       help="Show the generated Dockerfile content when creating Dockerfiles")
+    parser.add_argument("--help", "-h", action="store_true",
+                       help="Show this help message and exit")
+
+    # Parse known args so we can pass unknown ones to rocker
+    known_args, unknown_args = parser.parse_known_args()
+
+    if known_args.help:
+        parser.print_help()
+        print("\nAdditional rocker arguments will be passed through to rocker.")
+        print("Run 'rocker --help' to see rocker-specific options.")
+        sys.exit(0)
+
+    return known_args, unknown_args
+
+
+def show_config_info(merged_dict: dict, config_files_loaded: List[str]):
+    """Display information about loaded configuration and extensions"""
+    print("rockerc configuration:")
+
+    if config_files_loaded:
+        print(f"  Config files: {', '.join(config_files_loaded)}")
+    else:
+        print("  Config files: None found")
+
+    if "image" in merged_dict:
+        print(f"  Base image: {merged_dict['image']}")
+
+    extensions = merged_dict.get("args", [])
+    if extensions:
+        print(f"  Extensions: {', '.join(extensions)}")
+    else:
+        print("  Extensions: None")
+
+    print()  # Empty line for separation
+
+
 def run_rockerc(path: str = "."):
     """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
 
     Args:
         path (str, optional): Search path for rockerc.yaml files. Defaults to ".".
     """
+    # Parse CLI arguments first
+    known_args, unknown_args = parse_cli_args()
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+    # Track which config files were loaded for display
+    config_files_loaded = []
+
+    # Temporarily capture the print statements from collect_arguments
+    import builtins
+    original_print = builtins.print
+    def capture_print(*args, **kwargs):
+        if args and "loading" in str(args[0]):
+            config_files_loaded.append(str(args[0]).replace("loading ", ""))
+        # Don't print the loading messages anymore
+
+    builtins.print = capture_print
     merged_dict = collect_arguments(path)
+    builtins.print = original_print
 
     # If no config found anywhere, continue with no extensions by default.
     # If a config is found but has no 'args', treat as empty list (no extensions).
     if "args" not in merged_dict:
         merged_dict["args"] = []
 
+    # Show configuration info
+    show_config_info(merged_dict, config_files_loaded)
+
     if "dockerfile" in merged_dict:
         logging.info("Building dockerfile...")
         merged_dict["image"] = build_docker(merged_dict["dockerfile"])
-        logging.info("disabling 'pull' extension as a Dockerfile is used instead")
+        logging.info("Disabling 'pull' extension as a Dockerfile is used instead")
         if "pull" in merged_dict["args"]:
             merged_dict["args"].remove("pull")  # can't pull as we just build image
         # remove the dockerfile command as it does not need to be passed onto rocker
@@ -210,8 +282,8 @@ def run_rockerc(path: str = "."):
     args: List[str] = merged_dict.get("args", [])
 
     # Handle CLI args separately - filter out --create-dockerfile and pass rest through
-    cli_args = [arg for arg in sys.argv[1:] if arg != "--create-dockerfile"]
-    create_dockerfile = "--create-dockerfile" in sys.argv[1:]
+    cli_args = [arg for arg in unknown_args if arg != "--create-dockerfile"]
+    create_dockerfile = "--create-dockerfile" in unknown_args
 
     # Also check for --create-dockerfile in config args
     if "--create-dockerfile" in args:
@@ -232,16 +304,15 @@ def run_rockerc(path: str = "."):
         cmd_args = cli_args
 
     if not cmd_args:
-        logging.error(
-            "no rocker arguments provided. No rockerc.yaml found locally or in ~/.rockerc.yaml, and no CLI args given. Showing rocker help:"
-        )
-        subprocess.call("rocker -h", shell=True)
+        logging.error("No rocker arguments provided. No rockerc.yaml found locally or in ~/.rockerc.yaml, and no CLI args given.")
+        logging.error("Run 'rockerc --help' for usage information or 'rocker --help' for rocker options.")
         return
 
     cmd = ["rocker"] + cmd_args
-    logging.info("running cmd: %r", cmd)
+    logging.info("Running: %s", " ".join(cmd))
+
     if create_dockerfile:
-        save_rocker_cmd(cmd)
+        save_rocker_cmd(cmd, known_args.show_dockerfile)
     subprocess.run(cmd, check=True)
 
 

@@ -10,10 +10,9 @@ image: ubuntu:22.04
 # dockerfile: Dockerfile
 args:
   - nvidia
-  - x11 
-  - user 
-  - pull 
+  - x11
+  - user
+  - pull
   - deps
-  - git 
+  - git
   - pixi
-  - create-dockerfile
