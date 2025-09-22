@@ -71,7 +71,7 @@ def collect_arguments(path: str = ".") -> dict:
                         if yaml_content is not None and isinstance(yaml_content, dict):
                             merged_dict.update(yaml_content)
                             return merged_dict
-                        elif yaml_content is not None:
+                        if yaml_content is not None:
                             print(
                                 f"Error: YAML file {config_file} must contain a dictionary, not {type(yaml_content).__name__}"
                             )
