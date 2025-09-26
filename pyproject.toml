@@ -1,14 +1,14 @@
 [project]
 name = "rockerc"
-version = "0.8.0"
+version = "0.9.0"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
 license = "MIT"
 
 dependencies = [
-  "rocker>=0.2.17",
-  "deps-rocker>=0.11",
+  "rocker>=0.2.19",
+  "deps-rocker>=0.12",
   "off-your-rocker>=0.1.0",
   "pyyaml>=5",
 ]
