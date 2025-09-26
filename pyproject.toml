@@ -41,7 +41,7 @@ python = "3.13.*"
 
 [project.optional-dependencies]
 test = [
-  "black>=23,<=25.1.0",
+  "black>=23,<=25.9.0",
   "pylint>=3.2.5,<=3.3.8",
   "pytest-cov>=4.1,<=7.0.0",
   "pytest>=7.4,<=8.4.2",
