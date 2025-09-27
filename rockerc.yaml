@@ -16,4 +16,4 @@ args:
   - deps
   - git 
   - pixi
-  - create-dockerfile
+  - cwd
