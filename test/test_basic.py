@@ -59,6 +59,18 @@ class TestBasicClass(TestCase):
         result = yaml_dict_to_args(d)
         assert result == expected
 
+    def test_with_extra_args(self):
+        d = {
+            "args": ["nvidia", "x11"],
+            "image": "ubuntu:22.04",
+        }
+        extra_args = "--image-name test --name container"
+
+        expected = "--nvidia --x11 --image-name test --name container -- ubuntu:22.04"
+
+        result = yaml_dict_to_args(d, extra_args)
+        assert result == expected
+
     @pytest.mark.skip
     def test_realisic_yaml(self):
         result = collect_arguments(".")

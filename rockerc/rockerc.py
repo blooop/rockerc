@@ -7,11 +7,12 @@ import os
 import logging
 
 
-def yaml_dict_to_args(d: dict) -> str:
+def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     """Given a dictionary of arguments turn it into an argument string to pass to rocker
 
     Args:
         d (dict): rocker arguments dictionary
+        extra_args (str): additional command line arguments to insert before the image
 
     Returns:
         str: rocker arguments string
@@ -30,6 +31,10 @@ def yaml_dict_to_args(d: dict) -> str:
     # the rest of the named arguments
     for k, v in d.items():
         cmd_str += f"--{k} {v} "
+
+    # Add extra command line arguments before the separator
+    if extra_args:
+        cmd_str += extra_args + " "
 
     # Always add -- separator to prevent any extensions from consuming the image
     if image is not None:
@@ -225,16 +230,17 @@ def run_rockerc(path: str = "."):
         merged_dict["args"].remove("create-dockerfile")
         create_dockerfile = True
 
-    cmd_args = yaml_dict_to_args(merged_dict)
-    if len(cmd_args) > 0:
-        if len(sys.argv) > 1:
-            # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
-            dockerfile_arg = "--create-dockerfile"
-            if dockerfile_arg in sys.argv:
-                sys.argv.remove(dockerfile_arg)
-                create_dockerfile = True
-            cmd_args += " " + " ".join(sys.argv[1:])
+    extra_args = ""
+    if len(sys.argv) > 1:
+        # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
+        dockerfile_arg = "--create-dockerfile"
+        if dockerfile_arg in sys.argv:
+            sys.argv.remove(dockerfile_arg)
+            create_dockerfile = True
+        extra_args = " ".join(sys.argv[1:])
 
+    cmd_args = yaml_dict_to_args(merged_dict, extra_args)
+    if len(cmd_args) > 0:
         cmd = f"rocker {cmd_args}"
         logging.info(f"running cmd: {cmd}")
         split_cmd = shlex.split(cmd)
