@@ -7,35 +7,75 @@ import os
 import logging
 
 
-def yaml_dict_to_args(d: dict) -> str:
+def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     """Given a dictionary of arguments turn it into an argument string to pass to rocker
 
     Args:
         d (dict): rocker arguments dictionary
+        extra_args (str): additional command line arguments to insert before the image
 
     Returns:
         str: rocker arguments string
     """
+    image = d.pop("image", None)
+    segments = []
 
-    cmd_str = ""
+    # explicit flags
+    for a in d.pop("args", []):
+        segments.append(f"--{a}")
 
-    image = d.pop("image", None)  # special value
-    # image = d.pop("create-dockerfile", None)  # special value
-
-    if "args" in d:
-        args = d.pop("args")
-        for a in args:
-            cmd_str += f"--{a} "
-
-    # the rest of the named arguments
+    # key/value pairs
     for k, v in d.items():
-        cmd_str += f"--{k} {v} "
+        segments.extend([f"--{k}", str(v)])
 
-    # last argument is the image name
-    if image is not None:
-        cmd_str += image
+    # any extra CLI pieces - keep as string to preserve complex quoting
+    cmd_str = " ".join(segments)
+    if extra_args:
+        cmd_str += f" {extra_args}"
+
+    # separator + image
+    if image:
+        cmd_str += f" -- {image}"
 
     return cmd_str
+
+
+def load_global_config() -> dict:
+    """Load global rockerc configuration from ~/.rockerc.yaml
+
+    Returns:
+        dict: Parsed configuration dictionary, or empty dict if parsing fails.
+    """
+    config_path = pathlib.Path.home() / ".rockerc.yaml"
+    if not config_path.exists():
+        return {}
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except yaml.YAMLError as e:
+        logging.warning(f"Failed to parse YAML config at {config_path}: {e}")
+        return {}
+    except Exception as e:
+        logging.warning(f"Error loading config at {config_path}: {e}")
+        return {}
+
+
+def deduplicate_extensions(extensions: list) -> list:
+    """Remove duplicate extensions while preserving order
+
+    Args:
+        extensions (list): List of extension names
+
+    Returns:
+        list: Deduplicated list of extensions
+    """
+    seen = set()
+    result = []
+    for ext in extensions:
+        if ext not in seen:
+            seen.add(ext)
+            result.append(ext)
+    return result
 
 
 def collect_arguments(path: str = ".") -> dict:
@@ -47,6 +87,10 @@ def collect_arguments(path: str = ".") -> dict:
     Returns:
         dict: A dictionary of merged rockerc arguments
     """
+    # Load global config first
+    global_config = load_global_config()
+
+    # Load project-specific config
     search_path = pathlib.Path(path)
     merged_dict = {}
     for p in search_path.glob("rockerc.yaml"):
@@ -54,7 +98,17 @@ def collect_arguments(path: str = ".") -> dict:
 
         with open(p.as_posix(), "r", encoding="utf-8") as f:
             merged_dict.update(yaml.safe_load(f))
-    return merged_dict
+
+    # Start with global config as base, then override with project-specific settings
+    final_dict = global_config | merged_dict
+
+    # Special handling for args - merge and deduplicate instead of overriding
+    global_args = global_config.get("args", [])
+    project_args = merged_dict.get("args", [])
+    if global_args or project_args:
+        final_dict["args"] = deduplicate_extensions(global_args + project_args)
+
+    return final_dict
 
 
 def build_docker(dockerfile_path: str = ".") -> str:
@@ -168,16 +222,17 @@ def run_rockerc(path: str = "."):
         merged_dict["args"].remove("create-dockerfile")
         create_dockerfile = True
 
-    cmd_args = yaml_dict_to_args(merged_dict)
-    if len(cmd_args) > 0:
-        if len(sys.argv) > 1:
-            # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
-            dockerfile_arg = "--create-dockerfile"
-            if dockerfile_arg in sys.argv:
-                sys.argv.remove(dockerfile_arg)
-                create_dockerfile = True
-            cmd_args += " " + " ".join(sys.argv[1:])
+    extra_args = ""
+    if len(sys.argv) > 1:
+        # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
+        dockerfile_arg = "--create-dockerfile"
+        if dockerfile_arg in sys.argv:
+            sys.argv.remove(dockerfile_arg)
+            create_dockerfile = True
+        extra_args = " ".join(sys.argv[1:])
 
+    cmd_args = yaml_dict_to_args(merged_dict, extra_args)
+    if len(cmd_args) > 0:
         cmd = f"rocker {cmd_args}"
         logging.info(f"running cmd: {cmd}")
         split_cmd = shlex.split(cmd)
