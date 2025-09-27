@@ -31,11 +31,47 @@ def yaml_dict_to_args(d: dict) -> str:
     for k, v in d.items():
         cmd_str += f"--{k} {v} "
 
+    # Always add -- separator to prevent any extensions from consuming the image
+    if image is not None:
+        cmd_str += "-- "
+
     # last argument is the image name
     if image is not None:
         cmd_str += image
 
     return cmd_str
+
+
+def load_global_config() -> dict:
+    """Load global rockerc configuration from ~/.rockerc.yaml
+
+    Returns:
+        dict: Global configuration with default extensions
+    """
+    global_config_path = pathlib.Path.home() / ".rockerc.yaml"
+    if global_config_path.exists():
+        print(f"loading global config {global_config_path}")
+        with open(global_config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+def deduplicate_extensions(extensions: list) -> list:
+    """Remove duplicate extensions while preserving order
+
+    Args:
+        extensions (list): List of extension names
+
+    Returns:
+        list: Deduplicated list of extensions
+    """
+    seen = set()
+    result = []
+    for ext in extensions:
+        if ext not in seen:
+            seen.add(ext)
+            result.append(ext)
+    return result
 
 
 def collect_arguments(path: str = ".") -> dict:
@@ -47,6 +83,10 @@ def collect_arguments(path: str = ".") -> dict:
     Returns:
         dict: A dictionary of merged rockerc arguments
     """
+    # Load global config first
+    global_config = load_global_config()
+
+    # Load project-specific config
     search_path = pathlib.Path(path)
     merged_dict = {}
     for p in search_path.glob("rockerc.yaml"):
@@ -54,7 +94,24 @@ def collect_arguments(path: str = ".") -> dict:
 
         with open(p.as_posix(), "r", encoding="utf-8") as f:
             merged_dict.update(yaml.safe_load(f))
-    return merged_dict
+
+    # Start with global config as base, then override with project-specific settings
+    final_dict = global_config.copy()
+    final_dict.update(merged_dict)
+
+    # Special handling for args - merge and deduplicate instead of overriding
+    if "args" in global_config and "args" in merged_dict:
+        # Combine global and project extensions, with project taking precedence
+        combined_args = global_config["args"] + merged_dict["args"]
+        final_dict["args"] = deduplicate_extensions(combined_args)
+    elif "args" in global_config and "args" not in merged_dict:
+        # Only global extensions exist
+        final_dict["args"] = global_config["args"]
+    elif "args" not in global_config and "args" in merged_dict:
+        # Only project extensions exist
+        final_dict["args"] = merged_dict["args"]
+
+    return final_dict
 
 
 def build_docker(dockerfile_path: str = ".") -> str:
