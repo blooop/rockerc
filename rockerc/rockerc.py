@@ -5,6 +5,7 @@ import yaml
 import shlex
 import os
 import logging
+import json
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
@@ -26,7 +27,12 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
 
     # key/value pairs
     for k, v in d.items():
-        segments.extend([f"--{k}", str(v)])
+        if isinstance(v, list):
+            # For list values, add each item as a separate argument
+            for item in v:
+                segments.extend([f"--{k}", str(item)])
+        else:
+            segments.extend([f"--{k}", str(v)])
 
     # any extra CLI pieces - keep as string to preserve complex quoting
     cmd_str = " ".join(segments)
@@ -58,6 +64,201 @@ def load_global_config() -> dict:
     except Exception as e:
         logging.warning(f"Error loading config at {config_path}: {e}")
         return {}
+
+
+def inspect_container(container_name_or_id: str) -> dict:
+    """Inspect a Docker container and extract relevant run options
+
+    Args:
+        container_name_or_id (str): Container name or ID to inspect
+
+    Returns:
+        dict: Dictionary containing extracted container options suitable for rocker
+
+    Raises:
+        subprocess.CalledProcessError: If docker inspect fails
+        ValueError: If container data cannot be parsed
+    """
+    try:
+        # Get container details using docker inspect
+        result = subprocess.run(
+            ["docker", "inspect", container_name_or_id], capture_output=True, text=True, check=True
+        )
+
+        container_data = json.loads(result.stdout)[0]
+
+        # Extract relevant information
+        config = container_data.get("Config", {})
+        host_config = container_data.get("HostConfig", {})
+
+        # Build rocker-compatible options
+        rocker_options = {}
+
+        # Get the image
+        rocker_options["image"] = config.get("Image", "")
+
+        # Extract environment variables
+        env_vars = config.get("Env", [])
+        if env_vars:
+            # Filter out PATH and other system vars, keep user-defined ones
+            system_prefixes = ["PATH=", "HOSTNAME=", "HOME=", "PWD="]
+            filtered_env = [
+                env
+                for env in env_vars
+                if not any(env.startswith(prefix) for prefix in system_prefixes)
+            ]
+            if filtered_env:
+                rocker_options["env"] = filtered_env
+
+        # Extract volumes/bind mounts
+        binds = host_config.get("Binds", [])
+        if binds:
+            volumes = []
+            for bind in binds:
+                parts = bind.split(":")
+                if len(parts) >= 2:
+                    source, target = parts[0], parts[1]
+                    mode = parts[2] if len(parts) > 2 else "rw"
+                    volumes.append(f"{source}:{target}:{mode}")
+            if volumes:
+                rocker_options["volume"] = volumes
+
+        # Extract port mappings
+        port_bindings = host_config.get("PortBindings", {})
+        ports = []
+        for container_port, host_bindings in port_bindings.items():
+            if not host_bindings:
+                continue
+            for binding in host_bindings:
+                host_port = binding.get("HostPort", "")
+                if host_port:
+                    ports.append(f"{host_port}:{container_port}")
+        if ports:
+            rocker_options["port"] = ports
+
+        # Extract working directory (commented out for now as rocker doesn't have direct support)
+        # workdir = config.get("WorkingDir", "")
+        # if workdir:
+        #     # Use oyr-run-arg to pass --workdir to docker run
+        #     rocker_options["oyr-run-arg"] = [f"'--workdir {workdir}'"]
+
+        # Extract user
+        user = config.get("User", "")
+        if user:
+            rocker_options["user"] = user
+
+        # Extract devices
+        devices = host_config.get("Devices", [])
+        device_mappings = []
+        for device in devices:
+            path_on_host = device.get("PathOnHost", "")
+            path_in_container = device.get("PathInContainer", "")
+            if path_on_host and path_in_container:
+                device_mappings.append(f"{path_on_host}:{path_in_container}")
+        if device_mappings:
+            rocker_options["device"] = device_mappings
+
+        # Extract capabilities
+        cap_add = host_config.get("CapAdd", [])
+        if cap_add and cap_add != [None]:
+            rocker_options["cap-add"] = cap_add
+
+        # Extract privileged mode
+        if host_config.get("Privileged", False):
+            rocker_options["privileged"] = True
+
+        # Extract network mode
+        network_mode = host_config.get("NetworkMode", "")
+        if network_mode and network_mode not in ["default", "bridge"]:
+            rocker_options["network"] = network_mode
+
+        return rocker_options
+
+    except subprocess.CalledProcessError as e:
+        raise subprocess.CalledProcessError(
+            e.returncode, e.cmd, f"Failed to inspect container '{container_name_or_id}': {e.stderr}"
+        )
+    except (json.JSONDecodeError, KeyError, IndexError) as e:
+        raise ValueError(f"Failed to parse container data for '{container_name_or_id}': {e}") from e
+
+
+def generate_container_name(original_name: str, suffix: str = "rockerc") -> str:
+    """Generate a new container name, handling collisions
+
+    Args:
+        original_name (str): Original container name
+        suffix (str): Suffix to append (default: "rockerc")
+
+    Returns:
+        str: New unique container name
+    """
+    base_name = f"{original_name}-{suffix}"
+
+    # Check if the base name is available
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "-a", "--filter", f"name={base_name}", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        if base_name not in result.stdout.splitlines():
+            return base_name
+
+        # If collision, add a short random suffix
+        import random
+        import string
+
+        short_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
+        return f"{base_name}-{short_suffix}"
+
+    except subprocess.CalledProcessError:
+        # If docker command fails, just return the base name
+        return base_name
+
+
+def merge_container_options_with_config(container_options: dict, config_dict: dict) -> dict:
+    """Merge container options with rockerc.yaml configuration
+
+    Args:
+        container_options (dict): Options extracted from container inspection
+        config_dict (dict): Configuration from rockerc.yaml files
+
+    Returns:
+        dict: Merged configuration with container options as base and config overrides
+    """
+    # Start with container options as the base
+    merged = container_options.copy()
+
+    # Handle args specially - these are rocker extensions
+    if "args" in config_dict:
+        merged["args"] = config_dict["args"]
+
+        # Remove conflicting container options when rocker extensions are used
+        args = config_dict["args"]
+        if "user" in args and "user" in merged:
+            # Remove container user setting as --user extension takes precedence
+            del merged["user"]
+
+    # Override with config values, but handle lists specially
+    for key, value in config_dict.items():
+        if key == "args":
+            continue  # Already handled above
+        if key in ["env", "volume", "port", "device", "cap-add"] and isinstance(value, list):
+            # For list values, extend rather than replace
+            existing = merged.get(key, [])
+            if isinstance(existing, list):
+                # Deduplicate while preserving order
+                combined = existing + [v for v in value if v not in existing]
+                merged[key] = combined
+            else:
+                merged[key] = value
+        else:
+            # For other values, config takes precedence
+            merged[key] = value
+
+    return merged
 
 
 def deduplicate_extensions(extensions: list) -> list:
@@ -194,20 +395,101 @@ def run_rockerc(path: str = "."):
     """
 
     logging.basicConfig(level=logging.INFO)
-    merged_dict = collect_arguments(path)
 
-    if not merged_dict:
-        logging.error(
-            "No rockerc.yaml found in the specified directory. Please create a rockerc.yaml file with rocker arguments. See 'rocker -h' for help."
-        )
-        sys.exit(1)
+    # Parse command line arguments for --from-container
+    from_container = None
+    create_dockerfile = False
+    remaining_args = []
 
-    if "args" not in merged_dict:
-        logging.error(
-            "No 'args' key found in rockerc.yaml. Please add an 'args' list with rocker arguments. See 'rocker -h' for help."
-        )
-        sys.exit(1)
+    i = 0
+    while i < len(sys.argv):
+        if i == 0:  # Skip script name
+            i += 1
+            continue
 
+        arg = sys.argv[i]
+        if arg == "--from-container":
+            if i + 1 < len(sys.argv):
+                from_container = sys.argv[i + 1]
+                i += 2  # Skip both --from-container and its value
+            else:
+                logging.error("--from-container requires a container name or ID")
+                sys.exit(1)
+        elif arg == "--create-dockerfile":
+            create_dockerfile = True
+            i += 1
+        else:
+            remaining_args.append(arg)
+            i += 1
+
+    # Handle --from-container workflow
+    if from_container:
+        logging.info(f"Deriving container from existing container: {from_container}")
+
+        try:
+            # Inspect the source container
+            container_options = inspect_container(from_container)
+            logging.info(f"Successfully inspected container '{from_container}'")
+
+            # Load rockerc.yaml configuration
+            config_dict = collect_arguments(path)
+
+            # If no rockerc.yaml found, create minimal config with just args
+            if not config_dict:
+                logging.warning(
+                    "No rockerc.yaml found. Using only container options with default extensions."
+                )
+                config_dict = {"args": []}
+
+            # Ensure args exist
+            if "args" not in config_dict:
+                config_dict["args"] = []
+
+            # Merge container options with config
+            merged_dict = merge_container_options_with_config(container_options, config_dict)
+
+            # Generate new container name
+            original_name = from_container
+            # If from_container is a container ID, get the actual name
+            try:
+                result = subprocess.run(
+                    ["docker", "inspect", "--format", "{{.Name}}", from_container],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                # Remove leading slash from container name
+                original_name = result.stdout.strip().lstrip("/")
+            except subprocess.CalledProcessError:
+                # If we can't get the name, use the ID/name as provided
+                pass
+
+            new_container_name = generate_container_name(original_name)
+            merged_dict["name"] = new_container_name
+
+            logging.info(f"New container will be named: {new_container_name}")
+
+        except (subprocess.CalledProcessError, ValueError) as e:
+            logging.error(f"Failed to process container '{from_container}': {e}")
+            sys.exit(1)
+
+    else:
+        # Standard workflow - load from rockerc.yaml
+        merged_dict = collect_arguments(path)
+
+        if not merged_dict:
+            logging.error(
+                "No rockerc.yaml found in the specified directory. Please create a rockerc.yaml file with rocker arguments. See 'rocker -h' for help."
+            )
+            sys.exit(1)
+
+        if "args" not in merged_dict:
+            logging.error(
+                "No 'args' key found in rockerc.yaml. Please add an 'args' list with rocker arguments. See 'rocker -h' for help."
+            )
+            sys.exit(1)
+
+    # Handle dockerfile building
     if "dockerfile" in merged_dict:
         logging.info("Building dockerfile...")
         merged_dict["image"] = build_docker(merged_dict["dockerfile"])
@@ -217,19 +499,13 @@ def run_rockerc(path: str = "."):
         # remove the dockerfile command as it does not need to be passed onto rocker
         merged_dict.pop("dockerfile")
 
-    create_dockerfile = False
-    if "create-dockerfile" in merged_dict["args"]:
+    # Handle create-dockerfile from args or CLI
+    if "create-dockerfile" in merged_dict.get("args", []):
         merged_dict["args"].remove("create-dockerfile")
         create_dockerfile = True
 
-    extra_args = ""
-    if len(sys.argv) > 1:
-        # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
-        dockerfile_arg = "--create-dockerfile"
-        if dockerfile_arg in sys.argv:
-            sys.argv.remove(dockerfile_arg)
-            create_dockerfile = True
-        extra_args = " ".join(sys.argv[1:])
+    # Build extra args from remaining CLI arguments
+    extra_args = " ".join(remaining_args) if remaining_args else ""
 
     cmd_args = yaml_dict_to_args(merged_dict, extra_args)
     if len(cmd_args) > 0:

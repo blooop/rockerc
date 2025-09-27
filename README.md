@@ -38,12 +38,39 @@ This will ensure that `rockerc` and `rocker` commands are available on your PATH
 
 ## Usage
 
-navigate to a directory with a `rockerc.yaml` file and run:
+### Standard Usage
+
+Navigate to a directory with a `rockerc.yaml` file and run:
 ```
 rockerc
 ```
 
 This will search recursively for rockerc.yaml and pass those arguments to rocker
+
+### Derive from Existing Container
+
+You can derive a new rocker container from an existing running Docker container, preserving its run options and adding your rockerc extensions:
+
+```
+rockerc --from-container <container-name-or-id>
+```
+
+rockerc will:
+- Inspect the container to extract image and relevant `docker run` options (volumes, ports, env, user, devices, caps, etc.).
+- Merge those options with your `rockerc.yaml` extensions.
+- Launch a new container (named `<original>-rockerc` by default) via `rocker` with both the original settings and your extensions. If the default name exists, a short suffix is added.
+
+**Note:** Docker cannot change mounts/devices of an already-running container. When needed, rockerc creates a new container that mirrors the original and applies extensions.
+
+**Example:**
+```bash
+# Inspect and recreate an existing container with additional rocker extensions
+rockerc --from-container my-app-container
+
+# The new container will be named 'my-app-container-rockerc' and include:
+# - All volumes, environment variables, and settings from the original container
+# - Additional rocker extensions defined in your rockerc.yaml (like x11, user, git, etc.)
+```
 
 ### VS Code Integration
 
@@ -63,7 +90,9 @@ rockervsc
 I'm not sure this is the best way of implementing rockerc like functionality.  It might be better to implemented it as a rocker extension, or in rocker itself.  This was just the simplest way to get started. I may explore those other options in more detail in the future. 
 
 
-# rocker.yaml configuration
+# rockerc.yaml configuration
+
+## Basic Configuration
 
 You need to pass either a docker image, or a relative path to a dockerfile
 
@@ -79,3 +108,48 @@ dockerfile: Dockerfile
 ```
 
 will look for the dockerfile relative to the rockerc.yaml file
+
+## Container Derivation
+
+When using `--from-container`, rockerc will:
+
+1. **Extract container configuration** including:
+   - Base image
+   - Environment variables (excluding system vars like PATH, HOME)
+   - Volume mounts
+   - Port mappings
+   - Working directory (when supported)
+   - User settings
+   - Device mappings
+   - Linux capabilities
+   - Network settings
+
+2. **Merge with rockerc.yaml** where:
+   - Rocker extensions from `args` always take precedence
+   - List values (volumes, env vars, ports) are combined and deduplicated
+   - Conflicting settings (e.g., container user vs `--user` extension) are resolved in favor of rocker extensions
+
+3. **Generate unique container name** with automatic collision handling
+
+**Example workflow:**
+```bash
+# 1. You have a running container with custom setup
+docker run -d --name my-db -e DB_HOST=localhost -v /data:/var/lib/data postgres:15
+
+# 2. Create rockerc.yaml with desired extensions
+cat > rockerc.yaml << EOF
+args:
+  - x11
+  - user
+  - git
+EOF
+
+# 3. Derive new container with both original settings and rocker extensions
+rockerc --from-container my-db
+
+# Result: New container 'my-db-rockerc' with:
+# - postgres:15 image
+# - DB_HOST=localhost environment variable
+# - /data:/var/lib/data volume mount
+# - x11, user, and git rocker extensions applied
+```

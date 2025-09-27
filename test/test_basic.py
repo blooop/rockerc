@@ -268,3 +268,15 @@ class TestBasicClass(TestCase):
                 # Should merge settings but no args or image
                 expected = {"other_setting": "value", "another_setting": "value2"}
                 assert result == expected
+
+    def test_yaml_dict_to_args_with_list_values(self):
+        """Test that list values generate multiple arguments"""
+        d = {
+            "args": ["x11", "nvidia"],
+            "env": ["VAR1=value1", "VAR2=value2"],
+            "volume": ["/host1:/container1:rw", "/host2:/container2:ro"],
+            "image": "ubuntu:22.04",
+        }
+        expected = "--x11 --nvidia --env VAR1=value1 --env VAR2=value2 --volume /host1:/container1:rw --volume /host2:/container2:ro -- ubuntu:22.04"
+        result = yaml_dict_to_args(d)
+        assert result == expected
