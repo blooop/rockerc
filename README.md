@@ -40,10 +40,19 @@ This will ensure that `rockerc` and `rocker` commands are available on your PATH
 
 navigate to a directory with a `rockerc.yaml` file and run:
 ```
-rockerc 
+rockerc
 ```
 
 This will search recursively for rockerc.yaml and pass those arguments to rocker
+
+### VS Code Integration
+
+For automatic VS Code integration, use `rockervsc` instead:
+```
+rockervsc
+```
+
+`rockervsc` functions the same as `rockerc` but will automatically launch and attach VS Code to the created container. This provides seamless development environment setup with VS Code running inside your rocker container.
 
 ## Motivation
 
