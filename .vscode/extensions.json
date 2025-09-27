@@ -6,7 +6,6 @@
         "charliermarsh.ruff",
         "mhutchie.git-graph",
         "tamasfe.even-better-toml",
-        "ms-azuretools.vscode-docker",
         "jjjermiah.pixi-vscode"       
     ]
 }
