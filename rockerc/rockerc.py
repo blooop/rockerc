@@ -2,9 +2,9 @@ import sys
 import subprocess
 import pathlib
 import yaml
+import shlex
 import os
 import logging
-from typing import List
 
 
 def yaml_dict_to_args(d: dict) -> str:
@@ -17,81 +17,43 @@ def yaml_dict_to_args(d: dict) -> str:
         str: rocker arguments string
     """
 
-    cmd_list = []
+    cmd_str = ""
 
     image = d.pop("image", None)  # special value
+    # image = d.pop("create-dockerfile", None)  # special value
 
     if "args" in d:
         args = d.pop("args")
-        # Remove whitespace-only arguments
-        args = [arg.strip() for arg in args if arg.strip()]
         for a in args:
-            cmd_list.extend([f"--{a}"])
+            cmd_str += f"--{a} "
 
     # the rest of the named arguments
     for k, v in d.items():
-        cmd_list.extend([f"--{k}", str(v)])
+        cmd_str += f"--{k} {v} "
 
     # last argument is the image name
     if image is not None:
-        cmd_list.append(str(image))
+        cmd_str += image
 
-    return " ".join(cmd_list)
+    return cmd_str
 
 
 def collect_arguments(path: str = ".") -> dict:
-    """Search for rockerc.yaml files and return a merged dictionary.
-
-    Behavior:
-    - Looks for `rockerc.yaml` in the provided path.
-    - If not found, falls back to `~/.rockerc.yaml`.
-    - If still not found, returns an empty dict (no extensions by default).
+    """Search for rockerc.yaml files and return a merged dictionary
 
     Args:
-        path (str, optional): Path to search for files. Defaults to ".".
+        path (str, optional): path to reach for files. Defaults to ".".
 
     Returns:
         dict: A dictionary of merged rockerc arguments
     """
     search_path = pathlib.Path(path)
     merged_dict = {}
-
-    # Primary: local rockerc.yaml
     for p in search_path.glob("rockerc.yaml"):
         print(f"loading {p}")
+
         with open(p.as_posix(), "r", encoding="utf-8") as f:
-            try:
-                yaml_content = yaml.safe_load(f)
-                if yaml_content is not None and isinstance(yaml_content, dict):
-                    merged_dict.update(yaml_content)
-                elif yaml_content is not None:
-                    print(
-                        f"Error: YAML file {p} must contain a dictionary, not {type(yaml_content).__name__}"
-                    )
-                    sys.exit(1)
-            except yaml.YAMLError as e:
-                print(f"Error: Failed to parse YAML file {p}: {e}")
-                sys.exit(1)
-
-    # Fallback: ~/.rockerc.yaml if none found locally
-    if not merged_dict:
-        home_rc = pathlib.Path.home() / ".rockerc.yaml"
-        if home_rc.exists():
-            print(f"loading {home_rc}")
-            with open(home_rc.as_posix(), "r", encoding="utf-8") as f:
-                try:
-                    yaml_content = yaml.safe_load(f)
-                    if yaml_content is not None and isinstance(yaml_content, dict):
-                        merged_dict.update(yaml_content)
-                    elif yaml_content is not None:
-                        print(
-                            f"Error: YAML file {home_rc} must contain a dictionary, not {type(yaml_content).__name__}"
-                        )
-                        sys.exit(1)
-                except yaml.YAMLError as e:
-                    print(f"Error: Failed to parse YAML file {home_rc}: {e}")
-                    sys.exit(1)
-
+            merged_dict.update(yaml.safe_load(f))
     return merged_dict
 
 
@@ -111,7 +73,7 @@ def build_docker(dockerfile_path: str = ".") -> str:
     return tag
 
 
-def save_rocker_cmd(split_cmd: List[str]):
+def save_rocker_cmd(split_cmd: str):
     dry_run = split_cmd + ["--mode", "dry-run"]
     try:
         s = subprocess.run(dry_run, capture_output=True, text=True, check=True)
@@ -149,24 +111,18 @@ def save_rocker_cmd(split_cmd: List[str]):
         # Make the bash script executable
         os.chmod(bash_script_path, 0o755)
 
-        logging.info(
-            f"Files have been saved:\n - Dockerfile.rocker\n - {bash_script_path} (executable)"
-        )
+        logging.info(f"Files have been saved:\n - Dockerfile.rocker\n - {bash_script_path} (executable)")
     except subprocess.CalledProcessError as e:
         logging.error("[rockerc] Error: rocker dry-run failed.")
         logging.error(f"[rockerc] Command: {' '.join(dry_run)}")
         logging.error(f"[rockerc] Exit code: {e.returncode}")
         logging.error(f"[rockerc] Output:\n{e.stdout}")
         logging.error(f"[rockerc] Error output:\n{e.stderr}")
-        logging.error(
-            "[rockerc] This likely means rocker or one of its extensions failed to generate a Dockerfile. Please check your rockerc.yaml and rocker installation."
-        )
+        logging.error("[rockerc] This likely means rocker or one of its extensions failed to generate a Dockerfile. Please check your rockerc.yaml and rocker installation.")
         sys.exit(e.returncode)
     except ValueError as e:
         logging.error(f"[rockerc] Error processing the output from rocker dry-run: {e}")
-        logging.error(
-            "[rockerc] The output format may have changed or rocker failed to generate the expected output."
-        )
+        logging.error("[rockerc] The output format may have changed or rocker failed to generate the expected output.")
         sys.exit(1)
 
 
@@ -180,10 +136,13 @@ def run_rockerc(path: str = "."):
     logging.basicConfig(level=logging.INFO)
     merged_dict = collect_arguments(path)
 
-    # If no config found anywhere, continue with no extensions by default.
-    # If a config is found but has no 'args', treat as empty list (no extensions).
+    if not merged_dict:
+        logging.error("No rockerc.yaml found in the specified directory. Please create a rockerc.yaml file with rocker arguments. See 'rocker -h' for help.")
+        sys.exit(1)
+
     if "args" not in merged_dict:
-        merged_dict["args"] = []
+        logging.error("No 'args' key found in rockerc.yaml. Please add an 'args' list with rocker arguments. See 'rocker -h' for help.")
+        sys.exit(1)
 
     if "dockerfile" in merged_dict:
         logging.info("Building dockerfile...")
@@ -194,42 +153,30 @@ def run_rockerc(path: str = "."):
         # remove the dockerfile command as it does not need to be passed onto rocker
         merged_dict.pop("dockerfile")
 
-    args: List[str] = merged_dict.get("args", [])
-
-    # Handle CLI args separately - filter out --create-dockerfile and pass rest through
-    cli_args = [arg for arg in sys.argv[1:] if arg != "--create-dockerfile"]
-    create_dockerfile = "--create-dockerfile" in sys.argv[1:]
-
-    # Also check for --create-dockerfile in config args
-    if "--create-dockerfile" in args:
-        args = [arg for arg in args if arg != "--create-dockerfile"]
+    create_dockerfile = False
+    if "create-dockerfile" in merged_dict["args"]:
+        merged_dict["args"].remove("create-dockerfile")
         create_dockerfile = True
 
-    # Update merged_dict to only contain YAML args (for extensions from config)
-    merged_dict["args"] = args
+    cmd_args = yaml_dict_to_args(merged_dict)
+    if len(cmd_args) > 0:
+        if len(sys.argv) > 1:
+            # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
+            dockerfile_arg = "--create-dockerfile"
+            if dockerfile_arg in sys.argv:
+                sys.argv.remove(dockerfile_arg)
+                create_dockerfile = True
+            cmd_args += " " + " ".join(sys.argv[1:])
 
-    # Get the arguments from the YAML config (this handles config-based extensions)
-    yaml_cmd_args_str = yaml_dict_to_args(merged_dict)
-
-    # Combine YAML args with CLI args
-    if yaml_cmd_args_str:
-        yaml_cmd_args = yaml_cmd_args_str.split()
-        cmd_args = yaml_cmd_args + cli_args
+        cmd = f"rocker {cmd_args}"
+        logging.info(f"running cmd: {cmd}")
+        split_cmd = shlex.split(cmd)
+        if create_dockerfile:
+            save_rocker_cmd(split_cmd)
+        subprocess.run(split_cmd, check=True)
     else:
-        cmd_args = cli_args
-
-    if not cmd_args:
-        logging.error(
-            "no rocker arguments provided. No rockerc.yaml found locally or in ~/.rockerc.yaml, and no CLI args given. Showing rocker help:"
-        )
+        logging.error("no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:")
         subprocess.call("rocker -h", shell=True)
-        return
-
-    cmd = ["rocker"] + cmd_args
-    logging.info("running cmd: %r", cmd)
-    if create_dockerfile:
-        save_rocker_cmd(cmd)
-    subprocess.run(cmd, check=True)
 
 
 if __name__ == "__main__":

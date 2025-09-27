@@ -504,10 +504,10 @@ packages:
   requires_dist:
   - tomli ; python_full_version <= '3.11' and extra == 'toml'
   requires_python: '>=3.9'
-- pypi: https://files.pythonhosted.org/packages/25/f5/f749c95f7dca0df7f14c61ca402388e2b9807180ced20efed6a82121fd43/deps_rocker-0.12.0-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/15/32/c308e293d37ef5dbb7830b2f992b57875a7227d2fe47d7cc83093b4c8417/deps_rocker-0.11.0-py3-none-any.whl
   name: deps-rocker
-  version: 0.12.0
-  sha256: ab123f80c4a9739b3a300792a3ff1bdaf5f7b28ca2fe348a8116d4ef4bbe4b2f
+  version: 0.11.0
+  sha256: 84a73db810919d491308998f6d261e3b793e7e1225cdd52e91945ce90c51a64a
   requires_dist:
   - off-your-rocker>=0.1.0
   - pyyaml>=5.0
@@ -1120,8 +1120,8 @@ packages:
   version: 0.9.0
   sha256: ff34f8a7c06173296b0dbc1ef085550f22ad702bbc3fa5671e432985f8e0e1c9
   requires_dist:
-  - rocker>=0.2.19
-  - deps-rocker>=0.12
+  - rocker>=0.2.17
+  - deps-rocker>=0.11
   - off-your-rocker>=0.1.0
   - pyyaml>=5
   - pylint>=3.2.5,<=3.3.8 ; extra == 'test'
