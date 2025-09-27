@@ -1,156 +1,129 @@
-#!/usr/bin/env python3
-"""
-rockervsc - VS Code integration for rocker containers
-"""
-
-import sys
-import os
-import json
-import argparse
-import logging
+import subprocess
+import binascii
 from pathlib import Path
+from typing import Tuple
+import logging
+import pathlib
+import sys
+import datetime
+import argparse
 
 
-def setup_logging(verbose: bool = False) -> None:
-    """Setup logging configuration"""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+def folder_to_vscode_container(container_name: str, path: Path) -> Tuple[str, str]:
+    """given a container name and path, generate the vscode container hex and rocker args needed to launch the container
+
+    Args:
+        container_name (str): name of the rocker container
+        path (Path): path to load into the rocker container
+
+    Returns:
+        Tuple[str, str]: the container_hex and rocker arguments
+    """
+
+    container_hex = binascii.hexlify(container_name.encode()).decode()
+    rocker_args = f"--image-name {container_name} --name {container_name} --volume {path}:/workspaces/{container_name}:Z --oyr-run-arg '\" --detach\"'"
+
+    return container_hex, rocker_args
+
+
+def launch_vscode(container_name: str, container_hex: str):
+    """launches vscode and attached it to a specified container name (using a container hex)
+
+    Args:
+        container_name (str): name of container to attach to
+        container_hex (str): hex of the container for vscode uri
+    """
+    try:
+        subprocess.run(
+            f"code --folder-uri vscode-remote://attached-container+{container_hex}/workspaces/{container_name}",
+            shell=True,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to launch VSCode: {e}")
+        raise
+
+
+def container_exists(container_name: str) -> bool:
+    """
+    Check if a Docker container with the specified name exists.
+
+    Args:
+        container_name (str): The name of the Docker container to check.
+
+    Returns:
+        bool: True if the container exists, False otherwise.
+
+    Raises:
+        RuntimeError: If an error occurs while executing the Docker command.
+    """
+    # Run the Docker command to filter containers by name
+    result = subprocess.run(
+        ["docker", "ps", "-a", "--filter", f"name={container_name}", "--format", "{{.Names}}"],
+        capture_output=True,
+        text=True,
+        check=True,
     )
 
-
-def find_vscode_settings() -> Path:
-    """Find VS Code settings directory"""
-    # Common VS Code settings locations
-    possible_paths = [
-        Path.home() / ".vscode",
-        Path.home() / ".config" / "Code" / "User",
-        Path.home() / "Library" / "Application Support" / "Code" / "User",
-        Path.home() / "AppData" / "Roaming" / "Code" / "User",
-    ]
-
-    for path in possible_paths:
-        if path.exists():
-            return path
-
-    # Create default if none found
-    default_path = Path.home() / ".vscode"
-    default_path.mkdir(exist_ok=True)
-    return default_path
+    # Check if the container name appears in the output
+    return container_name in result.stdout.splitlines()
 
 
-def generate_devcontainer_config(workspace_path: Path) -> dict:
-    """Generate devcontainer configuration for rocker"""
-    return {
-        "name": f"Rocker Dev Container - {workspace_path.name}",
-        "dockerComposeFile": ["docker-compose.yml"],
-        "service": "rocker-dev",
-        "workspaceFolder": "/workspace",
-        "settings": {
-            "terminal.integrated.defaultProfile.linux": "bash"
-        },
-        "extensions": [
-            "ms-python.python",
-            "ms-python.pylint",
-            "ms-python.black-formatter"
-        ],
-        "forwardPorts": [],
-        "postCreateCommand": "",
-        "remoteUser": "developer"
-    }
+def run_rockervsc(path: str = ".", force: bool = False):
+    """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
+
+    Args:
+        path (str, optional): Search path for rockerc.yaml files. Defaults to ".".
+        force (bool, optional): Force rename of existing container. Defaults to False.
+    """
+
+    cwd = pathlib.Path().absolute()
+    container_name = cwd.name.lower()
+
+    if len(sys.argv) > 1:
+        # Filter out --force and -f arguments
+        filtered_args = [arg for arg in sys.argv[1:] if arg not in ["--force", "-f"]]
+        cmd_args = " ".join(filtered_args)
+        cmd = f"rockerc {cmd_args}"
+    else:
+        cmd = "rockerc"
+
+    container_hex, rocker_args = folder_to_vscode_container(container_name, path)
+    cmd += f" {rocker_args}"
+
+    if not container_exists(container_name):
+        print(f"running cmd: {cmd}")
+        subprocess.run(cmd, shell=True, check=False)
+    else:
+        if force:
+            print(f"Force option enabled. Renaming existing container '{container_name}'")
+            subprocess.run(
+                [
+                    "docker",
+                    "rename",
+                    container_name,
+                    f"{container_name}_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}",
+                ],
+                check=False,
+            )
+            print(f"running cmd: {cmd}")
+            subprocess.run(cmd, shell=True, check=False)
+        else:
+            print("container already running, attaching vscode to container")
+    launch_vscode(container_name, container_hex)
 
 
-def create_devcontainer(workspace_path: Path) -> None:
-    """Create .devcontainer directory and configuration"""
-    devcontainer_dir = workspace_path / ".devcontainer"
-    devcontainer_dir.mkdir(exist_ok=True)
-
-    # Create devcontainer.json
-    config = generate_devcontainer_config(workspace_path)
-    devcontainer_file = devcontainer_dir / "devcontainer.json"
-
-    with open(devcontainer_file, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=2)
-
-    logging.info(f"Created devcontainer configuration at {devcontainer_file}")
-
-
-def setup_vscode_workspace(workspace_path: Path) -> None:
-    """Setup VS Code workspace for rocker development"""
-    workspace_file = workspace_path / f"{workspace_path.name}.code-workspace"
-
-    workspace_config = {
-        "folders": [
-            {"path": "."}
-        ],
-        "settings": {
-            "python.defaultInterpreterPath": "/usr/bin/python3",
-            "terminal.integrated.cwd": "${workspaceFolder}"
-        },
-        "extensions": {
-            "recommendations": [
-                "ms-python.python",
-                "ms-vscode-remote.remote-containers"
-            ]
-        }
-    }
-
-    with open(workspace_file, 'w', encoding='utf-8') as f:
-        json.dump(workspace_config, f, indent=2)
-
-    logging.info(f"Created VS Code workspace file at {workspace_file}")
-
-
-def main() -> None:
-    """Main entry point for rockervsc"""
-    parser = argparse.ArgumentParser(
-        description="VS Code integration for rocker containers"
-    )
+def main():
+    parser = argparse.ArgumentParser(description="Run rockervsc with specified options")
     parser.add_argument(
-        "--workspace",
-        type=Path,
-        default=Path.cwd(),
-        help="Workspace directory (default: current directory)"
+        "--force", "-f", action="store_true", help="Force rename of existing container"
     )
-    parser.add_argument(
-        "--setup-devcontainer",
-        action="store_true",
-        help="Setup devcontainer configuration"
-    )
-    parser.add_argument(
-        "--setup-workspace",
-        action="store_true",
-        help="Setup VS Code workspace file"
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose logging"
-    )
+    parser.add_argument("path", nargs="?", default=".", help="Search path for rockerc.yaml files")
 
     args = parser.parse_args()
-    setup_logging(args.verbose)
-
-    workspace_path = args.workspace.resolve()
-
-    if not workspace_path.exists():
-        logging.error(f"Workspace directory does not exist: {workspace_path}")
-        sys.exit(1)
-
-    logging.info(f"Working with workspace: {workspace_path}")
-
-    if args.setup_devcontainer:
-        create_devcontainer(workspace_path)
-
-    if args.setup_workspace:
-        setup_vscode_workspace(workspace_path)
-
-    if not args.setup_devcontainer and not args.setup_workspace:
-        logging.info("No action specified. Use --help for available options.")
-        logging.info("Available actions:")
-        logging.info("  --setup-devcontainer: Create devcontainer configuration")
-        logging.info("  --setup-workspace: Create VS Code workspace file")
+    run_rockervsc(path=args.path, force=args.force)
 
 
 if __name__ == "__main__":
