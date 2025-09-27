@@ -17,32 +17,25 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     Returns:
         str: rocker arguments string
     """
+    image = d.pop("image", None)
+    segments = []
 
-    cmd_str = ""
+    # explicit flags
+    for a in d.pop("args", []):
+        segments.append(f"--{a}")
 
-    image = d.pop("image", None)  # special value
-    # image = d.pop("create-dockerfile", None)  # special value
-
-    if "args" in d:
-        args = d.pop("args")
-        for a in args:
-            cmd_str += f"--{a} "
-
-    # the rest of the named arguments
+    # key/value pairs
     for k, v in d.items():
-        cmd_str += f"--{k} {v} "
+        segments.extend([f"--{k}", str(v)])
 
-    # Add extra command line arguments before the separator
+    # any extra CLI pieces - keep as string to preserve complex quoting
+    cmd_str = " ".join(segments)
     if extra_args:
-        cmd_str += extra_args + " "
+        cmd_str += f" {extra_args}"
 
-    # Always add -- separator to prevent any extensions from consuming the image
-    if image is not None:
-        cmd_str += "-- "
-
-    # last argument is the image name
-    if image is not None:
-        cmd_str += image
+    # separator + image
+    if image:
+        cmd_str += f" -- {image}"
 
     return cmd_str
 
@@ -51,14 +44,20 @@ def load_global_config() -> dict:
     """Load global rockerc configuration from ~/.rockerc.yaml
 
     Returns:
-        dict: Global configuration with default extensions
+        dict: Parsed configuration dictionary, or empty dict if parsing fails.
     """
-    global_config_path = pathlib.Path.home() / ".rockerc.yaml"
-    if global_config_path.exists():
-        print(f"loading global config {global_config_path}")
-        with open(global_config_path, "r", encoding="utf-8") as f:
+    config_path = pathlib.Path.home() / ".rockerc.yaml"
+    if not config_path.exists():
+        return {}
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
-    return {}
+    except yaml.YAMLError as e:
+        logging.warning(f"Failed to parse YAML config at {config_path}: {e}")
+        return {}
+    except Exception as e:
+        logging.warning(f"Error loading config at {config_path}: {e}")
+        return {}
 
 
 def deduplicate_extensions(extensions: list) -> list:
@@ -101,20 +100,13 @@ def collect_arguments(path: str = ".") -> dict:
             merged_dict.update(yaml.safe_load(f))
 
     # Start with global config as base, then override with project-specific settings
-    final_dict = global_config.copy()
-    final_dict.update(merged_dict)
+    final_dict = global_config | merged_dict
 
     # Special handling for args - merge and deduplicate instead of overriding
-    if "args" in global_config and "args" in merged_dict:
-        # Combine global and project extensions, with project taking precedence
-        combined_args = global_config["args"] + merged_dict["args"]
-        final_dict["args"] = deduplicate_extensions(combined_args)
-    elif "args" in global_config and "args" not in merged_dict:
-        # Only global extensions exist
-        final_dict["args"] = global_config["args"]
-    elif "args" not in global_config and "args" in merged_dict:
-        # Only project extensions exist
-        final_dict["args"] = merged_dict["args"]
+    global_args = global_config.get("args", [])
+    project_args = merged_dict.get("args", [])
+    if global_args or project_args:
+        final_dict["args"] = deduplicate_extensions(global_args + project_args)
 
     return final_dict
 
