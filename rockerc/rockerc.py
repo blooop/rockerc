@@ -128,7 +128,9 @@ def collect_arguments(path: str = ".") -> dict:
         project_blacklist = [project_blacklist] if project_blacklist else []
 
     if global_blacklist or project_blacklist:
-        final_dict["extension-blacklist"] = deduplicate_extensions(global_blacklist + project_blacklist)
+        final_dict["extension-blacklist"] = deduplicate_extensions(
+            global_blacklist + project_blacklist
+        )
 
     # Filter out blacklisted extensions from args
     if "extension-blacklist" in final_dict and "args" in final_dict:

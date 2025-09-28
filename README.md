@@ -54,6 +54,18 @@ rockervsc
 
 `rockervsc` functions the same as `rockerc` but will automatically launch and attach VS Code to the created container. This provides seamless development environment setup with VS Code running inside your rocker container.
 
+`rockervsc` forwards all arguments to `rockerc`, so you can use any `rockerc` options:
+```
+rockervsc --gemini
+rockervsc --help
+rockervsc /path/to/project
+```
+
+The command will:
+1. Run `rockerc` with your arguments plus container configuration for VS Code
+2. Launch VS Code and attach it to the container
+3. If the container already exists, it will just attach VS Code without recreating it
+
 ## Motivation
 
 [Rocker](https://github.com/osrf/rocker) is an alternative to docker-compose that makes it easier to run containers with access to features of the local environment and add extra capabilities to existing docker images.  However rocker has many configurable options and it can get hard to read or reuse those arguments.  This is a naive wrapper that read a rockerc.yaml file and passes them to rocker.  There are currently [no plans](https://github.com/osrf/rocker/issues/148) to integrate docker-compose like functionality directly into rocker so I made this as a proof of concept to see what the ergonomics of it would be like. 
