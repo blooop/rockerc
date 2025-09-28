@@ -648,6 +648,11 @@ packages:
   - colorama ; extra == 'colors'
   - setuptools ; extra == 'plugins'
   requires_python: '>=3.9.0'
+- pypi: https://files.pythonhosted.org/packages/df/37/4349484d7693324e40d51d0dc2f4d52b49b6765598e14af56642075ecdde/iterfzf-1.8.0.62.0-py3-none-manylinux_1_2_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  name: iterfzf
+  version: 1.8.0.62.0
+  sha256: 15094a8ac72d0755d3657333fcd72329ef2d79ea6633c37a6be27be66671ae48
+  requires_python: '>=3.8'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.44-ha97dd6f_2.conda
   sha256: 707dfb8d55d7a5c6f95c772d778ef07a7ca85417d9971796f7d3daad0b615de8
   md5: 14bae321b8127b63cba276bd53fac237
@@ -1123,12 +1128,13 @@ packages:
 - pypi: ./
   name: rockerc
   version: 0.11.0
-  sha256: 62a8f0cd1e442d1bc2bf0b1407db94dbcce2311e95b7fcb119bda202dff51dd8
+  sha256: 45c8e12b783994bd3b76e2019b4ec6429d7792e6b70a2c08d8c364162b830d29
   requires_dist:
   - rocker>=0.2.19
   - deps-rocker>=0.14
   - off-your-rocker>=0.1.0
   - pyyaml>=5
+  - iterfzf>=1.0.0
   - pylint>=3.2.5,<=3.3.8 ; extra == 'test'
   - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
   - pytest>=7.4,<=8.4.2 ; extra == 'test'

@@ -65,11 +65,8 @@ include = ["rockerc"]
 
 [project.scripts]
 rockerc = "rockerc.rockerc:run_rockerc"
-<<<<<<< HEAD
 renv = "rockerc.renv:main"
-=======
 rockervsc = "rockerc.rockervsc:main"
->>>>>>> origin/main
 
 # Environments
 [tool.pixi.environments]
@@ -96,11 +93,7 @@ coverage-report = "coverage report -m"
 update-lock = "pixi update && git commit -a -m'update pixi.lock' || true"
 push = "git push"
 update-lock-push = { depends-on = ["update-lock", "push"] }
-<<<<<<< HEAD
-fix = { depends-on = ["update-lock", "format", "ruff-lint"] }
-=======
 fix = { depends-on = ["update-lock", "format", "ruff-lint", "pre-commit"] }
->>>>>>> origin/main
 fix-commit-push = { depends-on = ["fix", "commit-format", "update-lock-push"] }
 ci-no-cover = { depends-on = ["style", "test"] }
 ci = { depends-on = [
