@@ -1,40 +1,125 @@
 """
 renvsc - Rocker Environment Manager for VS Code
-Same as renv but uses rockervsc instead of rocker
+Same as renv but launches containers with VSCode integration
 """
 
 import sys
 import subprocess
-from rockerc.renv import run_rocker_command, run_renv
+import pathlib
+import binascii
+from rockerc.renv import run_renv
+from rockerc.rockervsc import launch_vscode, container_exists
 
 
-def run_rockervsc_command(config, command=None, detached=False):
-    """Execute rockervsc command - just replace 'rocker' with 'rockervsc'"""
-    original_run = subprocess.run
-    original_popen = subprocess.Popen
+def run_rockervsc_command(config, command=None, detached=False):  # pylint: disable=unused-argument
+    """Execute rocker command with VSCode integration"""
+    # Start with the base rocker command
+    cmd_parts = ["rocker"]
 
-    def patched_run(cmd_parts, **kwargs):
-        if cmd_parts and cmd_parts[0] == "rocker":
-            cmd_parts[0] = "rockervsc"
-        return original_run(cmd_parts, **kwargs)
+    # Extract special values that need separate handling
+    image = config.get("image", "")
+    volumes = []
+    if "volume" in config:
+        volume_config = config["volume"]
+        if isinstance(volume_config, list):
+            volumes = volume_config
+        else:
+            volumes = volume_config.split()
 
-    def patched_popen(cmd_parts, **kwargs):
-        if cmd_parts and cmd_parts[0] == "rocker":
-            cmd_parts[0] = "rockervsc"
-        return original_popen(cmd_parts, **kwargs)
+    # Get container name from environment variables or volume mounts
+    container_name = None
+    worktree_path = None
 
-    subprocess.run = patched_run
-    subprocess.Popen = patched_popen
+    # Extract container name from environment variables
+    if "env" in config:
+        env_vars = config["env"]
+        for env_var in env_vars:
+            if env_var.startswith("REPO_NAME="):
+                container_name = env_var.split("=", 1)[1]
+                break
 
-    try:
-        return run_rocker_command(config, command, detached)
-    finally:
-        subprocess.run = original_run
-        subprocess.Popen = original_popen
+    # Find the worktree path from volume mounts
+    for volume in volumes:
+        if "/workspace/" in volume and not volume.endswith(".git"):
+            host_path = volume.split(":")[0]
+            if pathlib.Path(host_path).exists():
+                worktree_path = host_path
+                break
+
+    if not container_name:
+        # Fallback: derive from worktree path
+        if worktree_path:
+            container_name = pathlib.Path(worktree_path).parent.name
+        else:
+            container_name = "vscode-container"
+
+    # Add basic extensions from args, but force detach mode for VSCode
+    if "args" in config:
+        for arg in config["args"]:
+            if arg and arg != "persist-image":  # Skip persist-image for VSCode
+                cmd_parts.append(f"--{arg}")
+
+    # Add detach mode for VSCode
+    cmd_parts.append("--detach")
+
+    # Add name and hostname
+    cmd_parts.extend(["--name", container_name])
+    cmd_parts.extend(["--hostname", container_name])
+
+    # Add environment variables
+    if "env" in config:
+        for env_var in config["env"]:
+            cmd_parts.extend(["--env", env_var])
+
+    # Add oyr-run-arg if present
+    if "oyr-run-arg" in config:
+        oyr_run_arg = config["oyr-run-arg"]
+        if oyr_run_arg:
+            cmd_parts.extend(["--oyr-run-arg", oyr_run_arg])
+
+    # Add volumes
+    for volume in volumes:
+        cmd_parts.extend(["--volume", volume])
+
+    # Add -- separator if volumes are present (required by rocker)
+    if volumes:
+        cmd_parts.append("--")
+
+    # Add image
+    if image:
+        cmd_parts.append(image)
+
+    # Add command if specified
+    if command:
+        cmd_parts.extend(command)
+    else:
+        cmd_parts.append("bash")  # Default command
+
+    # Log the full command for debugging
+    cmd_str = " ".join(cmd_parts)
+    print(f"INFO: Running rocker for VSCode: {cmd_str}")
+
+    # Use worktree directory as working directory
+    cwd = worktree_path
+
+    # Check if container already exists
+    if not container_exists(container_name):
+        # Run rocker to create the container
+        process = subprocess.run(cmd_parts, cwd=cwd, check=False)
+        if process.returncode != 0:
+            return process.returncode
+    else:
+        print(f"INFO: Container {container_name} already exists, skipping creation")
+
+    # Launch VSCode
+    container_hex = binascii.hexlify(container_name.encode()).decode()
+    launch_vscode(container_name, container_hex)
+
+    return 0
 
 
 def run_renvsc(args=None):
-    """Main entry point - monkey patch and call renv"""
+    """Main entry point - replace rocker command with rockervsc"""
     import rockerc.renv
 
     original_func = rockerc.renv.run_rocker_command

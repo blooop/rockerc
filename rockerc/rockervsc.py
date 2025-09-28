@@ -95,7 +95,7 @@ def run_rockervsc(path: str = ".", force: bool = False):
 
     if not container_exists(container_name):
         print(f"running cmd: {cmd}")
-        subprocess.run(cmd, shell=True, check=False)
+        subprocess.run(cmd, shell=True, check=False, cwd=path)
     else:
         if force:
             print(f"Force option enabled. Renaming existing container '{container_name}'")
@@ -109,7 +109,7 @@ def run_rockervsc(path: str = ".", force: bool = False):
                 check=False,
             )
             print(f"running cmd: {cmd}")
-            subprocess.run(cmd, shell=True, check=False)
+            subprocess.run(cmd, shell=True, check=False, cwd=path)
         else:
             print("container already running, attaching vscode to container")
     launch_vscode(container_name, container_hex)

@@ -13,16 +13,16 @@ def test_workflow_0_basic_lifecycle():
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 0 output"
     assert "✓ Fresh container test completed" in output, "Fresh container test did not complete"
     assert "✓ Stop and restart test completed" in output, "Stop and restart test did not complete"
-    assert (
-        "✓ Delete and restart test completed" in output
-    ), "Delete and restart test did not complete"
+    assert "✓ Delete and restart test completed" in output, (
+        "Delete and restart test did not complete"
+    )
     assert "✓ Force rebuild test completed" in output, "Force rebuild test did not complete"
-    assert (
-        "✓ Container breakout detection test completed" in output
-    ), "Container breakout detection test did not complete"
-    assert (
-        "✓ Basic lifecycle test completed successfully" in output
-    ), "Basic lifecycle test did not complete"
+    assert "✓ Container breakout detection test completed" in output, (
+        "Container breakout detection test did not complete"
+    )
+    assert "✓ Basic lifecycle test completed successfully" in output, (
+        "Basic lifecycle test did not complete"
+    )
 
 
 def test_workflow_1_pwd():
@@ -51,9 +51,9 @@ def test_workflow_3_cmd():
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode in (0, 1), f"Workflow 3 cmd failed: {output}"
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 3 output"
-    assert (
-        "/tmp/test_renv" in output or "test_renv" in output
-    ), "Expected working directory 'test_renv' not found in workflow 3 output"
+    assert "/tmp/test_renv" in output or "test_renv" in output, (
+        "Expected working directory 'test_renv' not found in workflow 3 output"
+    )
 
 
 def test_workflow_4_persistent():
@@ -62,9 +62,9 @@ def test_workflow_4_persistent():
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode in (0, 1), f"Workflow 4 persistent failed: {output}"
-    assert (
-        "persistent.txt" in output
-    ), "Expected persistent file 'persistent.txt' not found in workflow 4 persistent output"
+    assert "persistent.txt" in output, (
+        "Expected persistent file 'persistent.txt' not found in workflow 4 persistent output"
+    )
 
 
 def test_workflow_5_force_rebuild_cache():
@@ -104,22 +104,22 @@ def test_workflow_5_force_rebuild_cache():
     nocache_time = int(nocache_match.group(1))
 
     # Performance assertions - container reuse should be fastest
-    assert (
-        reuse_time <= force_time
-    ), f"Container reuse ({reuse_time}s) should be faster than force rebuild ({force_time}s)"
+    assert reuse_time <= force_time, (
+        f"Container reuse ({reuse_time}s) should be faster than force rebuild ({force_time}s)"
+    )
 
     # Force rebuild should be faster than no-cache (due to image caching)
     # Allow some tolerance for timing variations
     if nocache_time > 5:  # Only check if builds take meaningful time
-        assert (
-            force_time <= nocache_time + 2
-        ), f"Force rebuild with cache ({force_time}s) should be close to or faster than no-cache ({nocache_time}s)"
+        assert force_time <= nocache_time + 2, (
+            f"Force rebuild with cache ({force_time}s) should be close to or faster than no-cache ({nocache_time}s)"
+        )
 
     # Check that force rebuild message appears when container exists
     if "Force rebuild: removing existing container" in output:
-        assert (
-            "Creating new persistent container" in output
-        ), "Should create new container after force removal"
+        assert "Creating new persistent container" in output, (
+            "Should create new container after force removal"
+        )
 
     print(
         f"Cache test performance: initial={initial_time}s, force={force_time}s, nocache={nocache_time}s, reuse={reuse_time}s"
