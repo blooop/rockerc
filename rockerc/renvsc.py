@@ -7,8 +7,26 @@ import sys
 import subprocess
 import pathlib
 import binascii
+import logging
 from rockerc.renv import run_renv
 from rockerc.rockervsc import launch_vscode, container_exists
+
+
+def launch_vscode_with_workdir(container_name: str, container_hex: str, workdir: str):
+    """Launch VSCode attached to container with specific working directory"""
+    try:
+        vscode_uri = f"vscode-remote://attached-container+{container_hex}{workdir}"
+        subprocess.run(
+            f"code --folder-uri {vscode_uri}",
+            shell=True,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to launch VSCode: {e}")
+        # Fallback to default launch
+        launch_vscode(container_name, container_hex)
 
 
 def run_rockervsc_command(config, command=None, detached=False):  # pylint: disable=unused-argument
@@ -71,11 +89,34 @@ def run_rockervsc_command(config, command=None, detached=False):  # pylint: disa
         for env_var in config["env"]:
             cmd_parts.extend(["--env", env_var])
 
-    # Add oyr-run-arg if present
+    # Add oyr-run-arg if present, but extract workdir for proper VSCode integration
+    workdir = None
     if "oyr-run-arg" in config:
         oyr_run_arg = config["oyr-run-arg"]
         if oyr_run_arg:
-            cmd_parts.extend(["--oyr-run-arg", oyr_run_arg])
+            # Parse oyr-run-arg to extract workdir
+            import shlex
+            parsed_args = shlex.split(oyr_run_arg)
+            filtered_args = []
+            i = 0
+            while i < len(parsed_args):
+                arg = parsed_args[i]
+                if arg.startswith("--workdir="):
+                    workdir = arg.split("=", 1)[1]
+                elif arg == "--workdir" and i + 1 < len(parsed_args):
+                    workdir = parsed_args[i + 1]
+                    i += 1  # Skip the next arg
+                else:
+                    filtered_args.append(arg)
+                i += 1
+
+            # Add the filtered oyr-run-arg (without workdir)
+            if filtered_args:
+                cmd_parts.extend(["--oyr-run-arg", " ".join(filtered_args)])
+
+    # Add workdir separately if found
+    if workdir:
+        cmd_parts.extend(["--oyr-run-arg", f"--workdir={workdir}"])
 
     # Add volumes
     for volume in volumes:
@@ -111,9 +152,14 @@ def run_rockervsc_command(config, command=None, detached=False):  # pylint: disa
     else:
         print(f"INFO: Container {container_name} already exists, skipping creation")
 
-    # Launch VSCode
+    # Launch VSCode with proper working directory
     container_hex = binascii.hexlify(container_name.encode()).decode()
-    launch_vscode(container_name, container_hex)
+
+    # Use the same workdir that was passed to the container
+    if workdir:
+        launch_vscode_with_workdir(container_name, container_hex, workdir)
+    else:
+        launch_vscode(container_name, container_hex)
 
     return 0
 
