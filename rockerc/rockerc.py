@@ -76,6 +76,15 @@ def collect_arguments(path: str = ".") -> dict:
     Returns:
         dict: A dictionary of merged rockerc arguments
     """
+    # Load global configuration from ~/.rockerc.yaml
+    global_config = {}
+    global_config_path = pathlib.Path.home() / ".rockerc.yaml"
+    if global_config_path.exists():
+        print(f"loading {global_config_path}")
+        with open(global_config_path, "r", encoding="utf-8") as f:
+            global_config = yaml.safe_load(f) or {}
+
+    # Load project-specific configuration
     search_path = pathlib.Path(path)
     merged_dict = {}
     for p in search_path.glob("rockerc.yaml"):
@@ -84,7 +93,37 @@ def collect_arguments(path: str = ".") -> dict:
         with open(p.as_posix(), "r", encoding="utf-8") as f:
             merged_dict.update(yaml.safe_load(f))
 
-    return merged_dict
+    # Start with global config as base, then override with project-specific settings
+    final_dict = global_config | merged_dict
+
+    # Special handling for args - merge and deduplicate instead of overriding
+    global_args = global_config.get("args", [])
+    project_args = merged_dict.get("args", [])
+    if global_args or project_args:
+        final_dict["args"] = deduplicate_extensions(global_args + project_args)
+
+    # Special handling for extension-blacklist - merge lists instead of overriding
+    global_blacklist = global_config.get("extension-blacklist", [])
+    project_blacklist = merged_dict.get("extension-blacklist", [])
+
+    # Ensure they are lists for consistent handling
+    if not isinstance(global_blacklist, list):
+        global_blacklist = [global_blacklist] if global_blacklist else []
+    if not isinstance(project_blacklist, list):
+        project_blacklist = [project_blacklist] if project_blacklist else []
+
+    if global_blacklist or project_blacklist:
+        final_dict["extension-blacklist"] = deduplicate_extensions(
+            global_blacklist + project_blacklist
+        )
+
+    # Filter out blacklisted extensions from args
+    if "extension-blacklist" in final_dict and "args" in final_dict:
+        blacklisted_extensions = set(final_dict["extension-blacklist"])
+        filtered_args = [arg for arg in final_dict["args"] if arg not in blacklisted_extensions]
+        final_dict["args"] = filtered_args
+
+    return final_dict
 
 
 def build_docker(dockerfile_path: str = ".") -> str:

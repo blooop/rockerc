@@ -22,6 +22,7 @@ def extract_workdir_from_config(config):
 
     # Parse workdir from oyr-run-arg
     import shlex
+
     try:
         parsed_args = shlex.split(oyr_run_arg)
         for arg in parsed_args:

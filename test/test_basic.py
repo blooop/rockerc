@@ -1,4 +1,5 @@
 from unittest import TestCase
+from unittest.mock import patch
 import pytest
 import tempfile
 import pathlib
@@ -141,6 +142,12 @@ class TestBasicClass(TestCase):
 
     def test_collect_arguments_missing_args_and_image(self):
         with tempfile.TemporaryDirectory() as tmpdir:
+            # Create empty global config
+            global_config_path = pathlib.Path(tmpdir) / ".rockerc.yaml"
+            global_config = {"other_setting": "value", "another_setting": "value2"}
+            with open(global_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(global_config, f)
+
             # Create project config without args and image
             project_dir = pathlib.Path(tmpdir) / "project"
             project_dir.mkdir()
@@ -149,11 +156,17 @@ class TestBasicClass(TestCase):
             with open(project_config_path, "w", encoding="utf-8") as f:
                 yaml.dump(project_config, f)
 
-            result = collect_arguments(str(project_dir))
+            with patch("pathlib.Path.home") as mock_home:
+                mock_home.return_value = pathlib.Path(tmpdir)
+                result = collect_arguments(str(project_dir))
 
-            # Should merge settings but no args or image
-            expected = {"other_setting": "value", "another_setting": "value2"}
-            assert result == expected
+                # Should merge settings but no args or image
+                expected = {
+                    "other_setting": "value",
+                    "another_setting": "value2",
+                    "some_setting": "value",
+                }
+                assert result == expected
 
     def test_extension_blacklist_with_list(self):
         d = {

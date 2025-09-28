@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Tuple
 import logging
 import pathlib
-import sys
 import datetime
 import argparse
 
