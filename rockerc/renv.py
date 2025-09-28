@@ -68,21 +68,41 @@ def get_available_branches(repo_spec: RepoSpec) -> List[str]:
         return []
 
     try:
+        # For bare repositories, use 'branch' without '-r' to get local branches
+        # that track remote branches
         result = subprocess.run(
-            ["git", "-C", str(repo_dir), "branch", "-r"],
+            ["git", "-C", str(repo_dir), "branch"],
             capture_output=True,
             text=True,
             check=True,
         )
         branches = []
         for line in result.stdout.strip().split("\n"):
-            if line.strip() and not line.strip().startswith("origin/HEAD"):
-                branch = line.strip().replace("origin/", "")
-                if branch:
-                    branches.append(branch)
+            branch = line.strip().lstrip("* ").strip()
+            if branch:
+                branches.append(branch)
         return sorted(set(branches))
     except subprocess.CalledProcessError:
         return []
+
+
+def branch_exists(repo_spec: RepoSpec, branch_name: str) -> bool:
+    """Check if a branch exists in the repository"""
+    available_branches = get_available_branches(repo_spec)
+    return branch_name in available_branches
+
+
+def get_default_branch(repo_spec: RepoSpec) -> str:
+    """Get the default branch for a repository (main or master)"""
+    available_branches = get_available_branches(repo_spec)
+    if "main" in available_branches:
+        return "main"
+    elif "master" in available_branches:
+        return "master"
+    elif available_branches:
+        return available_branches[0]  # Return first available branch
+    else:
+        return "main"  # Default fallback
 
 
 def get_all_repo_branch_combinations() -> List[str]:
@@ -237,6 +257,17 @@ def setup_worktree(repo_spec: RepoSpec) -> pathlib.Path:
     setup_bare_repo(repo_spec)
 
     if not worktree_dir.exists():
+        # Check if the branch exists
+        if not branch_exists(repo_spec, repo_spec.branch):
+            default_branch = get_default_branch(repo_spec)
+            logging.info(f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default_branch}'")
+
+            # Create the new branch from the default branch
+            subprocess.run(
+                ["git", "-C", str(repo_dir), "branch", repo_spec.branch, default_branch],
+                check=True,
+            )
+
         logging.info(f"Creating worktree for branch: {repo_spec.branch}")
         subprocess.run(
             ["git", "-C", str(repo_dir), "worktree", "add", str(worktree_dir), repo_spec.branch],
