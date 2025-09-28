@@ -268,3 +268,310 @@ class TestBasicClass(TestCase):
                 # Should merge settings but no args or image
                 expected = {"other_setting": "value", "another_setting": "value2"}
                 assert result == expected
+
+    def test_extension_blacklist_with_list(self):
+        d = {
+            "image": "ubuntu:24.04",
+            "args": ["persist-image", "x11", "user", "pull", "git", "pixi", "cwd", "claude", "codex", "fzf", "ssh", "ssh-client", "spec-kit"],
+            "extension-blacklist": ["nvidia"]
+        }
+        expected = "--persist-image --x11 --user --pull --git --pixi --cwd --claude --codex --fzf --ssh --ssh-client --spec-kit --extension-blacklist nvidia -- ubuntu:24.04"
+        result = yaml_dict_to_args(d)
+        assert result == expected
+
+    def test_extension_blacklist_with_multiple_items(self):
+        d = {
+            "image": "ubuntu:22.04",
+            "args": ["x11", "user"],
+            "extension-blacklist": ["nvidia", "cuda", "opencl"]
+        }
+        expected = "--x11 --user --extension-blacklist nvidia --extension-blacklist cuda --extension-blacklist opencl -- ubuntu:22.04"
+        result = yaml_dict_to_args(d)
+        assert result == expected
+
+    def test_extension_blacklist_with_single_string(self):
+        d = {
+            "image": "ubuntu:22.04",
+            "args": ["x11", "user"],
+            "extension-blacklist": "nvidia"
+        }
+        expected = "--x11 --user --extension-blacklist nvidia -- ubuntu:22.04"
+        result = yaml_dict_to_args(d)
+        assert result == expected
+
+    def test_extension_blacklist_with_no_args(self):
+        d = {
+            "image": "ubuntu:22.04",
+            "extension-blacklist": ["nvidia"]
+        }
+        expected = "--extension-blacklist nvidia -- ubuntu:22.04"
+        result = yaml_dict_to_args(d)
+        assert result == expected
+
+    def test_extension_blacklist_empty_list(self):
+        d = {
+            "image": "ubuntu:22.04",
+            "args": ["x11"],
+            "extension-blacklist": []
+        }
+        expected = "--x11 -- ubuntu:22.04"
+        result = yaml_dict_to_args(d)
+        assert result == expected
+
+    def test_extension_blacklist_none(self):
+        d = {
+            "image": "ubuntu:22.04",
+            "args": ["x11"],
+            "extension-blacklist": None
+        }
+        expected = "--x11 -- ubuntu:22.04"
+        result = yaml_dict_to_args(d)
+        assert result == expected
+
+    def test_collect_arguments_with_global_extension_blacklist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create global config with extension-blacklist
+            global_config_path = pathlib.Path(tmpdir) / ".rockerc.yaml"
+            global_config = {"args": ["codex", "vim"], "extension-blacklist": ["nvidia", "cuda"]}
+            with open(global_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(global_config, f)
+
+            # Create project config with additional extension-blacklist
+            project_dir = pathlib.Path(tmpdir) / "project"
+            project_dir.mkdir()
+            project_config_path = project_dir / "rockerc.yaml"
+            project_config = {"args": ["x11"], "extension-blacklist": ["opencl"], "image": "ubuntu:22.04"}
+            with open(project_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(project_config, f)
+
+            with patch("pathlib.Path.home") as mock_home:
+                mock_home.return_value = pathlib.Path(tmpdir)
+                result = collect_arguments(str(project_dir))
+
+                # Should merge extension-blacklists and deduplicate
+                expected = {
+                    "args": ["codex", "vim", "x11"],
+                    "extension-blacklist": ["nvidia", "cuda", "opencl"],
+                    "image": "ubuntu:22.04"
+                }
+                assert result == expected
+
+    def test_collect_arguments_with_duplicate_extension_blacklist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create global config with extension-blacklist
+            global_config_path = pathlib.Path(tmpdir) / ".rockerc.yaml"
+            global_config = {"extension-blacklist": ["nvidia", "cuda"]}
+            with open(global_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(global_config, f)
+
+            # Create project config with overlapping extension-blacklist
+            project_dir = pathlib.Path(tmpdir) / "project"
+            project_dir.mkdir()
+            project_config_path = project_dir / "rockerc.yaml"
+            project_config = {"args": ["x11"], "extension-blacklist": ["cuda", "opencl"], "image": "ubuntu:22.04"}
+            with open(project_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(project_config, f)
+
+            with patch("pathlib.Path.home") as mock_home:
+                mock_home.return_value = pathlib.Path(tmpdir)
+                result = collect_arguments(str(project_dir))
+
+                # Should deduplicate extension-blacklists
+                expected = {
+                    "args": ["x11"],
+                    "extension-blacklist": ["nvidia", "cuda", "opencl"],
+                    "image": "ubuntu:22.04"
+                }
+                assert result == expected
+
+    def test_collect_arguments_with_string_extension_blacklist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create global config with string extension-blacklist
+            global_config_path = pathlib.Path(tmpdir) / ".rockerc.yaml"
+            global_config = {"extension-blacklist": "nvidia"}
+            with open(global_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(global_config, f)
+
+            # Create project config with list extension-blacklist
+            project_dir = pathlib.Path(tmpdir) / "project"
+            project_dir.mkdir()
+            project_config_path = project_dir / "rockerc.yaml"
+            project_config = {"args": ["x11"], "extension-blacklist": ["cuda"], "image": "ubuntu:22.04"}
+            with open(project_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(project_config, f)
+
+            with patch("pathlib.Path.home") as mock_home:
+                mock_home.return_value = pathlib.Path(tmpdir)
+                result = collect_arguments(str(project_dir))
+
+                # Should merge string and list extension-blacklists
+                expected = {
+                    "args": ["x11"],
+                    "extension-blacklist": ["nvidia", "cuda"],
+                    "image": "ubuntu:22.04"
+                }
+                assert result == expected
+
+    def test_collect_arguments_global_extension_blacklist_only(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create global config with extension-blacklist only
+            global_config_path = pathlib.Path(tmpdir) / ".rockerc.yaml"
+            global_config = {"extension-blacklist": ["nvidia"]}
+            with open(global_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(global_config, f)
+
+            # Create project config without extension-blacklist
+            project_dir = pathlib.Path(tmpdir) / "project"
+            project_dir.mkdir()
+            project_config_path = project_dir / "rockerc.yaml"
+            project_config = {"args": ["x11"], "image": "ubuntu:22.04"}
+            with open(project_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(project_config, f)
+
+            with patch("pathlib.Path.home") as mock_home:
+                mock_home.return_value = pathlib.Path(tmpdir)
+                result = collect_arguments(str(project_dir))
+
+                # Should use global extension-blacklist
+                expected = {
+                    "args": ["x11"],
+                    "extension-blacklist": ["nvidia"],
+                    "image": "ubuntu:22.04"
+                }
+                assert result == expected
+
+    def test_collect_arguments_project_extension_blacklist_only(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create global config without extension-blacklist
+            global_config_path = pathlib.Path(tmpdir) / ".rockerc.yaml"
+            global_config = {"args": ["vim"]}
+            with open(global_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(global_config, f)
+
+            # Create project config with extension-blacklist
+            project_dir = pathlib.Path(tmpdir) / "project"
+            project_dir.mkdir()
+            project_config_path = project_dir / "rockerc.yaml"
+            project_config = {"args": ["x11"], "extension-blacklist": ["nvidia"], "image": "ubuntu:22.04"}
+            with open(project_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(project_config, f)
+
+            with patch("pathlib.Path.home") as mock_home:
+                mock_home.return_value = pathlib.Path(tmpdir)
+                result = collect_arguments(str(project_dir))
+
+                # Should use project extension-blacklist
+                expected = {
+                    "args": ["vim", "x11"],
+                    "extension-blacklist": ["nvidia"],
+                    "image": "ubuntu:22.04"
+                }
+                assert result == expected
+
+    def test_collect_arguments_filters_blacklisted_extensions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create config with nvidia in both args and extension-blacklist
+            project_dir = pathlib.Path(tmpdir) / "project"
+            project_dir.mkdir()
+            project_config_path = project_dir / "rockerc.yaml"
+            project_config = {
+                "args": ["x11", "nvidia", "user", "cuda"],
+                "extension-blacklist": ["nvidia", "cuda"],
+                "image": "ubuntu:22.04"
+            }
+            with open(project_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(project_config, f)
+
+            with patch("pathlib.Path.home") as mock_home:
+                mock_home.return_value = pathlib.Path(tmpdir)
+                result = collect_arguments(str(project_dir))
+
+                # nvidia and cuda should be filtered out of args
+                expected = {
+                    "args": ["x11", "user"],
+                    "extension-blacklist": ["nvidia", "cuda"],
+                    "image": "ubuntu:22.04"
+                }
+                assert result == expected
+
+    def test_collect_arguments_filters_mixed_global_project_blacklist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create global config with some args and blacklist
+            global_config_path = pathlib.Path(tmpdir) / ".rockerc.yaml"
+            global_config = {"args": ["nvidia", "codex"], "extension-blacklist": ["nvidia"]}
+            with open(global_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(global_config, f)
+
+            # Create project config with overlapping args and additional blacklist
+            project_dir = pathlib.Path(tmpdir) / "project"
+            project_dir.mkdir()
+            project_config_path = project_dir / "rockerc.yaml"
+            project_config = {
+                "args": ["x11", "cuda", "user"],
+                "extension-blacklist": ["cuda"],
+                "image": "ubuntu:22.04"
+            }
+            with open(project_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(project_config, f)
+
+            with patch("pathlib.Path.home") as mock_home:
+                mock_home.return_value = pathlib.Path(tmpdir)
+                result = collect_arguments(str(project_dir))
+
+                # Both nvidia and cuda should be filtered out
+                expected = {
+                    "args": ["codex", "x11", "user"],
+                    "extension-blacklist": ["nvidia", "cuda"],
+                    "image": "ubuntu:22.04"
+                }
+                assert result == expected
+
+    def test_collect_arguments_no_filtering_when_no_blacklist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create config without extension-blacklist
+            project_dir = pathlib.Path(tmpdir) / "project"
+            project_dir.mkdir()
+            project_config_path = project_dir / "rockerc.yaml"
+            project_config = {
+                "args": ["x11", "nvidia", "user"],
+                "image": "ubuntu:22.04"
+            }
+            with open(project_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(project_config, f)
+
+            with patch("pathlib.Path.home") as mock_home:
+                mock_home.return_value = pathlib.Path(tmpdir)
+                result = collect_arguments(str(project_dir))
+
+                # No filtering should occur
+                expected = {
+                    "args": ["x11", "nvidia", "user"],
+                    "image": "ubuntu:22.04"
+                }
+                assert result == expected
+
+    def test_collect_arguments_filters_all_blacklisted_extensions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create config where all args are blacklisted
+            project_dir = pathlib.Path(tmpdir) / "project"
+            project_dir.mkdir()
+            project_config_path = project_dir / "rockerc.yaml"
+            project_config = {
+                "args": ["nvidia", "cuda"],
+                "extension-blacklist": ["nvidia", "cuda"],
+                "image": "ubuntu:22.04"
+            }
+            with open(project_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(project_config, f)
+
+            with patch("pathlib.Path.home") as mock_home:
+                mock_home.return_value = pathlib.Path(tmpdir)
+                result = collect_arguments(str(project_dir))
+
+                # All args should be filtered out
+                expected = {
+                    "args": [],
+                    "extension-blacklist": ["nvidia", "cuda"],
+                    "image": "ubuntu:22.04"
+                }
+                assert result == expected

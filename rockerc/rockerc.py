@@ -24,6 +24,15 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     for a in d.pop("args", []):
         segments.append(f"--{a}")
 
+    # special handling for extension-blacklist
+    extension_blacklist = d.pop("extension-blacklist", None)
+    if extension_blacklist:
+        if isinstance(extension_blacklist, list):
+            for extension in extension_blacklist:
+                segments.extend(["--extension-blacklist", str(extension)])
+        else:
+            segments.extend(["--extension-blacklist", str(extension_blacklist)])
+
     # key/value pairs
     for k, v in d.items():
         segments.extend([f"--{k}", str(v)])
@@ -107,6 +116,25 @@ def collect_arguments(path: str = ".") -> dict:
     project_args = merged_dict.get("args", [])
     if global_args or project_args:
         final_dict["args"] = deduplicate_extensions(global_args + project_args)
+
+    # Special handling for extension-blacklist - merge lists instead of overriding
+    global_blacklist = global_config.get("extension-blacklist", [])
+    project_blacklist = merged_dict.get("extension-blacklist", [])
+
+    # Ensure they are lists for consistent handling
+    if not isinstance(global_blacklist, list):
+        global_blacklist = [global_blacklist] if global_blacklist else []
+    if not isinstance(project_blacklist, list):
+        project_blacklist = [project_blacklist] if project_blacklist else []
+
+    if global_blacklist or project_blacklist:
+        final_dict["extension-blacklist"] = deduplicate_extensions(global_blacklist + project_blacklist)
+
+    # Filter out blacklisted extensions from args
+    if "extension-blacklist" in final_dict and "args" in final_dict:
+        blacklisted_extensions = set(final_dict["extension-blacklist"])
+        filtered_args = [arg for arg in final_dict["args"] if arg not in blacklisted_extensions]
+        final_dict["args"] = filtered_args
 
     return final_dict
 
