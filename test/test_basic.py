@@ -272,8 +272,22 @@ class TestBasicClass(TestCase):
     def test_extension_blacklist_with_list(self):
         d = {
             "image": "ubuntu:24.04",
-            "args": ["persist-image", "x11", "user", "pull", "git", "pixi", "cwd", "claude", "codex", "fzf", "ssh", "ssh-client", "spec-kit"],
-            "extension-blacklist": ["nvidia"]
+            "args": [
+                "persist-image",
+                "x11",
+                "user",
+                "pull",
+                "git",
+                "pixi",
+                "cwd",
+                "claude",
+                "codex",
+                "fzf",
+                "ssh",
+                "ssh-client",
+                "spec-kit",
+            ],
+            "extension-blacklist": ["nvidia"],
         }
         expected = "--persist-image --x11 --user --pull --git --pixi --cwd --claude --codex --fzf --ssh --ssh-client --spec-kit --extension-blacklist nvidia -- ubuntu:24.04"
         result = yaml_dict_to_args(d)
@@ -283,37 +297,26 @@ class TestBasicClass(TestCase):
         d = {
             "image": "ubuntu:22.04",
             "args": ["x11", "user"],
-            "extension-blacklist": ["nvidia", "cuda", "opencl"]
+            "extension-blacklist": ["nvidia", "cuda", "opencl"],
         }
         expected = "--x11 --user --extension-blacklist nvidia --extension-blacklist cuda --extension-blacklist opencl -- ubuntu:22.04"
         result = yaml_dict_to_args(d)
         assert result == expected
 
     def test_extension_blacklist_with_single_string(self):
-        d = {
-            "image": "ubuntu:22.04",
-            "args": ["x11", "user"],
-            "extension-blacklist": "nvidia"
-        }
+        d = {"image": "ubuntu:22.04", "args": ["x11", "user"], "extension-blacklist": "nvidia"}
         expected = "--x11 --user --extension-blacklist nvidia -- ubuntu:22.04"
         result = yaml_dict_to_args(d)
         assert result == expected
 
     def test_extension_blacklist_with_no_args(self):
-        d = {
-            "image": "ubuntu:22.04",
-            "extension-blacklist": ["nvidia"]
-        }
+        d = {"image": "ubuntu:22.04", "extension-blacklist": ["nvidia"]}
         expected = "--extension-blacklist nvidia -- ubuntu:22.04"
         result = yaml_dict_to_args(d)
         assert result == expected
 
     def test_extension_blacklist_empty_list(self):
-        d = {
-            "image": "ubuntu:22.04",
-            "args": ["x11"],
-            "extension-blacklist": []
-        }
+        d = {"image": "ubuntu:22.04", "args": ["x11"], "extension-blacklist": []}
         expected = "--x11 -- ubuntu:22.04"
         result = yaml_dict_to_args(d)
         assert result == expected
@@ -330,7 +333,11 @@ class TestBasicClass(TestCase):
             project_dir = pathlib.Path(tmpdir) / "project"
             project_dir.mkdir()
             project_config_path = project_dir / "rockerc.yaml"
-            project_config = {"args": ["x11"], "extension-blacklist": ["opencl"], "image": "ubuntu:22.04"}
+            project_config = {
+                "args": ["x11"],
+                "extension-blacklist": ["opencl"],
+                "image": "ubuntu:22.04",
+            }
             with open(project_config_path, "w", encoding="utf-8") as f:
                 yaml.dump(project_config, f)
 
@@ -342,7 +349,7 @@ class TestBasicClass(TestCase):
                 expected = {
                     "args": ["codex", "vim", "x11"],
                     "extension-blacklist": ["nvidia", "cuda", "opencl"],
-                    "image": "ubuntu:22.04"
+                    "image": "ubuntu:22.04",
                 }
                 assert result == expected
 
@@ -358,7 +365,11 @@ class TestBasicClass(TestCase):
             project_dir = pathlib.Path(tmpdir) / "project"
             project_dir.mkdir()
             project_config_path = project_dir / "rockerc.yaml"
-            project_config = {"args": ["x11"], "extension-blacklist": ["cuda", "opencl"], "image": "ubuntu:22.04"}
+            project_config = {
+                "args": ["x11"],
+                "extension-blacklist": ["cuda", "opencl"],
+                "image": "ubuntu:22.04",
+            }
             with open(project_config_path, "w", encoding="utf-8") as f:
                 yaml.dump(project_config, f)
 
@@ -370,7 +381,7 @@ class TestBasicClass(TestCase):
                 expected = {
                     "args": ["x11"],
                     "extension-blacklist": ["nvidia", "cuda", "opencl"],
-                    "image": "ubuntu:22.04"
+                    "image": "ubuntu:22.04",
                 }
                 assert result == expected
 
@@ -386,7 +397,11 @@ class TestBasicClass(TestCase):
             project_dir = pathlib.Path(tmpdir) / "project"
             project_dir.mkdir()
             project_config_path = project_dir / "rockerc.yaml"
-            project_config = {"args": ["x11"], "extension-blacklist": ["cuda"], "image": "ubuntu:22.04"}
+            project_config = {
+                "args": ["x11"],
+                "extension-blacklist": ["cuda"],
+                "image": "ubuntu:22.04",
+            }
             with open(project_config_path, "w", encoding="utf-8") as f:
                 yaml.dump(project_config, f)
 
@@ -398,7 +413,7 @@ class TestBasicClass(TestCase):
                 expected = {
                     "args": ["x11"],
                     "extension-blacklist": ["nvidia", "cuda"],
-                    "image": "ubuntu:22.04"
+                    "image": "ubuntu:22.04",
                 }
                 assert result == expected
 
@@ -426,7 +441,7 @@ class TestBasicClass(TestCase):
                 expected = {
                     "args": ["x11"],
                     "extension-blacklist": ["nvidia"],
-                    "image": "ubuntu:22.04"
+                    "image": "ubuntu:22.04",
                 }
                 assert result == expected
 
@@ -442,7 +457,11 @@ class TestBasicClass(TestCase):
             project_dir = pathlib.Path(tmpdir) / "project"
             project_dir.mkdir()
             project_config_path = project_dir / "rockerc.yaml"
-            project_config = {"args": ["x11"], "extension-blacklist": ["nvidia"], "image": "ubuntu:22.04"}
+            project_config = {
+                "args": ["x11"],
+                "extension-blacklist": ["nvidia"],
+                "image": "ubuntu:22.04",
+            }
             with open(project_config_path, "w", encoding="utf-8") as f:
                 yaml.dump(project_config, f)
 
@@ -454,7 +473,7 @@ class TestBasicClass(TestCase):
                 expected = {
                     "args": ["vim", "x11"],
                     "extension-blacklist": ["nvidia"],
-                    "image": "ubuntu:22.04"
+                    "image": "ubuntu:22.04",
                 }
                 assert result == expected
 
@@ -467,7 +486,7 @@ class TestBasicClass(TestCase):
             project_config = {
                 "args": ["x11", "nvidia", "user", "cuda"],
                 "extension-blacklist": ["nvidia", "cuda"],
-                "image": "ubuntu:22.04"
+                "image": "ubuntu:22.04",
             }
             with open(project_config_path, "w", encoding="utf-8") as f:
                 yaml.dump(project_config, f)
@@ -480,7 +499,7 @@ class TestBasicClass(TestCase):
                 expected = {
                     "args": ["x11", "user"],
                     "extension-blacklist": ["nvidia", "cuda"],
-                    "image": "ubuntu:22.04"
+                    "image": "ubuntu:22.04",
                 }
                 assert result == expected
 
@@ -499,7 +518,7 @@ class TestBasicClass(TestCase):
             project_config = {
                 "args": ["x11", "cuda", "user"],
                 "extension-blacklist": ["cuda"],
-                "image": "ubuntu:22.04"
+                "image": "ubuntu:22.04",
             }
             with open(project_config_path, "w", encoding="utf-8") as f:
                 yaml.dump(project_config, f)
@@ -512,7 +531,7 @@ class TestBasicClass(TestCase):
                 expected = {
                     "args": ["codex", "x11", "user"],
                     "extension-blacklist": ["nvidia", "cuda"],
-                    "image": "ubuntu:22.04"
+                    "image": "ubuntu:22.04",
                 }
                 assert result == expected
 
@@ -522,10 +541,7 @@ class TestBasicClass(TestCase):
             project_dir = pathlib.Path(tmpdir) / "project"
             project_dir.mkdir()
             project_config_path = project_dir / "rockerc.yaml"
-            project_config = {
-                "args": ["x11", "nvidia", "user"],
-                "image": "ubuntu:22.04"
-            }
+            project_config = {"args": ["x11", "nvidia", "user"], "image": "ubuntu:22.04"}
             with open(project_config_path, "w", encoding="utf-8") as f:
                 yaml.dump(project_config, f)
 
@@ -534,10 +550,7 @@ class TestBasicClass(TestCase):
                 result = collect_arguments(str(project_dir))
 
                 # No filtering should occur
-                expected = {
-                    "args": ["x11", "nvidia", "user"],
-                    "image": "ubuntu:22.04"
-                }
+                expected = {"args": ["x11", "nvidia", "user"], "image": "ubuntu:22.04"}
                 assert result == expected
 
     def test_collect_arguments_filters_all_blacklisted_extensions(self):
@@ -549,7 +562,7 @@ class TestBasicClass(TestCase):
             project_config = {
                 "args": ["nvidia", "cuda"],
                 "extension-blacklist": ["nvidia", "cuda"],
-                "image": "ubuntu:22.04"
+                "image": "ubuntu:22.04",
             }
             with open(project_config_path, "w", encoding="utf-8") as f:
                 yaml.dump(project_config, f)
@@ -562,6 +575,6 @@ class TestBasicClass(TestCase):
                 expected = {
                     "args": [],
                     "extension-blacklist": ["nvidia", "cuda"],
-                    "image": "ubuntu:22.04"
+                    "image": "ubuntu:22.04",
                 }
                 assert result == expected
