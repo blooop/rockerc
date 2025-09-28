@@ -372,3 +372,101 @@ class TestManageContainer:
         call_args = mock_run_rocker.call_args
         assert call_args[0][1] == ["git", "status"]  # Command argument
         assert not call_args[1].get("detached", True)  # Not detached
+
+
+class TestRockerCommandWorkingDirectory:
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_run_rocker_command_always_sets_worktree_cwd(self, mock_path_exists, mock_subprocess_run):
+        """Test that renv always runs rocker from the worktree directory"""
+        from rockerc.renv import run_rocker_command
+
+        # Mock path exists to return True for worktree directory
+        mock_path_exists.return_value = True
+        mock_subprocess_run.return_value.returncode = 0
+
+        # Create config with various extensions
+        config = {
+            "image": "ubuntu:22.04",
+            "args": ["user", "deps", "git"],
+            "name": "test-container",
+            "hostname": "test-container",
+            "volume": [
+                "/path/to/bare/repo:/workspace/test_repo.git",
+                "/path/to/worktree:/workspace/test_repo",
+                "/path/to/worktree/.git:/workspace/test_repo.git/worktrees/worktree-main",
+            ],
+            "oyr-run-arg": "--workdir=/workspace/test_repo --env=REPO_NAME=test_repo --env=BRANCH_NAME=main",
+        }
+
+        result = run_rocker_command(config)
+
+        assert result == 0
+        mock_subprocess_run.assert_called_once()
+
+        # Check that subprocess.run was called with the correct cwd
+        call_args = mock_subprocess_run.call_args
+        assert call_args[1]["cwd"] == "/path/to/worktree"
+
+        # Verify the command contains the deps extension
+        cmd_parts = call_args[0][0]
+        assert "rocker" in cmd_parts
+        assert "--deps" in cmd_parts
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_run_rocker_command_sets_cwd_even_without_deps(self, mock_path_exists, mock_subprocess_run):
+        """Test that even without deps extension, rocker runs from worktree directory"""
+        from rockerc.renv import run_rocker_command
+
+        # Mock path exists to return True for worktree directory
+        mock_path_exists.return_value = True
+        mock_subprocess_run.return_value.returncode = 0
+
+        # Create config without deps extension
+        config = {
+            "image": "ubuntu:22.04",
+            "args": ["user", "git"],
+            "name": "test-container",
+            "hostname": "test-container",
+            "volume": [
+                "/path/to/bare/repo:/workspace/test_repo.git",
+                "/path/to/worktree:/workspace/test_repo",
+            ],
+        }
+
+        result = run_rocker_command(config)
+
+        assert result == 0
+        mock_subprocess_run.assert_called_once()
+
+        # Check that subprocess.run was called with the worktree cwd
+        call_args = mock_subprocess_run.call_args
+        assert call_args[1]["cwd"] == "/path/to/worktree"
+
+    @patch("subprocess.run")
+    def test_run_rocker_command_no_cwd_when_no_worktree_volume(self, mock_subprocess_run):
+        """Test that no cwd is set when there's no worktree volume mount"""
+        from rockerc.renv import run_rocker_command
+
+        mock_subprocess_run.return_value.returncode = 0
+
+        # Create config without worktree volume (only bare repo)
+        config = {
+            "image": "ubuntu:22.04",
+            "args": ["user", "git"],
+            "name": "test-container",
+            "hostname": "test-container",
+            "volume": [
+                "/path/to/bare/repo:/workspace/test_repo.git",
+            ],
+        }
+
+        result = run_rocker_command(config)
+
+        assert result == 0
+        mock_subprocess_run.assert_called_once()
+
+        # Check that subprocess.run was called without cwd
+        call_args = mock_subprocess_run.call_args
+        assert call_args[1]["cwd"] is None

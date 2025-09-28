@@ -3,7 +3,6 @@ import pytest
 import tempfile
 import pathlib
 import yaml
-from unittest.mock import patch
 from rockerc.rockerc import (
     yaml_dict_to_args,
     collect_arguments,

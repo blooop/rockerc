@@ -594,14 +594,25 @@ def run_rocker_command(
     cmd_str = " ".join(cmd_parts)
     logging.info(f"Running rocker: {cmd_str}")
 
+    # Always use worktree directory as working directory for renv
+    cwd = None
+    # Extract worktree directory from volume mounts
+    for volume in volumes:
+        if "/workspace/" in volume and not volume.endswith(".git"):
+            host_path = volume.split(":")[0]
+            if pathlib.Path(host_path).exists():
+                cwd = host_path
+                logging.info(f"Using worktree directory as cwd: {cwd}")
+                break
+
     if detached:
         # Run in background and return immediately
         # pylint: disable=consider-using-with
-        subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd)
         # Give it a moment to start
         time.sleep(2)
         return 0
-    return subprocess.run(cmd_parts, check=False).returncode
+    return subprocess.run(cmd_parts, check=False, cwd=cwd).returncode
 
 
 def _handle_container_corruption(
