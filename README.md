@@ -29,24 +29,38 @@ Then install rockerc and its dependencies globally with:
 pipx install --include-deps rockerc
 ```
 
+to develop run
+```
+pipx install --include-deps . --force
+```
+
 This will ensure that `rockerc` and `rocker` commands are available on your PATH.
 
 ## Usage
 
 navigate to a directory with a `rockerc.yaml` file and run:
 ```
-rockerc 
+rockerc
 ```
 
 This will search recursively for rockerc.yaml and pass those arguments to rocker
 
+### VS Code Integration
+
+For automatic VS Code integration, use `rockervsc` instead:
+```
+rockervsc
+```
+
+`rockervsc` functions the same as `rockerc` but will automatically launch and attach VS Code to the created container. This provides seamless development environment setup with VS Code running inside your rocker container.
+
 ## Motivation
 
-[Rocker](https://github.com/osrf/rocker) is an alternative to docker-compose that makes it easier to run containers with access to features of the local environment and add extra capabilities to existing docker images.  However rocker has many configurable options and it can get hard to read or reuse those arguments.  This is a naive wrapper that read a rockerc.yaml file and passes them to rocker.  There are currently [no plans](https://github.com/osrf/rocker/issues/148) to integrate docker-compose like functionalty directly into rocker so I made this as a proof of concept to see what the ergonomics of it would be like. 
+[Rocker](https://github.com/osrf/rocker) is an alternative to docker-compose that makes it easier to run containers with access to features of the local environment and add extra capabilities to existing docker images.  However rocker has many configurable options and it can get hard to read or reuse those arguments.  This is a naive wrapper that read a rockerc.yaml file and passes them to rocker.  There are currently [no plans](https://github.com/osrf/rocker/issues/148) to integrate docker-compose like functionality directly into rocker so I made this as a proof of concept to see what the ergonomics of it would be like. 
 
 ## Caveats
 
-I'm not sure this is the best way of implementing rockerc like functionality.  It might be better to implmented it as a rocker extension, or in rocker itself.  This was just the simplest way to get started. I may explore those other options in more detail in the future. 
+I'm not sure this is the best way of implementing rockerc like functionality.  It might be better to implemented it as a rocker extension, or in rocker itself.  This was just the simplest way to get started. I may explore those other options in more detail in the future. 
 
 
 # rocker.yaml configuration
