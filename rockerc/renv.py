@@ -1,3 +1,25 @@
+"""
+renv - Rocker Environment Manager
+
+Architecture Overview:
+This module implements a multi-repository development environment using git worktrees and rocker containers.
+
+The architecture follows a layered approach for maximum code reuse:
+
+1. Base Layer:
+   - rockerc: Core container management, reads rockerc.yaml files and launches containers
+   - rockervsc: Light wrapper on rockerc with same interface, adds VSCode integration
+
+2. Environment Layer:
+   - renv: Collects configuration arguments and passes them to rockerc
+   - renvvsc: Functions the same as renv, but passes arguments to rockervsc instead of rockerc
+
+This design ensures:
+- Maximum code reuse between terminal and VSCode workflows
+- Consistent interfaces across all tools
+- Easy maintenance with changes in one place affecting both workflows
+"""
+
 import sys
 import subprocess
 import pathlib
@@ -192,7 +214,7 @@ _renv_completion() {
 }
 
 complete -F _renv_completion renv
-complete -F _renv_completion renvsc
+complete -F _renv_completion renvvsc
 """
 
     # Install to .bashrc

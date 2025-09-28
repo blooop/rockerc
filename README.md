@@ -36,6 +36,25 @@ pipx install --include-deps . --force
 
 This will ensure that `rockerc` and `rocker` commands are available on your PATH.
 
+## Architecture
+
+rockerc follows a layered architecture designed for maximum code reuse between terminal and VSCode workflows:
+
+### Base Layer
+- **rockerc**: Core container management tool that reads `rockerc.yaml` files and launches containers
+- **rockervsc**: Light wrapper on rockerc with the same interface, adds VSCode integration
+
+### Environment Layer
+- **renv**: Multi-repository environment manager that collects configuration arguments and passes them to rockerc
+- **renvvsc**: Functions the same as renv, but passes arguments to rockervsc instead of rockerc
+
+### Benefits of this Architecture
+- **Maximum code reuse**: Changes in core functionality automatically benefit both terminal and VSCode workflows
+- **Consistent interfaces**: All tools share the same command-line interface and configuration format
+- **Easy maintenance**: Bug fixes and features only need to be implemented once in the base layer
+
+This design ensures that whether you're using terminal-based development or VSCode integration, you get the same robust container management with your preferred interface.
+
 ## Usage
 
 navigate to a directory with a `rockerc.yaml` file and run:
