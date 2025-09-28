@@ -14,9 +14,33 @@ import pathlib
 import logging
 import os
 import shlex
+import yaml
 from typing import List, Optional, Dict, Any
 
 from .rockerc import yaml_dict_to_args, collect_arguments, build_docker, save_rocker_cmd
+
+
+def launch_vscode_with_workspace(container_name: str, container_hex: str, workspace_folder: str):
+    """Launch VSCode attached to a specific workspace folder in the container
+
+    Args:
+        container_name (str): name of container to attach to
+        container_hex (str): hex of the container for vscode uri
+        workspace_folder (str): workspace folder path inside container
+    """
+    try:
+        vscode_uri = f"vscode-remote://attached-container+{container_hex}{workspace_folder}"
+        # Launch VSCode in background so it doesn't block the terminal
+        subprocess.Popen(
+            f"code --folder-uri {vscode_uri}",
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logging.info(f"Launched VSCode attached to {container_name} at {workspace_folder}")
+    except Exception as e:
+        logging.error(f"Failed to launch VSCode: {e}")
+        raise
 
 
 def run_rockervsc(path: str = ".") -> int:
@@ -45,9 +69,7 @@ def run_rockervsc(path: str = ".") -> int:
         args_dict.pop("dockerfile")
 
     # Handle --create-dockerfile option
-    create_dockerfile = False
     if "--create-dockerfile" in sys.argv:
-        create_dockerfile = True
         # Convert args_dict to command format for save_rocker_cmd
         rocker_args = yaml_dict_to_args(args_dict)
         if rocker_args:
@@ -62,7 +84,8 @@ def run_rockervsc(path: str = ".") -> int:
     # Extract extra args from sys.argv if needed (excluding --create-dockerfile)
     extra_args = []
     if len(sys.argv) > 1:
-        extra_args = [arg for arg in sys.argv[1:] if arg != "--create-dockerfile" and arg != path]
+        excluded_args = {"--create-dockerfile", path}
+        extra_args = [arg for arg in sys.argv[1:] if arg not in excluded_args]
 
     # Call rockervsc function directly
     return rockervsc_run(path=path, force=False, extra_args=extra_args)
@@ -149,32 +172,81 @@ def run_renvvsc(args: Optional[List[str]] = None) -> int:
 
 def manage_container_vscode(
     repo_spec,
-    command: Optional[List[str]] = None,
+    command: Optional[List[str]] = None,  # pylint: disable=unused-argument
     force: bool = False,
     nocache: bool = False,
     no_container: bool = False,
 ) -> int:
     """
-    VSCode version of manage_container that uses rockervsc
+    VSCode version of manage_container that launches container in detached mode + attaches VSCode
 
-    This replicates the container management logic from renv but calls
-    rockervsc instead of rockerc for VSCode integration.
+    This launches the container in detached mode and attaches VSCode to it, but does NOT
+    enter the container interactively to avoid keystroke dropping issues.
     """
-    from .renv import setup_worktree, get_worktree_dir, build_rocker_config
+    from .renv import (
+        setup_worktree,
+        get_worktree_dir,
+        get_container_name,
+        container_exists,
+        container_running,
+        build_rocker_config,
+        run_rocker_command,
+    )
 
     if no_container:
         setup_worktree(repo_spec)
         logging.info(f"Worktree set up at: {get_worktree_dir(repo_spec)}")
         return 0
 
-    # Set up worktree
-    worktree_dir = setup_worktree(repo_spec)
+    # Set up worktree and get container info
+    setup_worktree(repo_spec)
+    container_name = get_container_name(repo_spec)
 
-    # Build configuration
-    config = build_rocker_config(repo_spec, force=force, nocache=nocache)
+    # Handle force rebuild by removing existing container
+    if force and container_exists(container_name):
+        logging.info(f"Force rebuild: removing existing container {container_name}")
+        subprocess.run(["docker", "rm", "-f", container_name], check=True)
 
-    # Use rockervsc instead of the regular rocker command
-    return run_rocker_command_vscode(config, command, worktree_dir)
+    # Launch or ensure container is running
+    if force or not container_exists(container_name) or not container_running(container_name):
+        if container_exists(container_name) and not force:
+            # Remove stopped container and recreate
+            logging.info(f"Removing stopped container {container_name} to recreate with rocker")
+            subprocess.run(["docker", "rm", "-f", container_name], check=False)
+
+        # Launch container in detached mode
+        logging.info(f"Using rocker to launch container {container_name} in detached mode")
+        config = build_rocker_config(repo_spec, force=force, nocache=nocache)
+        result = run_rocker_command(config, ["bash"], detached=True)
+        if result != 0:
+            return result
+
+        # Give container a moment to start up
+        import time
+
+        time.sleep(2)
+    else:
+        logging.info(f"Container {container_name} is already running")
+
+    # Now launch VSCode attached to the workspace folder
+    workspace_folder = f"/workspace/{repo_spec.repo}"
+    import binascii
+
+    container_hex = binascii.hexlify(container_name.encode()).decode()
+
+    logging.info(f"Launching VSCode attached to container {container_name} at {workspace_folder}")
+    try:
+        launch_vscode_with_workspace(container_name, container_hex, workspace_folder)
+        logging.info("VSCode launched successfully")
+        logging.info(f"Container {container_name} is running in detached mode")
+        logging.info(
+            f"Use 'docker exec -it {container_name} /bin/bash' to enter the container manually"
+        )
+    except Exception as e:
+        logging.warning(f"Failed to launch VSCode: {e}")
+        return 1
+
+    return 0
 
 
 def run_rocker_command_vscode(
@@ -183,9 +255,9 @@ def run_rocker_command_vscode(
     """
     Execute VSCode container launch using rockervsc approach
 
-    This uses the rockervsc logic directly instead of trying to convert renv config.
+    This writes the renv config to a rockerc.yaml in the worktree and uses rockervsc.
     """
-    from .rockervsc import run_rockervsc
+    from .rockervsc import run_rockervsc as rockervsc_run_func
 
     # Extract container name and setup for VSCode
     container_name = config.get("name", "unknown")
@@ -198,12 +270,51 @@ def run_rocker_command_vscode(
         os.chdir(str(worktree_dir))
 
     try:
+        # Create a rockerc.yaml file in the worktree with the full renv configuration
+        # This ensures rockervsc has all the volume mounts, git setup, etc.
+        rockerc_path = (
+            worktree_dir / "rockerc.yaml" if worktree_dir else pathlib.Path("rockerc.yaml")
+        )
+
+        # Convert config to rockerc.yaml format
+        rockerc_config = {
+            "image": config.get("image", "ubuntu:22.04"),
+            "args": config.get("args", ["user", "pull", "git-clone", "git", "persist-image"]),
+        }
+
+        # Add volume mounts
+        if "volume" in config:
+            volumes = config["volume"]
+            if isinstance(volumes, list):
+                for volume in volumes:
+                    rockerc_config.setdefault("volume", []).append(volume)
+            else:
+                rockerc_config["volume"] = volumes
+
+        # Add other rocker arguments
+        for key, value in config.items():
+            if key not in ["image", "args", "volume", "name", "hostname"]:
+                rockerc_config[key] = value
+
+        # Add container-specific arguments that rockervsc needs
+        if "name" in config:
+            rockerc_config["name"] = config["name"]
+        if "hostname" in config:
+            rockerc_config["hostname"] = config["hostname"]
+
+        # Write the rockerc.yaml file
+        with open(rockerc_path, "w", encoding="utf-8") as f:
+            yaml.dump(rockerc_config, f, default_flow_style=False)
+
+        logging.info(f"Created rockerc.yaml for VSCode in {rockerc_path}")
+        logging.info(f"Config: {rockerc_config}")
+
         # Use rockervsc's run_rockervsc function with the worktree directory
-        # This will read the rockerc.yaml in the worktree and launch VSCode
-        result = run_rockervsc(
+        # This will read the rockerc.yaml we just created and launch VSCode
+        result = rockervsc_run_func(
             path=str(worktree_dir) if worktree_dir else ".",
             force=False,  # renv handles force logic
-            extra_args=command if command else []
+            extra_args=command if command else [],
         )
         return result
     finally:

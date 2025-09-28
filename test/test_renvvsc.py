@@ -43,7 +43,9 @@ class TestRenvvscArchitecture:
     @patch("rockerc.renvsc.os.chdir")
     @patch("rockerc.renvsc.os.getcwd")
     @patch("rockerc.rockervsc.run_rockervsc")
-    def test_run_rocker_command_vscode_calls_rockervsc(self, mock_run_rockervsc, mock_getcwd, mock_chdir):
+    def test_run_rocker_command_vscode_calls_rockervsc(
+        self, mock_run_rockervsc, mock_getcwd, mock_chdir
+    ):
         """Test that run_rocker_command_vscode calls rockervsc with correct working directory"""
         # Setup mock data
         mock_getcwd.return_value = "/original/dir"
@@ -59,9 +61,7 @@ class TestRenvvscArchitecture:
         mock_chdir.assert_any_call(str(worktree_dir))
         mock_chdir.assert_any_call("/original/dir")  # Restore original directory
         mock_run_rockervsc.assert_called_once_with(
-            path=str(worktree_dir),
-            force=False,
-            extra_args=[]
+            path=str(worktree_dir), force=False, extra_args=[]
         )
         assert result == 0
 
@@ -242,11 +242,7 @@ class TestVSCodeSpecificBehavior:
         result = run_rocker_command_vscode(config, command=command)
 
         # Verify command is passed to rockervsc
-        mock_run_rockervsc.assert_called_once_with(
-            path=".",
-            force=False,
-            extra_args=command
-        )
+        mock_run_rockervsc.assert_called_once_with(path=".", force=False, extra_args=command)
         assert result == 0
 
     @patch("rockerc.renvsc.run_rocker_command_vscode")

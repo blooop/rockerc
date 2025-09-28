@@ -34,6 +34,31 @@ from typing import List, Optional, Dict, Any
 from .rockerc import deduplicate_extensions
 
 
+def launch_vscode_with_workspace_folder(
+    container_name: str, container_hex: str, workspace_folder: str
+):
+    """Launch VSCode attached to a specific workspace folder in the container
+
+    Args:
+        container_name (str): name of container to attach to
+        container_hex (str): hex of the container for vscode uri
+        workspace_folder (str): workspace folder path inside container
+    """
+    try:
+        vscode_uri = f"vscode-remote://attached-container+{container_hex}{workspace_folder}"
+        # Launch VSCode in background so it doesn't block the terminal
+        subprocess.Popen(
+            f"code --folder-uri {vscode_uri}",
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logging.info(f"Launched VSCode attached to {container_name} at {workspace_folder}")
+    except Exception as e:
+        logging.error(f"Failed to launch VSCode: {e}")
+        raise
+
+
 @dataclass
 class RepoSpec:
     owner: str
@@ -693,6 +718,74 @@ def _try_attach_with_fallback(
     return attach_to_container(container_name, command)
 
 
+def manage_container_with_vscode(
+    repo_spec: RepoSpec,
+    command: Optional[List[str]] = None,
+    force: bool = False,
+    nocache: bool = False,
+    no_container: bool = False,
+) -> int:
+    """Manage container lifecycle and execution with VSCode integration
+
+    This is like manage_container but also launches VSCode attached to the container
+    after ensuring it's running in detached mode.
+    """
+    import binascii
+
+    if no_container:
+        setup_worktree(repo_spec)
+        logging.info(f"Worktree set up at: {get_worktree_dir(repo_spec)}")
+        return 0
+
+    # Set up worktree
+    setup_worktree(repo_spec)
+    container_name = get_container_name(repo_spec)
+
+    # Handle force rebuild by removing existing container
+    if force and container_exists(container_name):
+        logging.info(f"Force rebuild: removing existing container {container_name}")
+        subprocess.run(["docker", "rm", "-f", container_name], check=True)
+
+    # Ensure container is running in detached mode
+    if force or not container_exists(container_name) or not container_running(container_name):
+        if container_exists(container_name) and not force:
+            # Remove stopped container and recreate with rocker
+            logging.info(f"Removing stopped container {container_name} to recreate with rocker")
+            subprocess.run(["docker", "rm", "-f", container_name], check=False)
+
+        logging.info(f"Using rocker to launch container {container_name} in detached mode")
+        config = build_rocker_config(repo_spec, force=force, nocache=nocache)
+        result = run_rocker_command(config, ["bash"], detached=True)
+        if result != 0:
+            return result
+
+        # Give container a moment to start up
+        time.sleep(2)
+    else:
+        logging.info(f"Container {container_name} is already running")
+
+    # Launch VSCode attached to the workspace folder
+    workspace_folder = f"/workspace/{repo_spec.repo}"
+    container_hex = binascii.hexlify(container_name.encode()).decode()
+
+    logging.info(f"Launching VSCode attached to container {container_name} at {workspace_folder}")
+    try:
+        launch_vscode_with_workspace_folder(container_name, container_hex, workspace_folder)
+        logging.info("VSCode launched successfully")
+    except Exception as e:
+        logging.warning(f"Failed to launch VSCode: {e}")
+        # Don't fail the whole operation if VSCode launch fails
+
+    # If a command was specified, run it in the container and return
+    if command:
+        logging.info(f"Running command in container: {' '.join(command)}")
+        return attach_to_container(container_name, command)
+
+    # Otherwise, enter the container interactively (like normal renv)
+    logging.info(f"Entering container {container_name} interactively")
+    return attach_to_container(container_name, None)
+
+
 def manage_container(
     repo_spec: RepoSpec,
     command: Optional[List[str]] = None,
@@ -762,6 +855,8 @@ def run_renv(args: Optional[List[str]] = None) -> int:
 
     parser.add_argument("--install", action="store_true", help="Install shell autocompletion")
 
+    parser.add_argument("--vsc", action="store_true", help="Launch VSCode attached to container")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.install:
@@ -780,13 +875,23 @@ def run_renv(args: Optional[List[str]] = None) -> int:
         repo_spec = RepoSpec.parse(parsed_args.repo_spec)
         logging.info(f"Working with: {repo_spec}")
 
-        return manage_container(
-            repo_spec=repo_spec,
-            command=parsed_args.command if parsed_args.command else None,
-            force=parsed_args.force,
-            nocache=parsed_args.nocache,
-            no_container=parsed_args.no_container,
-        )
+        # If --vsc option is specified, use VSCode integration
+        if parsed_args.vsc:
+            return manage_container_with_vscode(
+                repo_spec=repo_spec,
+                command=parsed_args.command if parsed_args.command else None,
+                force=parsed_args.force,
+                nocache=parsed_args.nocache,
+                no_container=parsed_args.no_container,
+            )
+        else:
+            return manage_container(
+                repo_spec=repo_spec,
+                command=parsed_args.command if parsed_args.command else None,
+                force=parsed_args.force,
+                nocache=parsed_args.nocache,
+                no_container=parsed_args.no_container,
+            )
 
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")
