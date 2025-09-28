@@ -54,6 +54,16 @@ rockervsc
 
 `rockervsc` functions the same as `rockerc` but will automatically launch and attach VS Code to the created container. This provides seamless development environment setup with VS Code running inside your rocker container.
 
+`rockervsc` forwards all arguments to `rockerc`, so you can use any `rockerc` options:
+```
+rockervsc --gemini
+```
+
+The command will:
+1. Run `rockerc` with your arguments plus container configuration for VS Code
+2. Launch VS Code and attach it to the container
+3. If the container already exists, it will just attach VS Code without recreating it
+
 For multi-repository development with git worktrees and VS Code, use `renvsc`:
 ```
 renvsc owner/repo@branch

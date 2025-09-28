@@ -71,24 +71,23 @@ def container_exists(container_name: str) -> bool:
     return container_name in result.stdout.splitlines()
 
 
-def run_rockervsc(path: str = ".", force: bool = False):
+def run_rockervsc(path: str = ".", force: bool = False, extra_args: list = None):
     """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
 
     Args:
         path (str, optional): Search path for rockerc.yaml files. Defaults to ".".
         force (bool, optional): Force rename of existing container. Defaults to False.
+        extra_args (list, optional): Additional arguments to pass to rockerc. Defaults to None.
     """
 
     cwd = pathlib.Path().absolute()
     container_name = cwd.name.lower()
 
-    if len(sys.argv) > 1:
-        # Filter out --force and -f arguments
-        filtered_args = [arg for arg in sys.argv[1:] if arg not in ["--force", "-f"]]
-        cmd_args = " ".join(filtered_args)
-        cmd = f"rockerc {cmd_args}"
-    else:
-        cmd = "rockerc"
+    cmd = "rockerc"
+    if extra_args:
+        cmd += " " + " ".join(extra_args)
+    if path != ".":
+        cmd += f" {path}"
 
     container_hex, rocker_args = folder_to_vscode_container(container_name, path)
     cmd += f" {rocker_args}"
@@ -122,8 +121,9 @@ def main():
     )
     parser.add_argument("path", nargs="?", default=".", help="Search path for rockerc.yaml files")
 
-    args = parser.parse_args()
-    run_rockervsc(path=args.path, force=args.force)
+    # Parse known args and pass the rest to rockerc
+    args, unknown_args = parser.parse_known_args()
+    run_rockervsc(path=args.path, force=args.force, extra_args=unknown_args)
 
 
 if __name__ == "__main__":

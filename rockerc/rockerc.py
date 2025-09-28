@@ -24,6 +24,15 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     for a in d.pop("args", []):
         segments.append(f"--{a}")
 
+    # special handling for extension-blacklist
+    extension_blacklist = d.pop("extension-blacklist", None)
+    if extension_blacklist:
+        if isinstance(extension_blacklist, list):
+            for extension in extension_blacklist:
+                segments.extend(["--extension-blacklist", str(extension)])
+        else:
+            segments.extend(["--extension-blacklist", str(extension_blacklist)])
+
     # key/value pairs
     for k, v in d.items():
         segments.extend([f"--{k}", str(v)])
