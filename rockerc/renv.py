@@ -4,8 +4,12 @@ import pathlib
 import logging
 import argparse
 import time
+import yaml
+import shutil
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
+
+from .rockerc import deduplicate_extensions
 
 
 @dataclass
@@ -188,6 +192,7 @@ _renv_completion() {
 }
 
 complete -F _renv_completion renv
+complete -F _renv_completion renvsc
 """
 
     # Install to .bashrc
@@ -224,6 +229,87 @@ def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
     """Get the worktree directory path for a repository and branch"""
     safe_branch = repo_spec.branch.replace("/", "-")
     return get_repo_dir(repo_spec) / f"worktree-{safe_branch}"
+
+
+def load_renv_rockerc_config() -> dict:
+    """Load global renv rockerc configuration from ~/renv/rockerc.yaml
+
+    Creates the file from template if it doesn't exist.
+
+    Returns:
+        dict: Parsed configuration dictionary, or empty dict if parsing fails.
+    """
+    renv_dir = pathlib.Path.home() / "renv"
+    config_path = renv_dir / "rockerc.yaml"
+
+    # Create renv directory if it doesn't exist
+    renv_dir.mkdir(exist_ok=True)
+
+    # Copy template if config doesn't exist
+    if not config_path.exists():
+        template_path = pathlib.Path(__file__).parent / "renv_rockerc_template.yaml"
+        if template_path.exists():
+            shutil.copy2(template_path, config_path)
+            logging.info(f"Created default renv config at {config_path}")
+        else:
+            logging.warning(f"Template file not found at {template_path}")
+            return {}
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except yaml.YAMLError as e:
+        logging.warning(f"Failed to parse YAML config at {config_path}: {e}")
+        return {}
+    except Exception as e:
+        logging.warning(f"Error loading config at {config_path}: {e}")
+        return {}
+
+
+def load_repo_rockerc_config(worktree_dir: pathlib.Path) -> dict:
+    """Load repository rockerc configuration from rockerc.yaml in the worktree
+
+    Args:
+        worktree_dir: Path to the repository worktree
+
+    Returns:
+        dict: Parsed configuration dictionary, or empty dict if file doesn't exist or parsing fails.
+    """
+    config_path = worktree_dir / "rockerc.yaml"
+    if not config_path.exists():
+        return {}
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except yaml.YAMLError as e:
+        logging.warning(f"Failed to parse YAML config at {config_path}: {e}")
+        return {}
+    except Exception as e:
+        logging.warning(f"Error loading config at {config_path}: {e}")
+        return {}
+
+
+def combine_rockerc_configs(renv_config: dict, repo_config: dict) -> dict:
+    """Combine renv and repository rockerc configurations
+
+    Args:
+        renv_config: Configuration from ~/renv/rockerc.yaml
+        repo_config: Configuration from repository's rockerc.yaml
+
+    Returns:
+        dict: Combined configuration with repo config taking precedence
+    """
+    # Start with renv config as base, then override with repo config
+    combined = renv_config.copy()
+    combined.update(repo_config)
+
+    # Special handling for args - merge and deduplicate instead of overriding
+    renv_args = renv_config.get("args", [])
+    repo_args = repo_config.get("args", [])
+    if renv_args or repo_args:
+        combined["args"] = deduplicate_extensions(renv_args + repo_args)
+
+    return combined
 
 
 def get_container_name(repo_spec: RepoSpec) -> str:
@@ -290,10 +376,19 @@ def build_rocker_config(
     force: bool = False,  # pylint: disable=unused-argument
     nocache: bool = False,  # pylint: disable=unused-argument
 ) -> Dict[str, Any]:
-    """Build rocker configuration with default extensions"""
+    """Build rocker configuration combining renv and repository configurations"""
     container_name = get_container_name(repo_spec)
     repo_dir = get_repo_dir(repo_spec)
     worktree_dir = get_worktree_dir(repo_spec)
+
+    # Load and combine rockerc configurations
+    renv_config = load_renv_rockerc_config()
+    repo_config = load_repo_rockerc_config(worktree_dir)
+    combined_config = combine_rockerc_configs(renv_config, repo_config)
+
+    logging.info(f"Loaded renv config: {renv_config}")
+    logging.info(f"Loaded repo config: {repo_config}")
+    logging.info(f"Combined config: {combined_config}")
 
     # Docker mount points
     docker_bare_repo_mount = f"/workspace/{repo_spec.repo}.git"
@@ -317,16 +412,16 @@ def build_rocker_config(
     with open(git_config_file, "w", encoding="utf-8") as f:
         f.write(git_config_content)
 
-    # Create config using spec from renv.md, but remove nocleanup to let rocker manage security properly
+    # Start with base renv configuration
     config = {
-        "image": "ubuntu:22.04",
-        "args": [
+        "image": combined_config.get("image", "ubuntu:22.04"),
+        "args": combined_config.get("args", [
             "user",
             "pull",
             "git-clone",
             "git",
             "persist-image",
-        ],  # Removed nocleanup to avoid persistence issues
+        ]),
         "name": container_name,
         "hostname": container_name,
         "volume": [
@@ -337,8 +432,10 @@ def build_rocker_config(
         "oyr-run-arg": f"--workdir={docker_workdir} --env=REPO_NAME={repo_spec.repo} --env=BRANCH_NAME={repo_spec.branch.replace('/', '-')}",
     }
 
-    # Note: force rebuild is handled by removing existing containers, not by rocker extensions
-    # nocache is not implemented as rocker extension - it should be handled during container management
+    # Add any additional configuration parameters from the combined config
+    for key, value in combined_config.items():
+        if key not in ["image", "args"]:
+            config[key] = value
 
     return config
 

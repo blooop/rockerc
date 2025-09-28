@@ -40,24 +40,6 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     return cmd_str
 
 
-def load_global_config() -> dict:
-    """Load global rockerc configuration from ~/.rockerc.yaml
-
-    Returns:
-        dict: Parsed configuration dictionary, or empty dict if parsing fails.
-    """
-    config_path = pathlib.Path.home() / ".rockerc.yaml"
-    if not config_path.exists():
-        return {}
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    except yaml.YAMLError as e:
-        logging.warning(f"Failed to parse YAML config at {config_path}: {e}")
-        return {}
-    except Exception as e:
-        logging.warning(f"Error loading config at {config_path}: {e}")
-        return {}
 
 
 def deduplicate_extensions(extensions: list) -> list:
@@ -87,10 +69,6 @@ def collect_arguments(path: str = ".") -> dict:
     Returns:
         dict: A dictionary of merged rockerc arguments
     """
-    # Load global config first
-    global_config = load_global_config()
-
-    # Load project-specific config
     search_path = pathlib.Path(path)
     merged_dict = {}
     for p in search_path.glob("rockerc.yaml"):
@@ -99,16 +77,7 @@ def collect_arguments(path: str = ".") -> dict:
         with open(p.as_posix(), "r", encoding="utf-8") as f:
             merged_dict.update(yaml.safe_load(f))
 
-    # Start with global config as base, then override with project-specific settings
-    final_dict = global_config | merged_dict
-
-    # Special handling for args - merge and deduplicate instead of overriding
-    global_args = global_config.get("args", [])
-    project_args = merged_dict.get("args", [])
-    if global_args or project_args:
-        final_dict["args"] = deduplicate_extensions(global_args + project_args)
-
-    return final_dict
+    return merged_dict
 
 
 def build_docker(dockerfile_path: str = ".") -> str:

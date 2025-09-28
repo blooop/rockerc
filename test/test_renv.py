@@ -82,7 +82,9 @@ class TestRockerConfig:
         assert "user" in config["args"]
         assert "pull" in config["args"]
         assert "git" in config["args"]
-        assert "git-clone" in config["args"]
+        assert "persist-image" in config["args"]  # Updated to match new default config
+        assert "x11" in config["args"]  # Updated to match new default config
+        assert "ssh" in config["args"]  # Updated to match new default config
         assert "nocleanup" not in config["args"]  # Removed to let rocker manage security properly
         assert "cwd" not in config["args"]  # Should be removed per spec
         assert config["name"] == "test_renv-main"
