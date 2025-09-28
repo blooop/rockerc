@@ -321,6 +321,16 @@ class TestBasicClass(TestCase):
         result = yaml_dict_to_args(d)
         assert result == expected
 
+    def test_extension_blacklist_none(self):
+        d = {
+            "image": "ubuntu:22.04",
+            "args": ["x11"],
+            "extension-blacklist": None
+        }
+        expected = "--x11 -- ubuntu:22.04"
+        result = yaml_dict_to_args(d)
+        assert result == expected
+
     def test_collect_arguments_with_global_extension_blacklist(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create global config with extension-blacklist
