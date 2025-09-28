@@ -94,7 +94,16 @@ renv blooop/test_renv "bash -c 'git status; pwd; ls -l'"
 
 - prints the git status, the current working directory, and a list of files.
 
-#### 5. Debug or Manual Management
+#### 6. VS Code Integration with renvsc
+```bash
+renvsc blooop/test_renv@main
+```
+- Works exactly like `renv` but automatically launches VS Code attached to the container
+- Creates a detached container suitable for VS Code Remote-Containers extension
+- All the same features as `renv`: worktree management, container reuse, multi-repo support
+- VS Code opens directly in the repository with full container environment access
+
+#### 7. Debug or Manual Management
 ```bash
 renv blooop/test_renv@main --no-container
 ```
@@ -173,10 +182,58 @@ When running `renv` without arguments, or with partial input, interactive fuzzy 
 
 This makes switching between repos and branches fast and error-free, even in large multi-repo setups.
 
+## VS Code Integration (renvsc)
+
+`renvsc` provides seamless VS Code integration with renv-managed containers. It combines all the functionality of `renv` with automatic VS Code launching and attachment.
+
+### Key Features
+- **Full renv compatibility**: All `renv` commands work with `renvsc`
+- **Automatic VS Code launch**: Opens VS Code attached to the container after creation
+- **Detached containers**: Creates containers in detached mode suitable for VS Code Remote-Containers
+- **Container reuse**: Reattaches VS Code to existing containers without rebuilding
+- **Multi-repo support**: Switch between different repos and branches with VS Code
+
+### Usage Examples
+
+#### Basic Usage
+```bash
+renvsc blooop/test_renv@main
+```
+- Creates/reuses container for the repository and branch
+- Launches VS Code attached to the container
+- Working directory is set to the repository root
+
+#### Branch Switching
+```bash
+renvsc blooop/test_renv@feature/new-feature
+```
+- Creates new worktree and container for the feature branch
+- Opens VS Code in the new environment
+- Previous containers remain available
+
+#### Multi-Repository Development
+```bash
+renvsc osrf/rocker@main
+```
+- Switch to a different repository while keeping existing containers
+- VS Code opens in the new repository environment
+
+### Requirements for renvsc
+- All standard renv requirements (Git, rocker, Docker)
+- VS Code installed with Remote-Containers extension
+- Container must support VS Code server (automatically handled by renv's base configuration)
+
+### Technical Details
+- Uses `--detach` flag for container creation (required for VS Code)
+- Removes `persist-image` extension (incompatible with detached mode)
+- Generates container hex identifier for VS Code Remote-Containers URI
+- Maintains full compatibility with renv's configuration and extensions
+
 ## Requirements
 - Git
 - rockerc
 - rocker (Docker)
+- For renvsc: VS Code with Remote-Containers extension
 
 ## Troubleshooting
 - If repo exists, latest changes are fetched
