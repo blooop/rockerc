@@ -139,8 +139,6 @@ class TestBasicClass(TestCase):
         result = deduplicate_extensions(extensions)
         assert result == expected
 
-
-
     def test_collect_arguments_missing_args_and_image(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create project config without args and image

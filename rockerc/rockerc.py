@@ -40,8 +40,6 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     return cmd_str
 
 
-
-
 def deduplicate_extensions(extensions: list) -> list:
     """Remove duplicate extensions while preserving order
 

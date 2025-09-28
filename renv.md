@@ -1,8 +1,8 @@
 
  I am adding a new tool to complement rockerc.  its called renv and uses rocker to create a development container. You
    can use rockerc as inspiration for how to manage rocker, but create renv as a separate tool that calls rocker 
-  directly. rockerc expects there to be rockerc files, whereas renv shoudl work on any repo without a rockerc file and 
-  defines its own require extension for basic development. I have included some tempalte workflows as bash scripts, you
+  directly. rockerc expects there to be rockerc files, whereas renv should work on any repo without a rockerc file and 
+  defines its own require extension for basic development. I have included some template workflows as bash scripts, you
    must implement rocker to meeting the all the specs in the markdown file and also the tests stubs I left in 
   test/worksflows. use the pixi environment and pixi tasks to run tests and ci. you are working on the host machine   where rocker is installed. aad an executable `renv` to the pyproject.toml.  write lots of tests and work step by test
    to implement the features and higher level goal
@@ -16,7 +16,7 @@
 
 The main workflow to support is the user can type a `renv repo_owner/repo_name` and re enter the container seamlessly, ie, if it needs to be built, build and attach.  If the image is already built but not running, start the container and attach, and if the container is already running, it should attach to that container.  
 
-renv uses rocker to manage the building of the dockerfiles via extensions. renv automatically loads some default extensions to provide a base level of developer experience such as ssh, git etc. The user can add their own develoment tools by creating an extension for it.  The aim is that you only have to write a dockerfile for your tools once, and then you can bring it along to any development environment you want via a flag. see https://github.com/blooop/deps_rocker and https://github.com/osrf/rocker.   When the use runs the renv command on a repo, the user will enter a fully set up development container directly inside that git repository. 
+renv uses rocker to manage the building of the dockerfiles via extensions. renv automatically loads some default extensions to provide a base level of developer experience such as ssh, git etc. The user can add their own development tools by creating an extension for it.  The aim is that you only have to write a dockerfile for your tools once, and then you can bring it along to any development environment you want via a flag. see https://github.com/blooop/deps_rocker and https://github.com/osrf/rocker.   When the use runs the renv command on a repo, the user will enter a fully set up development container directly inside that git repository. 
 
 renv automatically names the containers based on the repo name and branch name. so renv blooop/test_renv@feature1 creates a docker image and container named test_renv-feature1 and enters a folder called test_renv as that is the repo name. 
 
@@ -193,4 +193,3 @@ For more details, see the project README or run `renv --help`.
 
 
 this is an example of how to use oyr-run-arg to pass arguments to docker through rocker.
-

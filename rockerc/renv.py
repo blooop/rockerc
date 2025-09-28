@@ -346,7 +346,9 @@ def setup_worktree(repo_spec: RepoSpec) -> pathlib.Path:
         # Check if the branch exists
         if not branch_exists(repo_spec, repo_spec.branch):
             default_branch = get_default_branch(repo_spec)
-            logging.info(f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default_branch}'")
+            logging.info(
+                f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default_branch}'"
+            )
 
             # Create the new branch from the default branch
             subprocess.run(
@@ -415,13 +417,16 @@ def build_rocker_config(
     # Start with base renv configuration
     config = {
         "image": combined_config.get("image", "ubuntu:22.04"),
-        "args": combined_config.get("args", [
-            "user",
-            "pull",
-            "git-clone",
-            "git",
-            "persist-image",
-        ]),
+        "args": combined_config.get(
+            "args",
+            [
+                "user",
+                "pull",
+                "git-clone",
+                "git",
+                "persist-image",
+            ],
+        ),
         "name": container_name,
         "hostname": container_name,
         "volume": [

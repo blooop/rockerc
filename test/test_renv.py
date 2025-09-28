@@ -377,7 +377,9 @@ class TestManageContainer:
 class TestRockerCommandWorkingDirectory:
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
-    def test_run_rocker_command_always_sets_worktree_cwd(self, mock_path_exists, mock_subprocess_run):
+    def test_run_rocker_command_always_sets_worktree_cwd(
+        self, mock_path_exists, mock_subprocess_run
+    ):
         """Test that renv always runs rocker from the worktree directory"""
         from rockerc.renv import run_rocker_command
 
@@ -415,7 +417,9 @@ class TestRockerCommandWorkingDirectory:
 
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
-    def test_run_rocker_command_sets_cwd_even_without_deps(self, mock_path_exists, mock_subprocess_run):
+    def test_run_rocker_command_sets_cwd_even_without_deps(
+        self, mock_path_exists, mock_subprocess_run
+    ):
         """Test that even without deps extension, rocker runs from worktree directory"""
         from rockerc.renv import run_rocker_command
 

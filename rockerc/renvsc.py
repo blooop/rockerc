@@ -2,6 +2,7 @@
 renvsc - Rocker Environment Manager for VS Code
 Same as renv but uses rockervsc instead of rocker
 """
+
 import sys
 import subprocess
 from rockerc.renv import run_rocker_command, run_renv
@@ -35,6 +36,7 @@ def run_rockervsc_command(config, command=None, detached=False):
 def run_renvsc(args=None):
     """Main entry point - monkey patch and call renv"""
     import rockerc.renv
+
     original_func = rockerc.renv.run_rocker_command
     rockerc.renv.run_rocker_command = run_rockervsc_command
 
