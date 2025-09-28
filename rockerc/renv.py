@@ -294,6 +294,7 @@ def build_rocker_config(
             "pull",
             "git-clone",
             "git",
+            "persist-image",
         ],  # Removed nocleanup to avoid persistence issues
         "name": container_name,
         "hostname": container_name,
