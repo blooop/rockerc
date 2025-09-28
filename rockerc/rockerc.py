@@ -6,6 +6,8 @@ import shlex
 import os
 import logging
 import json
+from collections import OrderedDict
+import re
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
@@ -228,35 +230,40 @@ def merge_container_options_with_config(container_options: dict, config_dict: di
     Returns:
         dict: Merged configuration with container options as base and config overrides
     """
-    # Start with container options as the base
-    merged = container_options.copy()
+    merged = {key: _copy_value(value) for key, value in container_options.items()}
 
     # Handle args specially - these are rocker extensions
     if "args" in config_dict:
-        merged["args"] = config_dict["args"]
-
-        # Remove conflicting container options when rocker extensions are used
-        args = config_dict["args"]
+        merged["args"] = deduplicate_extensions(_normalize_simple_list(config_dict.get("args", [])))
+        args = merged["args"]
         if "user" in args and "user" in merged:
-            # Remove container user setting as --user extension takes precedence
-            del merged["user"]
+            merged.pop("user", None)
+    elif "args" in merged:
+        merged["args"] = deduplicate_extensions(_normalize_simple_list(merged["args"]))
 
-    # Override with config values, but handle lists specially
-    for key, value in config_dict.items():
-        if key == "args":
-            continue  # Already handled above
-        if key in ["env", "volume", "port", "device", "cap-add"] and isinstance(value, list):
-            # For list values, extend rather than replace
-            existing = merged.get(key, [])
-            if isinstance(existing, list):
-                # Deduplicate while preserving order
-                combined = existing + [v for v in value if v not in existing]
-                merged[key] = combined
-            else:
-                merged[key] = value
+    list_handlers = {
+        "env": lambda c, cfg: _merge_keyed_items(c, cfg, _normalize_env_list, _env_key),
+        "volume": lambda c, cfg: _merge_keyed_items(c, cfg, _normalize_volume_list, _volume_key),
+        "port": lambda c, cfg: _merge_keyed_items(c, cfg, _normalize_port_list, _port_key),
+        "device": lambda c, cfg: _merge_keyed_items(c, cfg, _normalize_device_list, _device_key),
+        "cap-add": _merge_simple_items,
+    }
+
+    for key, handler in list_handlers.items():
+        container_value = container_options.get(key)
+        config_value = config_dict.get(key)
+        merged_value = handler(container_value, config_value)
+        if merged_value is None:
+            continue
+        if merged_value:
+            merged[key] = merged_value
         else:
-            # For other values, config takes precedence
-            merged[key] = value
+            merged.pop(key, None)
+
+    for key, value in config_dict.items():
+        if key in ("args", "env", "volume", "port", "device", "cap-add"):
+            continue
+        merged[key] = _copy_value(value)
 
     return merged
 
@@ -277,6 +284,269 @@ def deduplicate_extensions(extensions: list) -> list:
             seen.add(ext)
             result.append(ext)
     return result
+
+
+def _copy_value(value):
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, dict):
+        return dict(value)
+    return value
+
+
+def _is_explicitly_empty(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, (list, tuple, set, dict)):
+        return len(value) == 0
+    if isinstance(value, str):
+        return value.strip() == ""
+    return False
+
+
+def _strip_outer_quotes(value: str) -> str:
+    if not value:
+        return value
+    if (value[0] == value[-1]) and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def _normalize_env_list(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        normalized = []
+        for key, val in value.items():
+            if val is None or val == "":
+                normalized.append(str(key))
+            else:
+                normalized.append(f"{key}={val}")
+        return normalized
+    items = value if isinstance(value, list) else [value]
+    normalized = []
+    for item in items:
+        if item is None:
+            continue
+        normalized.append(str(item).strip())
+    return normalized
+
+
+def _env_key(entry: str) -> str:
+    if "=" in entry:
+        return entry.split("=", 1)[0]
+    return entry
+
+
+def _split_volume_entry(entry: str) -> tuple[str | None, str | None, str | None]:
+    if not entry:
+        return None, None, None
+    cleaned = _strip_outer_quotes(entry.strip())
+    key_value_target = _extract_target_from_key_value(cleaned)
+    if key_value_target:
+        # key/value syntax handled separately
+        return cleaned, key_value_target, None
+
+    parts = cleaned.rsplit(":", 2)
+    if len(parts) == 1:
+        return parts[0], None, None
+    if len(parts) == 2:
+        return parts[0], parts[1], None
+    return parts[0], parts[1], parts[2]
+
+
+def _extract_target_from_key_value(entry: str) -> str | None:
+    if "target=" not in entry:
+        return None
+    for segment in entry.split(","):
+        segment = segment.strip()
+        if segment.startswith("target="):
+            return _strip_outer_quotes(segment.split("=", 1)[1])
+    return None
+
+
+def _normalize_volume_list(value) -> list[str]:
+    if value is None:
+        return []
+    items = value if isinstance(value, list) else [value]
+    normalized = []
+    for item in items:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def _volume_key(entry: str) -> str | tuple[str | None, str | None]:
+    if not entry:
+        return entry
+    cleaned = entry.strip()
+    unquoted = _strip_outer_quotes(cleaned)
+    key_value_target = _extract_target_from_key_value(unquoted)
+    if key_value_target:
+        return key_value_target
+    source, target, _mode = _split_volume_entry(unquoted)
+    key_target = _strip_outer_quotes(target) if target else None
+    key_source = _strip_outer_quotes(source) if source else None
+    return key_target or key_source or unquoted
+
+
+def _normalize_device_list(value) -> list[str]:
+    return _normalize_volume_list(value)
+
+
+def _device_key(entry: str):
+    if not entry:
+        return entry
+    cleaned = _strip_outer_quotes(entry.strip())
+    parts = cleaned.rsplit(":", 2)
+    if len(parts) >= 2:
+        return _strip_outer_quotes(parts[1])
+    return cleaned
+
+
+def _normalize_port_list(value) -> list[str]:
+    if value is None:
+        return []
+    items = value if isinstance(value, list) else [value]
+    normalized = []
+    for item in items:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def _port_key(entry: str):
+    if not entry:
+        return entry
+    cleaned = entry.strip()
+    segments = cleaned.split(":")
+    if not segments:
+        return cleaned
+    return segments[-1]
+
+
+def _normalize_simple_list(value) -> list[str]:
+    if value is None:
+        return []
+    items = value if isinstance(value, list) else [value]
+    normalized = []
+    for item in items:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def _volume_target(entry: str) -> str | None:
+    if not entry:
+        return None
+    cleaned = _strip_outer_quotes(str(entry).strip())
+    key_value_target = _extract_target_from_key_value(cleaned)
+    if key_value_target:
+        return key_value_target
+    source, target, _mode = _split_volume_entry(cleaned)
+    if target:
+        return _strip_outer_quotes(target)
+    if source:
+        return _strip_outer_quotes(source)
+    return None
+
+
+def _remove_volume_target(merged_dict: dict, target: str) -> bool:
+    if not target:
+        return False
+    volumes = merged_dict.get("volume")
+    if not volumes:
+        return False
+
+    normalized_target = target.strip()
+    updated = []
+    removed = False
+    for entry in _normalize_volume_list(volumes):
+        entry_target = _volume_target(entry)
+        if entry_target and entry_target.strip() == normalized_target:
+            removed = True
+            continue
+        updated.append(entry)
+
+    if removed:
+        if updated:
+            merged_dict["volume"] = updated
+        else:
+            merged_dict.pop("volume", None)
+    return removed
+
+
+def _extract_duplicate_mount_target(stderr_output: str) -> str | None:
+    if not stderr_output:
+        return None
+    # docker errors can include quotes or trailing newline; capture path conservatively
+    match = re.search(r"Duplicate mount point: (?P<path>\S+)", stderr_output)
+    if match:
+        return match.group("path")
+    return None
+
+
+def _merge_keyed_items(container_value, config_value, normalize_fn, key_fn):
+    container_list = normalize_fn(container_value)
+    config_list = normalize_fn(config_value)
+    explicit_empty = _is_explicitly_empty(config_value)
+
+    if explicit_empty and config_value is not None and not config_list:
+        return []
+
+    if not container_list and not config_list:
+        return [] if explicit_empty else None
+
+    items = OrderedDict()
+
+    def add_entry(entry):
+        key = key_fn(entry)
+        key_obj = (None, entry) if key is None else key
+        items[key_obj] = entry
+
+    for entry in container_list:
+        add_entry(entry)
+
+    for entry in config_list:
+        add_entry(entry)
+
+    result = [value for value in items.values() if value not in (None, "")]
+    if not result and (config_value is not None or explicit_empty):
+        return []
+    return result or None
+
+
+def _merge_simple_items(container_value, config_value):
+    container_list = _normalize_simple_list(container_value)
+    config_list = _normalize_simple_list(config_value)
+    explicit_empty = _is_explicitly_empty(config_value)
+
+    if explicit_empty and config_value is not None and not config_list:
+        return []
+
+    if not container_list and not config_list:
+        return [] if explicit_empty else None
+
+    seen = set()
+    result = []
+
+    for entry in container_list + config_list:
+        if entry not in seen:
+            seen.add(entry)
+            result.append(entry)
+
+    if not result and (config_value is not None or explicit_empty):
+        return []
+    return result or None
 
 
 def collect_arguments(path: str = ".") -> dict:
@@ -507,19 +777,46 @@ def run_rockerc(path: str = "."):
     # Build extra args from remaining CLI arguments
     extra_args = " ".join(remaining_args) if remaining_args else ""
 
-    cmd_args = yaml_dict_to_args(merged_dict, extra_args)
-    if len(cmd_args) > 0:
+    attempts = 0
+    max_attempts = 5
+    dockerfile_saved = False
+
+    while True:
+        cmd_args = yaml_dict_to_args(merged_dict, extra_args)
+        if len(cmd_args) == 0:
+            break
+
         cmd = f"rocker {cmd_args}"
         logging.info(f"running cmd: {cmd}")
         split_cmd = shlex.split(cmd)
-        if create_dockerfile:
+
+        if create_dockerfile and not dockerfile_saved:
             save_rocker_cmd(split_cmd)
-        subprocess.run(split_cmd, check=True)
-    else:
-        logging.error(
-            "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
-        )
-        subprocess.call("rocker -h", shell=True)
+            dockerfile_saved = True
+
+        try:
+            result = subprocess.run(split_cmd, check=True, stderr=subprocess.PIPE, text=True)
+            if result.stderr:
+                sys.stderr.write(result.stderr)
+            return
+        except subprocess.CalledProcessError as e:
+            duplicate_target = _extract_duplicate_mount_target(
+                (e.stderr or "") + ("\n" + e.stdout if getattr(e, "stdout", None) else "")
+            )
+            if duplicate_target and attempts < max_attempts:
+                if _remove_volume_target(merged_dict, duplicate_target):
+                    attempts += 1
+                    logging.warning(
+                        "Detected duplicate mount point '%s'. Removing container mount and retrying.",
+                        duplicate_target,
+                    )
+                    continue
+            raise
+
+    logging.error(
+        "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
+    )
+    subprocess.call("rocker -h", shell=True)
 
 
 if __name__ == "__main__":

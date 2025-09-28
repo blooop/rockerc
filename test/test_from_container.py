@@ -1,10 +1,14 @@
 from unittest import TestCase
 import pytest
 from unittest.mock import patch
+import subprocess
 from rockerc.rockerc import (
     inspect_container,
     generate_container_name,
     merge_container_options_with_config,
+    _remove_volume_target,
+    _extract_duplicate_mount_target,
+    run_rockerc,
 )
 
 
@@ -312,3 +316,127 @@ class TestFromContainerFunctionality(TestCase):
         }
 
         assert result == expected
+
+    def test_merge_container_options_env_overrides_container(self):
+        """Config env values should override container env entries"""
+        container_options = {
+            "image": "ubuntu:22.04",
+            "env": ["XAUTHORITY=/tmp/.docker-old.xauth", "DISPLAY=:0"],
+        }
+
+        config_dict = {
+            "args": ["x11"],
+            "env": ["XAUTHORITY=/tmp/.docker-new.xauth", "CUSTOM=1"],
+        }
+
+        result = merge_container_options_with_config(container_options, config_dict)
+
+        assert result["env"] == [
+            "XAUTHORITY=/tmp/.docker-new.xauth",
+            "DISPLAY=:0",
+            "CUSTOM=1",
+        ]
+
+    def test_merge_container_options_env_accepts_dict(self):
+        """Config env dictionaries should merge cleanly"""
+        container_options = {"image": "ubuntu", "env": ["A=1", "B=from_container"]}
+        config_dict = {"args": [], "env": {"B": "from_config", "C": "new"}}
+
+        result = merge_container_options_with_config(container_options, config_dict)
+
+        assert result["env"] == ["A=1", "B=from_config", "C=new"]
+
+    def test_merge_container_options_volume_duplicate_target_prefers_config(self):
+        """Config volume entries should replace container mounts for the same target"""
+        container_options = {
+            "image": "ubuntu:22.04",
+            "volume": ["/home/ags/.codex:/home/ags/.codex:rw", "/data:/data:ro"],
+        }
+
+        config_dict = {
+            "args": [],
+            "volume": ["/home/ags/.codex:/home/ags/.codex", "/extra:/extra:rw"],
+        }
+
+        result = merge_container_options_with_config(container_options, config_dict)
+
+        assert result["volume"] == [
+            "/home/ags/.codex:/home/ags/.codex",
+            "/data:/data:ro",
+            "/extra:/extra:rw",
+        ]
+
+    def test_merge_container_options_env_empty_removes_container_entries(self):
+        """Explicit empty env list in config should drop container env values"""
+        container_options = {"image": "ubuntu:22.04", "env": ["KEEP=1"]}
+        config_dict = {"args": [], "env": []}
+
+        result = merge_container_options_with_config(container_options, config_dict)
+
+        assert "env" not in result
+
+    def test_merge_container_options_port_conflict_prefers_config(self):
+        """Port mappings should prefer config values for the same container port"""
+        container_options = {"image": "ubuntu", "port": ["3000:80/tcp"]}
+        config_dict = {"args": [], "port": ["4000:80/tcp"]}
+
+        result = merge_container_options_with_config(container_options, config_dict)
+
+        assert result["port"] == ["4000:80/tcp"]
+
+    def test_remove_volume_target(self):
+        """Helper removes matching volume targets and keeps others"""
+        merged = {
+            "volume": [
+                "/tmp/.X11-unix:/tmp/.X11-unix:rw",
+                "/data:/data:ro",
+            ]
+        }
+
+        assert _remove_volume_target(merged, "/tmp/.X11-unix") is True
+        assert merged["volume"] == ["/data:/data:ro"]
+
+    def test_extract_duplicate_mount_target(self):
+        """Parsing duplicate mount error returns the path"""
+        message = "docker: Error response from daemon: Duplicate mount point: /tmp/.X11-unix\n"
+        assert _extract_duplicate_mount_target(message) == "/tmp/.X11-unix"
+
+    def test_run_rockerc_handles_duplicate_mount_retry(self):
+        """run_rockerc should drop conflicting volume and retry"""
+
+        duplicate_error = subprocess.CalledProcessError(
+            125,
+            ["rocker"],
+            stderr="docker: Error response from daemon: Duplicate mount point: /tmp/.X11-unix\n",
+        )
+
+        calls = {"count": 0, "captured": []}
+
+        def fake_run(cmd, check=True, **_):
+            calls["captured"].append(cmd)
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise duplicate_error
+            return subprocess.CompletedProcess(cmd, 0)
+
+        with (
+            patch("rockerc.rockerc.collect_arguments") as mock_collect,
+            patch("rockerc.rockerc.subprocess.run", side_effect=fake_run) as _,
+            patch("rockerc.rockerc.subprocess.call") as mock_call,
+            patch("sys.argv", ["rockerc"]),
+        ):
+            mock_collect.return_value = {
+                "args": ["x11"],
+                "volume": ["/tmp/.X11-unix:/tmp/.X11-unix:rw"],
+                "image": "ubuntu:24.04",
+            }
+            mock_call.return_value = 0
+
+            run_rockerc()
+
+        assert calls["count"] == 2
+        first_cmd = calls["captured"][0]
+        second_cmd = calls["captured"][1]
+        assert "--volume" in first_cmd
+        assert any("/tmp/.X11-unix" in part for part in first_cmd)
+        assert all("/tmp/.X11-unix" not in part for part in second_cmd)
