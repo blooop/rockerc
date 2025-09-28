@@ -13,6 +13,7 @@ import subprocess
 import pathlib
 import logging
 import os
+import shlex
 from typing import List, Optional, Dict, Any
 
 from .rockerc import yaml_dict_to_args, collect_arguments, build_docker, save_rocker_cmd
@@ -25,6 +26,7 @@ def run_rockervsc(path: str = ".") -> int:
     This function replicates the core logic from rockerc.run_rockerc but calls
     rockervsc for VSCode integration instead of raw rocker commands.
     """
+    from .rockervsc import run_rockervsc as rockervsc_run
 
     # Collect and process arguments the same way as rockerc
     args_dict = collect_arguments(path)
@@ -35,38 +37,35 @@ def run_rockervsc(path: str = ".") -> int:
 
     # Handle dockerfile builds if needed
     if "dockerfile" in args_dict:
-        build_result = build_docker(args_dict["dockerfile"])
-        if build_result != 0:
-            logging.error("Docker build failed")
-            return build_result
-
-        # Update image name and remove pull from args
-        dockerfile_path = pathlib.Path(args_dict["dockerfile"])
-        if dockerfile_path.is_absolute():
-            image_name = dockerfile_path.parent.name
-        else:
-            image_name = pathlib.Path(path).resolve().name
-
-        args_dict["image"] = image_name
+        image_tag = build_docker(args_dict["dockerfile"])
+        args_dict["image"] = image_tag
+        logging.info("disabling 'pull' extension as a Dockerfile is used instead")
         if "args" in args_dict and "pull" in args_dict["args"]:
             args_dict["args"].remove("pull")
-
-    # Convert to rocker arguments
-    rocker_args = yaml_dict_to_args(args_dict)
+        args_dict.pop("dockerfile")
 
     # Handle --create-dockerfile option
+    create_dockerfile = False
     if "--create-dockerfile" in sys.argv:
-        save_rocker_cmd(rocker_args)
+        create_dockerfile = True
+        # Convert args_dict to command format for save_rocker_cmd
+        rocker_args = yaml_dict_to_args(args_dict)
+        if rocker_args:
+            cmd = f"rocker {rocker_args}"
+            split_cmd = shlex.split(cmd)
+            save_rocker_cmd(split_cmd)
         return 0
 
-    # Use rockervsc instead of calling rocker directly
-    cmd = ["rockervsc"] + rocker_args.split()
+    # Use rockervsc function directly instead of subprocess
+    logging.info(f"Using rockervsc function with path: {path}")
 
-    logging.info(f"Running rockervsc: {' '.join(cmd)}")
+    # Extract extra args from sys.argv if needed (excluding --create-dockerfile)
+    extra_args = []
+    if len(sys.argv) > 1:
+        extra_args = [arg for arg in sys.argv[1:] if arg != "--create-dockerfile" and arg != path]
 
-    # Execute rockervsc with the same working directory logic as rockerc
-    result = subprocess.run(cmd, cwd=path, check=False)
-    return result.returncode
+    # Call rockervsc function directly
+    return rockervsc_run(path=path, force=False, extra_args=extra_args)
 
 
 def run_renvvsc(args: Optional[List[str]] = None) -> int:

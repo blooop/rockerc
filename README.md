@@ -42,16 +42,17 @@ rockerc follows a layered architecture designed for maximum code reuse between t
 
 ### Base Layer
 - **rockerc**: Core container management tool that reads `rockerc.yaml` files and launches containers
-- **rockervsc**: Light wrapper on rockerc with the same interface, adds VSCode integration
+- **rockervsc**: Light wrapper that shares rockerc functionality, adds VSCode integration
 
 ### Environment Layer
-- **renv**: Multi-repository environment manager that collects configuration arguments and passes them to rockerc
-- **renvvsc**: Functions the same as renv, but passes arguments to rockervsc instead of rockerc
+- **renv**: Multi-repository environment manager that collects configuration arguments and uses rockerc functions
+- **renvvsc**: Functions the same as renv, but uses rockervsc functions for VSCode integration
 
 ### Benefits of this Architecture
 - **Maximum code reuse**: Changes in core functionality automatically benefit both terminal and VSCode workflows
 - **Consistent interfaces**: All tools share the same command-line interface and configuration format
 - **Easy maintenance**: Bug fixes and features only need to be implemented once in the base layer
+- **Shared Python code**: Components call each other via Python functions rather than command line, ensuring efficient execution and consistent behavior
 
 This design ensures that whether you're using terminal-based development or VSCode integration, you get the same robust container management with your preferred interface.
 

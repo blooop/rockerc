@@ -1,5 +1,6 @@
 import subprocess
 import binascii
+import shlex
 from pathlib import Path
 from typing import Tuple
 import logging
@@ -78,22 +79,56 @@ def run_rockervsc(path: str = ".", force: bool = False, extra_args: list = None)
         force (bool, optional): Force rename of existing container. Defaults to False.
         extra_args (list, optional): Additional arguments to pass to rockerc. Defaults to None.
     """
+    from .rockerc import collect_arguments, yaml_dict_to_args, build_docker
 
     cwd = pathlib.Path().absolute()
     container_name = cwd.name.lower()
 
-    cmd = "rockerc"
-    if extra_args:
-        cmd += " " + " ".join(extra_args)
-    if path != ".":
-        cmd += f" {path}"
+    # Use rockerc functions directly instead of subprocess
+    merged_dict = collect_arguments(path)
 
-    container_hex, rocker_args = folder_to_vscode_container(container_name, path)
-    cmd += f" {rocker_args}"
+    if not merged_dict:
+        logging.error(
+            "No rockerc.yaml found in the specified directory. Please create a rockerc.yaml file with rocker arguments. See 'rocker -h' for help."
+        )
+        return 1
+
+    if "args" not in merged_dict:
+        logging.error(
+            "No 'args' key found in rockerc.yaml. Please add an 'args' list with rocker arguments. See 'rocker -h' for help."
+        )
+        return 1
+
+    if "dockerfile" in merged_dict:
+        logging.info("Building dockerfile...")
+        merged_dict["image"] = build_docker(merged_dict["dockerfile"])
+        logging.info("disabling 'pull' extension as a Dockerfile is used instead")
+        if "pull" in merged_dict["args"]:
+            merged_dict["args"].remove("pull")
+        merged_dict.pop("dockerfile")
+
+    # Build extra arguments for rocker
+    container_hex, rocker_args = folder_to_vscode_container(container_name, pathlib.Path(path))
+
+    # Add extra arguments if provided
+    extra_args_str = ""
+    if extra_args:
+        extra_args_str = " ".join(extra_args)
+
+    # Combine all arguments
+    combined_extra_args = f"{extra_args_str} {rocker_args}".strip()
+
+    cmd_args = yaml_dict_to_args(merged_dict, combined_extra_args)
 
     if not container_exists(container_name):
-        print(f"running cmd: {cmd}")
-        subprocess.run(cmd, shell=True, check=False, cwd=path)
+        if len(cmd_args) > 0:
+            cmd = f"rocker {cmd_args}"
+            print(f"running cmd: {cmd}")
+            split_cmd = shlex.split(cmd)
+            subprocess.run(split_cmd, check=False, cwd=path)
+        else:
+            logging.error("no arguments found in rockerc.yaml")
+            return 1
     else:
         if force:
             print(f"Force option enabled. Renaming existing container '{container_name}'")
@@ -106,11 +141,19 @@ def run_rockervsc(path: str = ".", force: bool = False, extra_args: list = None)
                 ],
                 check=False,
             )
-            print(f"running cmd: {cmd}")
-            subprocess.run(cmd, shell=True, check=False, cwd=path)
+            if len(cmd_args) > 0:
+                cmd = f"rocker {cmd_args}"
+                print(f"running cmd: {cmd}")
+                split_cmd = shlex.split(cmd)
+                subprocess.run(split_cmd, check=False, cwd=path)
+            else:
+                logging.error("no arguments found in rockerc.yaml")
+                return 1
         else:
             print("container already running, attaching vscode to container")
+
     launch_vscode(container_name, container_hex)
+    return 0
 
 
 def main():
