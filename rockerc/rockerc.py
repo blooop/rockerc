@@ -67,6 +67,8 @@ def render_extension_table(
     original_project_args: list[str] | None,
     blacklist: list[str],
     removed_by_blacklist: list[str],
+    original_global_blacklist: list[str] | None = None,
+    original_project_blacklist: list[str] | None = None,
 ) -> None:
     """Render a provenance table of extensions.
 
@@ -84,6 +86,8 @@ def render_extension_table(
     bl_set = set(blacklist)
     removed_set = set(removed_by_blacklist)
     final_set = set(final_args)
+    g_bl_set = set(original_global_blacklist or [])
+    p_bl_set = set(original_project_blacklist or [])
 
     # Ordered grouping per corrected spec: precedence by provenance group only, preserving
     # original encounter order within each group (no alphabetical sorting).
@@ -234,8 +238,12 @@ def render_extension_table(
     def build_group_rows(names: list[str], target: list[list[str]]):
         for ext in names:
             status = extension_status(ext)
-            g_cell = fmt_cell(ext, ext in g_set, status)
-            l_cell = fmt_cell(ext, ext in p_set, status)
+            # Show in columns where extension appears in args OR blacklist
+            show_in_global = (ext in g_set) or (ext in g_bl_set)
+            show_in_local = (ext in p_set) or (ext in p_bl_set)
+
+            g_cell = fmt_cell(ext, show_in_global, status)
+            l_cell = fmt_cell(ext, show_in_local, status)
             if status == "loaded":
                 status_txt = color(status, _Colors.GREEN)
             elif status == "blacklisted":
@@ -458,6 +466,8 @@ def collect_arguments_with_meta(path: str = ".") -> tuple[dict, dict]:
         "merged_args_before_blacklist": merged_args,
         "removed_by_blacklist": removed,
         "blacklist": blacklist,
+        "original_global_blacklist": g_bl or None,
+        "original_project_blacklist": p_bl or None,
         "global_config_used": bool(global_config),
         "project_config_used": bool(project_config),
         "source_files": project_files,
@@ -677,6 +687,8 @@ def run_rockerc(path: str = "."):
         original_project_args=meta.get("original_project_args"),
         blacklist=meta.get("blacklist", []),
         removed_by_blacklist=meta.get("removed_by_blacklist", []),
+        original_global_blacklist=meta.get("original_global_blacklist"),
+        original_project_blacklist=meta.get("original_project_blacklist"),
     )
 
     # Show origin info (only if verbose to reduce noise)
