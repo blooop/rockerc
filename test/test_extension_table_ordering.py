@@ -47,8 +47,10 @@ def test_three_table_grouping_with_blacklist(capsys):
 def test_blacklist_only_extension_grouping(capsys):
     """Test edge case: extension present only in blacklist, not in args.
 
-    Extensions that appear ONLY in blacklist (never in args) should NOT be
-    displayed in the table, as there's nothing to show - they didn't match anything.
+    Extensions that appear ONLY in blacklist (never in args) WILL be displayed
+    in the Global column with strikethrough to show what the config is blocking,
+    even if it doesn't match anything. This helps users see potentially unused
+    blacklist entries.
     """
     original_global_args = ["gonly", "shared1", "shared2"]
     original_project_args = ["shared1", "local1", "shared2", "local2"]
@@ -69,8 +71,10 @@ def test_blacklist_only_extension_grouping(capsys):
     # blacklist_only_ext is not present in args, only in blacklist
     assert "blacklist_only_ext" not in original_global_args
     assert "blacklist_only_ext" not in original_project_args
-    # It should NOT appear in the output since it never matched any args
-    assert "blacklist_only_ext" not in out
-    # But other properly blacklisted items should show with their status
+    # It WILL appear in the output to show it's being blocked by global config
+    assert "blacklist_only_ext" in out
+    # It should have filtered status (not blacklisted, since it didn't match anything)
+    assert "filtered" in out
+    # Other properly blacklisted items should show with their status
     assert "shared1" in out  # was in args and blacklisted
     assert "local2" in out  # was in args and blacklisted

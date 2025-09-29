@@ -198,18 +198,16 @@ def render_extension_table(
     for ext in ordered:
         status = extension_status(ext)
 
-        # Show extension in a column only if it was in that column's args
-        # (not just in the blacklist)
-        show_in_global = ext in g_set
-        show_in_local = ext in p_set
+        # Show extension in a column if:
+        # - It was in that column's args, OR
+        # - It was blacklisted in that column (to show what's being blocked)
+        show_in_global = (ext in g_set) or (ext in g_bl_set)
+        show_in_local = (ext in p_set) or (ext in p_bl_set)
 
-        # An extension should show as blacklisted in a column if:
-        # 1. It was originally in that column's args, AND
-        # 2. It was removed (is in removed_set or bl_set)
-        was_removed = (ext in removed_set) or (ext in bl_set)
-
-        is_blacklisted_in_global = show_in_global and was_removed
-        is_blacklisted_in_local = show_in_local and was_removed
+        # Apply strikethrough only in the column where it's blacklisted
+        # NOT in columns where it's just present in args
+        is_blacklisted_in_global = ext in g_bl_set
+        is_blacklisted_in_local = ext in p_bl_set
 
         g_cell = fmt_cell(ext, show_in_global, status, is_blacklisted_in_global)
         l_cell = fmt_cell(ext, show_in_local, status, is_blacklisted_in_local)
