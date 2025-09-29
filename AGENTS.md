@@ -2,7 +2,15 @@ This project uses pixi to manage its environment.
 
 look at the pyproject.toml to see the pixi tasks
 
-Every time you make a change run `pixi r ci` to validate it works
+Workflow:
+    * On first message:
+        - create a new specification according to the pattern specs/01/short-spec-name/spec.md.  Keep it as consise as possible
+        - create a plan in the same folder, you can expand more here
+        - commit the contents of this folder only
 
-
-Every time I give instructions add them to a 01-spec-name.md in the specs folder.  The first instruction should create the spec file and following instructions should be used to clarify the original spec. each time the spec file is updated commit just that file so that the history of the spec is maintained.
+    * Every time I ask for a change
+        - update the spec.md with clarifications while keeping it consise. commit if there are changes
+        - implement the change
+        - run `pixi run ci`
+        - fix errors and iterate until ci passes
+        - only if ci passes commit the changes.
