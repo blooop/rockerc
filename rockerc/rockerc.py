@@ -218,15 +218,20 @@ def render_extension_table(
             return "filtered"
         return "loaded"
 
-    def fmt_cell(ext_name: str, show: bool, status: str) -> str:
+    def fmt_cell(ext_name: str, show: bool, status: str, is_blacklisted_here: bool) -> str:
         if not show:
             return ""
         cell_txt = ext_name
         if status == "loaded":
             cell_txt = color(cell_txt, _Colors.CYAN)
         elif status == "blacklisted":
-            cell_txt = color(cell_txt, _Colors.RED)
-            cell_txt = strike(cell_txt)
+            # Only apply strikethrough if blacklisted in THIS column's config
+            if is_blacklisted_here:
+                cell_txt = color(cell_txt, _Colors.RED)
+                cell_txt = strike(cell_txt)
+            else:
+                # Required here but blacklisted elsewhere
+                cell_txt = color(cell_txt, _Colors.CYAN)
         elif status == "filtered":
             cell_txt = color(cell_txt, _Colors.YELLOW)
         return cell_txt
@@ -243,8 +248,12 @@ def render_extension_table(
             show_in_global = (ext in g_set) or (ext in g_bl_set)
             show_in_local = (ext in p_set) or (ext in p_bl_set)
 
-            g_cell = fmt_cell(ext, show_in_global, status)
-            l_cell = fmt_cell(ext, show_in_local, status)
+            # Track whether blacklisted specifically in each config
+            is_blacklisted_in_global = ext in g_bl_set
+            is_blacklisted_in_local = ext in p_bl_set
+
+            g_cell = fmt_cell(ext, show_in_global, status, is_blacklisted_in_global)
+            l_cell = fmt_cell(ext, show_in_local, status, is_blacklisted_in_local)
             if status == "loaded":
                 status_txt = color(status, _Colors.GREEN)
             elif status == "blacklisted":
