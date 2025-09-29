@@ -9,6 +9,15 @@ Row Group Ordering (strict):
 
 Blacklisted extensions: Any blacklisted extension that fits one of the above categories still appears in its natural group. Do **not** create a separate blacklist group.
 
+## Clarification 2025-09-29: Remove Redundant Column
+The current table prints columns: Global | Local | Extension | Status.
+The 'Extension' column is redundant (it duplicates the non-empty cell from Global/Local context).
+
+Update: Remove the 'Extension' column. New columns: Global | Local | Status.
+Display extension names only in the provenance columns (Global/Local) where they apply; a row will still show both cells populated for shared extensions.
+For global-only or local-only extensions the non-applicable cell remains blank.
+Status coloring & blacklist strike-through remains unchanged.
+
 ## Acceptance Criteria
 - Output table rows appear strictly in the order of the three groups above.
 - Within each group, preserve existing sort behavior (describe current behavior once code is inspected) or apply alphabetical ordering if none exists.
