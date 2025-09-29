@@ -248,25 +248,15 @@ def render_extension_table(
     build_group_rows(shared_names, shared_rows)
     build_group_rows(local_only_names, local_rows)
 
-    # Print three separate tables
-    headers = ["Global", "Local", "Status"]
-    if use_color:
-        headers = [f"{_Colors.CYAN}{_Colors.BOLD}{h}{_Colors.RESET}" for h in headers]
+    # Concatenate all three lists into a single combined list
+    combined_rows = global_rows + shared_rows + local_rows
 
-    if global_rows:
-        print(_header("Global Extensions:"))
-        print(tabulate(global_rows, headers=headers, tablefmt="plain"))
-        print()
-
-    if shared_rows:
-        print(_header("Shared Extensions (Global + Local):"))
-        print(tabulate(shared_rows, headers=headers, tablefmt="plain"))
-        print()
-
-    if local_rows:
-        print(_header("Local Extensions:"))
-        print(tabulate(local_rows, headers=headers, tablefmt="plain"))
-        print()
+    # Print single table with all rows
+    if combined_rows:
+        headers = ["Global", "Local", "Status"]
+        if use_color:
+            headers = [f"{_Colors.CYAN}{_Colors.BOLD}{h}{_Colors.RESET}" for h in headers]
+        print(tabulate(combined_rows, headers=headers, tablefmt="plain"))
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
