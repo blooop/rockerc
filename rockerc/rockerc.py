@@ -2,24 +2,15 @@ import sys
 import subprocess
 import pathlib
 import yaml
-import shlex
 import os
 import logging
-from typing import Tuple
 
-# The core module provides unified detached execution & VS Code attach flow
-try:  # pragma: no cover - import guard for early bootstrap scenarios
-    from .core import (
-        derive_container_name,
-        prepare_launch_plan,
-        execute_plan,
-    )
-except Exception:  # pragma: no cover
-    derive_container_name = lambda explicit=None: pathlib.Path().absolute().name.lower()  # type: ignore
-    def prepare_launch_plan(*a, **k):  # type: ignore  # noqa: D401
-        raise RuntimeError("core module unavailable")
-    def execute_plan(*a, **k):  # type: ignore  # noqa: D401
-        raise RuntimeError("core module unavailable")
+# Unified detached execution & VS Code attach flow helpers
+from rockerc.core import (
+    derive_container_name,
+    prepare_launch_plan,
+    execute_plan,
+)
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
@@ -231,7 +222,7 @@ def save_rocker_cmd(split_cmd: str):
         sys.exit(1)
 
 
-def _parse_extra_flags(argv: list[str]) -> Tuple[bool, bool, list[str]]:
+def _parse_extra_flags(argv: list[str]) -> tuple[bool, bool, list[str]]:
     """Parse ad-hoc flags for --vsc and --force, returning (vsc, force, remaining_args).
 
     We keep this lightweight to avoid introducing argparse changes that might surprise users.
@@ -314,10 +305,10 @@ def run_rockerc(path: str = "."):
     plan = prepare_launch_plan(
         merged_dict,
         extra_cli,
-        container_name=container_name,
-        vscode=vsc,
-        force=force,
-        path=pathlib.Path(path).absolute(),
+        container_name,
+        vsc,
+        force,
+        pathlib.Path(path).absolute(),
     )
 
     if create_dockerfile and plan.rocker_cmd:

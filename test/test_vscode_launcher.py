@@ -36,44 +36,35 @@ class TestVscodeHelpers:
         # Empty container name still produces flags (edge but retained for parity with legacy test)
         assert injections == "--detach --name  --image-name  --volume /some/path:/workspaces/:Z"
 
-        def test_run_rockerc_no_nameerror(self):
-            """Regression: ensure run_rockerc accesses derive_container_name without NameError.
+    def test_run_rockerc_no_nameerror(self):
+        """Regression: ensure run_rockerc accesses derive_container_name without NameError."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            config = {"args": ["user"], "image": "ubuntu:22.04"}
+            with open(tmp_path / "rockerc.yaml", "w", encoding="utf-8") as f:
+                yaml.safe_dump(config, f)
 
-            We simulate a minimal config and mock docker/rocker calls so no external
-            dependencies are required. If a NameError occurs the test will fail.
-            """
-            with tempfile.TemporaryDirectory() as tmp:
-                tmp_path = pathlib.Path(tmp)
-                # create minimal rockerc.yaml
-                config = {"args": ["user"], "image": "ubuntu:22.04"}
-                with open(tmp_path / "rockerc.yaml", "w", encoding="utf-8") as f:
-                    yaml.safe_dump(config, f)
-
-                # Patch cwd resolution inside derive_container_name via pathlib.Path().absolute()
-                # Also patch docker and rocker subprocess calls
-                def fake_run(cmd, check=False, capture_output=False, text=False):  # noqa: D401
-                    # Simulate 'docker ps' returning no existing container first
-                    if isinstance(cmd, list) and cmd[:2] == ["docker", "ps"]:
-                        completed = subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-                        return completed
-                    # Simulate rocker invocation success
-                    if isinstance(cmd, list) and cmd and cmd[0] == "rocker":
-                        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-                    # Simulate docker exec (interactive) call via subprocess.call elsewhere; ignore here
+            def fake_run(cmd, **_kwargs):  # noqa: D401
+                # Simulate docker ps, rocker launch, and any other subprocess.run usages
+                if isinstance(cmd, list) and len(cmd) >= 2 and cmd[:2] == ["docker", "ps"]:
                     return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                if isinstance(cmd, list) and cmd and cmd[0] == "rocker":
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                # VS Code attach attempt (code ...) succeed silently
+                if isinstance(cmd, list) and cmd and cmd[0] == "code":
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-                def fake_call(_cmd, *_a, **_k):  # noqa: D401
-                    # docker build / exec etc.
-                    return 0
+            def fake_call(_cmd, *_a, **_k):  # noqa: D401
+                return 0
 
-                with patch.object(os, "getcwd", return_value=str(tmp_path)):
-                    with patch("subprocess.run", side_effect=fake_run):
-                        with patch("subprocess.call", side_effect=fake_call):
-                            # Change to temp directory for collect_arguments
+            with patch.object(os, "getcwd", return_value=str(tmp_path)):
+                with patch("subprocess.run", side_effect=fake_run):
+                    with patch("subprocess.call", side_effect=fake_call):
+                        with patch("rockerc.core.wait_for_container", return_value=True):
                             cwd = os.getcwd()
                             os.chdir(tmp_path)
                             try:
-                                # Should exit via sys.exit from run_rockerc after shell exec.
                                 with patch("sys.exit") as mock_exit:
                                     with patch("rockerc.core.interactive_shell", return_value=0):
                                         rockerc_mod.run_rockerc(".")

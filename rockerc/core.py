@@ -208,7 +208,7 @@ def interactive_shell(container_name: str, shell: str | None = None) -> int:
     return subprocess.call(exec_cmd)
 
 
-def prepare_launch_plan(
+def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     args_dict: dict,
     extra_cli: str,
     container_name: str,
