@@ -67,10 +67,12 @@ Removed the redundant 'Extension' column from `render_extension_table`:
 - Updated ordering test to assert absence of the word 'Extension' in header line.
 - CI after change: 43 passed, 1 skipped.
 
-### Clarification 2025-09-29 (Provenance Sorting Reinforced)
-Per latest instruction: The table MUST be sorted strictly by provenance groups, in this exact sequence:
-1. Global-only (extension appears only in Global column)
-2. Shared (appears in both Global and Local columns)
-3. Local-only (appears only in Local column)
+### Clarification 2025-09-29 (Sorting Rule – Final)
+Sorting (row order) is a pure 3‑tier precedence over the provenance columns:
+1. Global-only rows (in global, not in local)
+2. Shared rows (in both)
+3. Local-only rows (in local, not in global)
 
-Within each group we retain the original (stable) encounter order taken from the source argument lists; no additional alphabetical sort is applied unless a future requirement states otherwise. This matches current implementation (`render_extension_table`) which constructs `global_only + shared + local_only` in that order.
+All global-only rows must appear before the first shared row; all shared rows must appear before the first local-only row. Within each tier we keep the original stable order taken from the respective source lists (no alphabetical reordering). This is exactly the logic currently implemented in `render_extension_table` via `ordered = global_only + shared + local_only`.
+
+Blacklisted entries NEVER alter this ordering; they are rendered in-place with status `blacklisted`.
