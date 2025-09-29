@@ -44,3 +44,46 @@ def test_group_precedence_with_stable_intragroup_order(capsys):
         < positions["local2"]
         < positions["local1"]
     )
+
+
+def test_duplicate_extension_names_in_input_lists(capsys):
+    """Verify table behavior when duplicate extension names are in input lists.
+
+    Duplicates should be deduplicated, with each extension appearing once in its
+    appropriate group.
+    """
+    original_global_args = ["shared1", "gonly", "shared1", "gonly"]
+    original_project_args = ["shared1", "local1", "shared1", "local1"]
+    blacklist = []
+    removed = []
+    final_args = ["shared1", "gonly", "local1"]
+
+    render_extension_table(
+        final_args,
+        original_global_args=original_global_args,
+        original_project_args=original_project_args,
+        blacklist=blacklist,
+        removed_by_blacklist=removed,
+    )
+
+    out = capsys.readouterr().out
+    lines = out.splitlines()
+    # Each extension should appear in exactly one ROW (though shared1 appears in 2 columns)
+    # Count rows containing each extension
+    gonly_rows = [line for line in lines if "gonly" in line]
+    shared1_rows = [
+        line for line in lines if "shared1" in line and "Status" not in line
+    ]  # exclude header
+    local1_rows = [line for line in lines if "local1" in line]
+
+    assert len(gonly_rows) == 1, f"Expected 1 row with gonly, got {len(gonly_rows)}"
+    assert len(shared1_rows) == 1, f"Expected 1 row with shared1, got {len(shared1_rows)}"
+    assert len(local1_rows) == 1, f"Expected 1 row with local1, got {len(local1_rows)}"
+
+    # Verify grouping order: global-only (gonly) < shared (shared1) < local-only (local1)
+    positions = {
+        "gonly": out.index("gonly"),
+        "shared1": out.index("shared1"),
+        "local1": out.index("local1"),
+    }
+    assert positions["gonly"] < positions["shared1"] < positions["local1"]

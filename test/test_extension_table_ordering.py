@@ -42,3 +42,33 @@ def test_three_table_grouping_with_blacklist(capsys):
 
     # Deprecated standalone heading 'Extensions:' (without qualifier) must not appear
     assert "\nExtensions:\n" not in f"\n{text}\n"
+
+
+def test_blacklist_only_extension_grouping(capsys):
+    """Test edge case: extension present only in blacklist, not in args.
+
+    Verifies correct table rendering and grouping for blacklist-only extension.
+    """
+    original_global_args = ["gonly", "shared1", "shared2"]
+    original_project_args = ["shared1", "local1", "shared2", "local2"]
+    blacklist = ["shared1", "local2", "blacklist_only_ext"]
+    removed = ["shared1", "local2"]
+    final_args = ["gonly", "shared2", "local1"]
+
+    render_extension_table(
+        final_args,
+        original_global_args=original_global_args,
+        original_project_args=original_project_args,
+        blacklist=blacklist,
+        removed_by_blacklist=removed,
+        original_global_blacklist=["blacklist_only_ext"],
+    )
+
+    out = capsys.readouterr().out
+    # blacklist_only_ext is not present in args, only in blacklist
+    assert "blacklist_only_ext" not in original_global_args
+    assert "blacklist_only_ext" not in original_project_args
+    # But it should appear in the output (in the Global column with filtered/blacklisted status)
+    assert "blacklist_only_ext" in out
+    # Verify it has appropriate status marking
+    assert "filtered" in out or "blacklisted" in out

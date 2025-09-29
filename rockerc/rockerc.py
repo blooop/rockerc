@@ -20,7 +20,48 @@ from rockerc.core import (
 #############################################
 
 
-class _Colors:  # pragma: no cover - trivial container
+class Colorizer:
+    """Unified color and formatting helper for consistent styling."""
+
+    ANSI = {
+        "RESET": "\033[0m",
+        "BOLD": "\033[1m",
+        "DIM": "\033[2m",
+        "STRIKE": "\033[9m",
+        "CYAN": "\033[36m",
+        "GREEN": "\033[32m",
+        "YELLOW": "\033[33m",
+        "RED": "\033[31m",
+        "MAGENTA": "\033[35m",
+        "BLUE": "\033[34m",
+    }
+
+    def __init__(self):
+        self.enabled = os.environ.get("NO_COLOR") is None and sys.stdout.isatty()
+
+    def style(self, text: str, color: str, *, bold: bool = False, strike: bool = False) -> str:
+        """Apply color and styling to text."""
+        if not self.enabled or not text:
+            return text
+        parts = [self.ANSI[color]]
+        if bold:
+            parts.append(self.ANSI["BOLD"])
+        if strike:
+            parts.append(self.ANSI["STRIKE"])
+        parts.append(text)
+        parts.append(self.ANSI["RESET"])
+        return "".join(parts)
+
+    def header(self, text: str) -> str:
+        """Format text as a header (blue, bold)."""
+        return self.style(text, "BLUE", bold=True)
+
+
+# Global instance for backward compatibility
+_colorizer = Colorizer()
+
+
+class _Colors:  # pragma: no cover - trivial container for backward compatibility
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"
@@ -34,12 +75,7 @@ class _Colors:  # pragma: no cover - trivial container
 
 def _use_color() -> bool:
     # Respect NO_COLOR (https://no-color.org/) and only colorize when stdout is a TTY
-    if os.environ.get("NO_COLOR") is not None:
-        return False
-    try:
-        return sys.stdout.isatty()
-    except Exception:  # pragma: no cover - defensive
-        return False
+    return _colorizer.enabled
 
 
 def _c(txt: str, color: str, *, bold: bool = False) -> str:
@@ -60,6 +96,24 @@ def _header(txt: str) -> str:
 #############################################
 
 
+def _expand_aggregates(ext_list: list[str]) -> list[str]:
+    """Normalize aggregated tokens like 'nvidia - x11 - user' into individual extensions."""
+    expanded: list[str] = []
+    for item in ext_list:
+        if " - " in item and not item.strip().startswith("-"):
+            parts = [p.strip() for p in item.split(" - ") if p.strip()]
+            # Only expand if every part looks like a plausible extension token
+            if parts and all(part.replace("-", "").isalnum() for part in parts):
+                for p in parts:
+                    if p not in expanded:
+                        expanded.append(p)
+                continue
+        # Add non-aggregate items only if not already present
+        if item not in expanded:
+            expanded.append(item)
+    return expanded
+
+
 def render_extension_table(
     final_args: list[str],
     *,
@@ -73,14 +127,15 @@ def render_extension_table(
     """Render a provenance table of extensions.
 
     Consumes pre-computed metadata – does NOT perform merge/filter logic.
-    Columns (updated): Global | Local | Status
-    The previous redundant 'Extension' column (duplicating the name) was removed.
+    Columns: Global | Local | Status
     Group order: global-only, shared, local-only (stable original order).
     Blacklisted entries appear with strikethrough & red status in-place.
     """
+    col = _colorizer
 
-    g_raw = original_global_args or []
-    p_raw = original_project_args or []
+    # Expand aggregates first
+    g_raw = _expand_aggregates(original_global_args or [])
+    p_raw = _expand_aggregates(original_project_args or [])
     g_set = set(g_raw)
     p_set = set(p_raw)
     bl_set = set(blacklist)
@@ -89,192 +144,83 @@ def render_extension_table(
     g_bl_set = set(original_global_blacklist or [])
     p_bl_set = set(original_project_blacklist or [])
 
-    # Ordered grouping per corrected spec: precedence by provenance group only, preserving
-    # original encounter order within each group (no alphabetical sorting).
-    # We derive a stable first-seen index from the concatenation of (g_raw + p_raw).
-    first_seen: dict[str, int] = {}
-    for idx, name in enumerate(g_raw + p_raw):
-        if name not in first_seen:
-            first_seen[name] = idx
+    # Remember original order for stable sorting (keep first occurrence only)
+    raw_index = {}
+    for i, n in enumerate(g_raw + p_raw):
+        if n not in raw_index:
+            raw_index[n] = i
 
     def group_rank(name: str) -> int:
-        # Consider both args and blacklist for grouping
+        """Return group rank: 0=global-only, 1=shared, 2=local-only, 3=unknown."""
         in_g = (name in g_set) or (name in g_bl_set)
         in_p = (name in p_set) or (name in p_bl_set)
         if in_g and not in_p:
-            return 0  # global-only
+            return 0
         if in_g and in_p:
-            return 1  # shared
-        if in_p and not in_g:
-            return 2  # local-only
-        return 3  # unknown / fallback (should not happen)
+            return 1
+        return 2 if in_p and not in_g else 3
 
-    # Collect unique names from provenance sets for grouping (include blacklists)
-    unique_names: list[str] = []
-    for name in g_raw + p_raw + list(g_bl_set) + list(p_bl_set):
-        if name not in unique_names:
-            unique_names.append(name)
+    # Collect all unique names and sort by (group_rank, original_index)
+    all_names = (
+        set(g_raw) | set(p_raw) | g_bl_set | p_bl_set | set(blacklist) | set(removed_by_blacklist)
+    )
 
-    # Partition per group preserving stable order via first_seen (capture now, may be recomputed)
-    global_only_names = [n for n in unique_names if group_rank(n) == 0]
-    shared_names = [n for n in unique_names if group_rank(n) == 1]
-    local_only_names = [n for n in unique_names if group_rank(n) == 2]
+    def sort_key(name: str):
+        return (group_rank(name), raw_index.get(name, float("inf")))
 
-    # We'll eventually produce three isolated row arrays (global_rows, shared_rows, local_rows)
-    # and then concatenate them. Keep an 'ordered' list only for reinsertion of removed items.
-    ordered = global_only_names + shared_names + local_only_names
-
-    # Normalize any accidental aggregated tokens like "nvidia - x11 - user" (display only)
-    def _expand_aggregates(ext_list: list[str]) -> list[str]:
-        expanded: list[str] = []
-        # We relax the requirement that parts already appear in provenance; if a tokenized
-        # aggregate arrives we still expand it for clearer display.
-        for item in ext_list:
-            if " - " in item and not item.strip().startswith("-"):
-                parts = [p.strip() for p in item.split(" - ") if p.strip()]
-                # Only expand if every part looks like a plausible extension token
-                if parts and all(part.replace("-", "").isalnum() for part in parts):
-                    for p in parts:
-                        if p not in expanded:  # avoid duplicating earlier entries
-                            expanded.append(p)
-                    continue
-            expanded.append(item)
-        return expanded
-
-    # Expand aggregates and, if expansion occurred in project or global lists, update provenance
-    expanded_ordered = _expand_aggregates(ordered)
-    if expanded_ordered != ordered:
-        # Rebuild raw lists similarly so membership columns reflect correct provenance
-        g_raw = _expand_aggregates(g_raw)
-        p_raw = _expand_aggregates(p_raw)
-        g_set = set(g_raw)
-        p_set = set(p_raw)
-        # Recompute unique names & group partitions to include expanded tokens
-        unique_names = []
-        for name in g_raw + p_raw:
-            if name not in unique_names:
-                unique_names.append(name)
-        global_only_names = [n for n in unique_names if (n in g_set and n not in p_set)]
-        shared_names = [n for n in unique_names if (n in g_set and n in p_set)]
-        local_only_names = [n for n in unique_names if (n in p_set and n not in g_set)]
-        ordered = expanded_ordered
-    else:
-        ordered = expanded_ordered
-
-    # Defensive: ensure any removed/blacklisted not in ordered are injected according to rank
-    for ext in removed_by_blacklist:
-        if ext in ordered:
-            continue
-        r = group_rank(ext)
-        if r == 0:
-            # Insert before first non global-only
-            first_non_global = next(
-                (i for i, n in enumerate(ordered) if group_rank(n) != 0), len(ordered)
-            )
-            ordered.insert(first_non_global, ext)
-        elif r == 1:
-            # After last shared (or after all global-only if none shared yet)
-            last_shared_pos = -1
-            for i, n in enumerate(ordered):
-                if group_rank(n) == 1:
-                    last_shared_pos = i
-            if last_shared_pos >= 0:
-                ordered.insert(last_shared_pos + 1, ext)
-            else:
-                # after all global-only
-                after_globals = next(
-                    (i for i, n in enumerate(ordered) if group_rank(n) != 0), len(ordered)
-                )
-                ordered.insert(after_globals, ext)
-        elif r == 2:
-            # Append at end (local-only segment is last)
-            ordered.append(ext)
-        else:
-            ordered.append(ext)
-
-    use_color = _use_color()
-
-    def strike(txt: str) -> str:
-        if not txt:
-            return txt
-        if use_color:
-            return f"\033[9m{txt}\033[0m"
-        return f"<del>{txt}</del>"
-
-    def color(txt: str, code: str, bold: bool = False) -> str:
-        if not use_color:
-            return txt
-        prefix = code
-        if bold:
-            prefix += _Colors.BOLD
-        return f"{prefix}{txt}{_Colors.RESET}"
+    ordered = sorted(all_names, key=sort_key)
 
     def extension_status(ext: str) -> str:
+        """Return status: loaded, blacklisted, or filtered."""
         if ext in final_set:
             return "loaded"
         if ext in removed_set:
             return "blacklisted"
-        if ext in bl_set:
-            return "filtered"
-        return "loaded"
+        return "filtered" if ext in bl_set else "loaded"
 
     def fmt_cell(ext_name: str, show: bool, status: str, is_blacklisted_here: bool) -> str:
+        """Format a table cell with appropriate styling."""
         if not show:
             return ""
-        cell_txt = ext_name
+
         if status == "loaded":
-            cell_txt = color(cell_txt, _Colors.CYAN)
-        elif status == "blacklisted":
-            # Only apply strikethrough if blacklisted in THIS column's config
+            return col.style(ext_name, "CYAN")
+        if status == "blacklisted":
             if is_blacklisted_here:
-                cell_txt = color(cell_txt, _Colors.RED)
-                cell_txt = strike(cell_txt)
-            else:
-                # Required here but blacklisted elsewhere
-                cell_txt = color(cell_txt, _Colors.CYAN)
-        elif status == "filtered":
-            cell_txt = color(cell_txt, _Colors.YELLOW)
-        return cell_txt
+                return col.style(ext_name, "RED", strike=True)
+            # Required here but blacklisted elsewhere
+            return col.style(ext_name, "CYAN")
+        # filtered
+        return col.style(ext_name, "YELLOW")
 
-    # Build three independent row arrays first (no printing)
-    global_rows: list[list[str]] = []
-    shared_rows: list[list[str]] = []
-    local_rows: list[list[str]] = []
+    # Build rows
+    rows = []
+    for ext in ordered:
+        status = extension_status(ext)
+        show_in_global = (ext in g_set) or (ext in g_bl_set)
+        show_in_local = (ext in p_set) or (ext in p_bl_set)
 
-    def build_group_rows(names: list[str], target: list[list[str]]):
-        for ext in names:
-            status = extension_status(ext)
-            # Show in columns where extension appears in args OR blacklist
-            show_in_global = (ext in g_set) or (ext in g_bl_set)
-            show_in_local = (ext in p_set) or (ext in p_bl_set)
+        is_blacklisted_in_global = ext in g_bl_set
+        is_blacklisted_in_local = ext in p_bl_set
 
-            # Track whether blacklisted specifically in each config
-            is_blacklisted_in_global = ext in g_bl_set
-            is_blacklisted_in_local = ext in p_bl_set
+        g_cell = fmt_cell(ext, show_in_global, status, is_blacklisted_in_global)
+        l_cell = fmt_cell(ext, show_in_local, status, is_blacklisted_in_local)
 
-            g_cell = fmt_cell(ext, show_in_global, status, is_blacklisted_in_global)
-            l_cell = fmt_cell(ext, show_in_local, status, is_blacklisted_in_local)
-            if status == "loaded":
-                status_txt = color(status, _Colors.GREEN)
-            elif status == "blacklisted":
-                status_txt = color(status, _Colors.RED)
-            else:
-                status_txt = color(status, _Colors.YELLOW)
-            target.append([g_cell, l_cell, status_txt])
+        if status == "loaded":
+            status_txt = col.style(status, "GREEN")
+        elif status == "blacklisted":
+            status_txt = col.style(status, "RED")
+        else:
+            status_txt = col.style(status, "YELLOW")
 
-    build_group_rows(global_only_names, global_rows)
-    build_group_rows(shared_names, shared_rows)
-    build_group_rows(local_only_names, local_rows)
+        rows.append([g_cell, l_cell, status_txt])
 
-    # Concatenate all three lists into a single combined list
-    combined_rows = global_rows + shared_rows + local_rows
-
-    # Print single table with all rows
-    if combined_rows:
+    # Print table
+    if rows:
         headers = ["Global", "Local", "Status"]
-        if use_color:
-            headers = [f"{_Colors.CYAN}{_Colors.BOLD}{h}{_Colors.RESET}" for h in headers]
-        print(tabulate(combined_rows, headers=headers, tablefmt="plain"))
+        if col.enabled:
+            headers = [col.style(h, "CYAN", bold=True) for h in headers]
+        print(tabulate(rows, headers=headers, tablefmt="plain"))
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
@@ -424,15 +370,8 @@ def collect_arguments_with_meta(path: str = ".") -> tuple[dict, dict]:
       project_config_used: bool
       source_files: list[str]
     """
-    # Load global & project similar to collect_arguments, but keep more info
-    config_path = pathlib.Path.home() / ".rockerc.yaml"
-    global_config: Dict[str, Any] = {}
-    if config_path.exists():
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                global_config = yaml.safe_load(f) or {}
-        except Exception:  # pragma: no cover - fallback
-            global_config = {}
+    # Load configs to capture metadata
+    global_config = load_global_config()
 
     search_path = pathlib.Path(path)
     project_config: Dict[str, Any] = {}
@@ -440,35 +379,26 @@ def collect_arguments_with_meta(path: str = ".") -> tuple[dict, dict]:
     for p in search_path.glob("rockerc.yaml"):
         project_files.append(p.as_posix())
         with open(p.as_posix(), "r", encoding="utf-8") as f:
-            project_config.update(yaml.safe_load(f) or {})
+            project_config |= yaml.safe_load(f) or {}
 
-    final_dict: Dict[str, Any] = global_config | project_config
-
+    # Extract metadata before merging
     g_args = global_config.get("args", []) or []
     p_args = project_config.get("args", []) or []
-    merged_args = []
-    if g_args or p_args:
-        merged_args = deduplicate_extensions(g_args + p_args)
-        final_dict["args"] = merged_args.copy()
+    merged_args = deduplicate_extensions(g_args + p_args) if (g_args or p_args) else []
 
     g_bl = global_config.get("extension-blacklist", []) or []
     p_bl = project_config.get("extension-blacklist", []) or []
 
     if not isinstance(g_bl, list):
-        g_bl = [g_bl]
+        g_bl = [g_bl] if g_bl else []
     if not isinstance(p_bl, list):
-        p_bl = [p_bl]
+        p_bl = [p_bl] if p_bl else []
 
-    if g_bl or p_bl:
-        blacklist = deduplicate_extensions(g_bl + p_bl)
-        final_dict["extension-blacklist"] = blacklist
-    else:
-        blacklist = []
+    blacklist = deduplicate_extensions(g_bl + p_bl) if (g_bl or p_bl) else []
+    removed = [a for a in merged_args if a in set(blacklist)] if (blacklist and merged_args) else []
 
-    removed: List[str] = []
-    if blacklist and merged_args:
-        removed = [a for a in merged_args if a in set(blacklist)]
-        final_dict["args"] = [a for a in merged_args if a not in set(blacklist)]
+    # Now use collect_arguments to get the final merged result
+    final_dict = collect_arguments(path)
 
     meta = {
         "original_global_args": g_args or None,
@@ -501,44 +431,58 @@ def build_docker(dockerfile_path: str = ".") -> str:
     return tag
 
 
+def _format_docker_run_script(run_command_section: str) -> str:
+    """Format docker run command as a bash script."""
+    lines = run_command_section.split()
+    formatted_lines = [
+        "#!/bin/bash",
+        "# This file was autogenerated by rockerc",
+        "docker run \\",
+    ]
+
+    # Skip 'docker run' which is split in the first two items
+    for i, line in enumerate(lines[2:], start=2):
+        suffix = " \\" if i < len(lines) - 1 else ""
+        formatted_lines.append(f"  {line}{suffix}")
+
+    return "\n".join(formatted_lines)
+
+
+def _write_dockerfile(dockerfile_content: str) -> None:
+    """Write Dockerfile content to Dockerfile.rocker."""
+    with open("Dockerfile.rocker", "w", encoding="utf-8") as dockerfile:
+        dockerfile.write("#This file was autogenerated by rockerc\n")
+        dockerfile.write(dockerfile_content)
+
+
+def _write_run_script(script_content: str, script_path: str) -> None:
+    """Write and make executable the run script."""
+    with open(script_path, "w", encoding="utf-8") as bash_script:
+        bash_script.write(script_content)
+    os.chmod(script_path, 0o755)
+
+
 def save_rocker_cmd(split_cmd: List[str]) -> str | None:
     dry_run = split_cmd + ["--mode", "dry-run"]
     try:
         s = subprocess.run(dry_run, capture_output=True, text=True, check=True)
         output = s.stdout
+
         # Split by "vvvvvv" to discard the top section
         _, after_vvvvvv = output.split("vvvvvv", 1)
         # Split by "^^^^^^" to get the second section
         section_to_save, after_caret = after_vvvvvv.split("^^^^^^", 1)
+
         # Save the Dockerfile section
         dockerfile_content = section_to_save.strip()
-        with open("Dockerfile.rocker", "w", encoding="utf-8") as dockerfile:
-            dockerfile.write("#This file was autogenerated by rockerc\n")
-            dockerfile.write(dockerfile_content)
+        _write_dockerfile(dockerfile_content)
+
         # Find the "run this command" section
         run_command_section = after_caret.split("Run this command: ", 1)[-1].strip()
-        formatted_script_lines = []
-        lines = run_command_section.split()
-        formatted_script_lines.append("#!/bin/bash")
-        formatted_script_lines.append("# This file was autogenerated by rockerc")
-        formatted_script_lines.append("docker run \\")
-
-        for i, line in enumerate(
-            lines[2:], start=2
-        ):  # Skip 'docker run' which is split in the first two items
-            if i < len(lines) - 1:
-                formatted_script_lines.append(f"  {line} \\")
-            else:
-                formatted_script_lines.append(f"  {line}")
-
-        formatted_script_content = "\n".join(formatted_script_lines)
+        formatted_script_content = _format_docker_run_script(run_command_section)
 
         bash_script_path = "run_dockerfile.sh"
-        with open(bash_script_path, "w", encoding="utf-8") as bash_script:
-            bash_script.write(formatted_script_content)
-
-        # Make the bash script executable
-        os.chmod(bash_script_path, 0o755)
+        _write_run_script(formatted_script_content, bash_script_path)
 
         logging.info(
             "Saved generated Dockerfile to Dockerfile.rocker and launch script to %s",
@@ -616,6 +560,32 @@ def _configure_logging(verbose: bool):  # pragma: no cover - formatting only
     handler.setFormatter(_Formatter())
     root.addHandler(handler)
     root.setLevel(level)
+
+
+def _print_verbose_metadata(meta: dict) -> None:
+    """Print verbose metadata about configuration sources and merging."""
+    origins: List[str] = []
+    if meta.get("global_config_used"):
+        origins.append("global ~/.rockerc.yaml")
+    if meta.get("project_config_used"):
+        origins.append("project rockerc.yaml")
+    if origins:
+        print(_c("Sources:", _Colors.DIM, bold=True), _c(", ".join(origins), _Colors.DIM))
+    if meta.get("original_global_args"):
+        print(
+            _c("Global args:", _Colors.DIM, bold=True),
+            _c(", ".join(meta["original_global_args"]), _Colors.DIM),
+        )
+    if meta.get("original_project_args"):
+        print(
+            _c("Project args:", _Colors.DIM, bold=True),
+            _c(", ".join(meta["original_project_args"]), _Colors.DIM),
+        )
+    if meta.get("merged_args_before_blacklist"):
+        print(
+            _c("Merged (pre-blacklist):", _Colors.DIM, bold=True),
+            _c(", ".join(meta["merged_args_before_blacklist"]), _Colors.DIM),
+        )
 
 
 def run_rockerc(path: str = "."):
@@ -703,28 +673,7 @@ def run_rockerc(path: str = "."):
 
     # Show origin info (only if verbose to reduce noise)
     if verbose:
-        origins: List[str] = []
-        if meta.get("global_config_used"):
-            origins.append("global ~/.rockerc.yaml")
-        if meta.get("project_config_used"):
-            origins.append("project rockerc.yaml")
-        if origins:
-            print(_c("Sources:", _Colors.DIM, bold=True), _c(", ".join(origins), _Colors.DIM))
-        if meta.get("original_global_args"):
-            print(
-                _c("Global args:", _Colors.DIM, bold=True),
-                _c(", ".join(meta["original_global_args"]), _Colors.DIM),
-            )
-        if meta.get("original_project_args"):
-            print(
-                _c("Project args:", _Colors.DIM, bold=True),
-                _c(", ".join(meta["original_project_args"]), _Colors.DIM),
-            )
-        if meta.get("merged_args_before_blacklist"):
-            print(
-                _c("Merged (pre-blacklist):", _Colors.DIM, bold=True),
-                _c(", ".join(meta["merged_args_before_blacklist"]), _Colors.DIM),
-            )
+        _print_verbose_metadata(meta)
 
     if create_dockerfile and plan.rocker_cmd:
         dockerfile_content = save_rocker_cmd(plan.rocker_cmd)
