@@ -67,12 +67,18 @@ Removed the redundant 'Extension' column from `render_extension_table`:
 - Updated ordering test to assert absence of the word 'Extension' in header line.
 - CI after change: 43 passed, 1 skipped.
 
-### Clarification 2025-09-29 (Sorting Rule – Final)
-Sorting (row order) is a pure 3‑tier precedence over the provenance columns:
-1. Global-only rows (in global, not in local)
-2. Shared rows (in both)
-3. Local-only rows (in local, not in global)
+### Clarification 2025-09-29 (Sorting Rule – CORRECTED)
+The intended rule is a precedence-based grouping, NOT alphabetical sorting.
 
-All global-only rows must appear before the first shared row; all shared rows must appear before the first local-only row. Within each tier we keep the original stable order taken from the respective source lists (no alphabetical reordering). This is exactly the logic currently implemented in `render_extension_table` via `ordered = global_only + shared + local_only`.
+Ordering must be determined solely by group rank (provenance) while preserving original encounter order within each group:
+1. Global-only (present only in global args)
+2. Shared (present in both)
+3. Local-only (present only in project args)
 
-Blacklisted entries NEVER alter this ordering; they are rendered in-place with status `blacklisted`.
+All global-only rows must appear before the first shared row. All shared rows must appear before the first local-only row. A global-only extension that originally appeared after a shared extension in the source lists MUST still be lifted ahead of every shared row in the final table (group precedence overrides raw position across groups). Within a group, keep stable first-seen order (no alpha sort).
+
+Implementation detail: compute first-seen order index across the concatenation of (global_args + project_args). For each unique extension compute a group_rank: 0=global-only, 1=shared, 2=local-only. Sort by (group_rank, first_seen_index). This guarantees contiguous blocks per group while retaining the original sequence inside each block.
+
+Blacklisted entries: remain in-place according to their provenance group; styling only.
+
+Removed earlier (incorrect) spec revision that introduced alphabetical ordering.

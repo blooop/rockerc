@@ -85,11 +85,33 @@ def render_extension_table(
     removed_set = set(removed_by_blacklist)
     final_set = set(final_args)
 
-    # Ordered grouping per spec
-    global_only = [g for g in g_raw if g not in p_set]
-    shared = [g for g in g_raw if g in p_set]
-    local_only = [p for p in p_raw if p not in g_set]
-    ordered = global_only + shared + local_only
+    # Ordered grouping per corrected spec: precedence by provenance group only, preserving
+    # original encounter order within each group (no alphabetical sorting).
+    # We derive a stable first-seen index from the concatenation of (g_raw + p_raw).
+    first_seen: dict[str, int] = {}
+    for idx, name in enumerate(g_raw + p_raw):
+        if name not in first_seen:
+            first_seen[name] = idx
+
+    def group_rank(name: str) -> int:
+        in_g = name in g_set
+        in_p = name in p_set
+        if in_g and not in_p:
+            return 0  # global-only
+        if in_g and in_p:
+            return 1  # shared
+        if in_p and not in_g:
+            return 2  # local-only
+        return 3  # unknown / fallback (should not happen)
+
+    # Collect unique names from provenance sets so we don't introduce names that only appear
+    # due to final_args expansion; ordering is based purely on provenance membership.
+    unique_names: list[str] = []
+    for name in g_raw + p_raw:
+        if name not in unique_names:
+            unique_names.append(name)
+
+    ordered = sorted(unique_names, key=lambda n: (group_rank(n), first_seen[n]))
 
     # Normalize any accidental aggregated tokens like "nvidia - x11 - user" (display only)
     def _expand_aggregates(ext_list: list[str]) -> list[str]:
@@ -122,27 +144,36 @@ def render_extension_table(
     else:
         ordered = expanded_ordered
 
-    # Defensive: ensure any removed/blacklisted that somehow not in ordered are appended
+    # Defensive: ensure any removed/blacklisted not in ordered are injected according to rank
     for ext in removed_by_blacklist:
-        if ext not in ordered:
-            # Decide group heuristically: preference global->shared->local patterns
-            if ext in g_set and ext in p_set:
-                # shared but missing – insert after last shared or after globals
-                if shared:
-                    insert_idx = len(global_only) + len(shared)
-                else:
-                    insert_idx = len(global_only)
-                ordered.insert(insert_idx, ext)
-            elif ext in g_set:
-                # treat as global-only
-                if ext not in global_only:
-                    ordered.insert(len(global_only), ext)
-            elif ext in p_set:
-                # treat as local-only (append at end within local segment)
-                ordered.append(ext)
+        if ext in ordered:
+            continue
+        r = group_rank(ext)
+        if r == 0:
+            # Insert before first non global-only
+            first_non_global = next(
+                (i for i, n in enumerate(ordered) if group_rank(n) != 0), len(ordered)
+            )
+            ordered.insert(first_non_global, ext)
+        elif r == 1:
+            # After last shared (or after all global-only if none shared yet)
+            last_shared_pos = -1
+            for i, n in enumerate(ordered):
+                if group_rank(n) == 1:
+                    last_shared_pos = i
+            if last_shared_pos >= 0:
+                ordered.insert(last_shared_pos + 1, ext)
             else:
-                # Unknown provenance: append at end
-                ordered.append(ext)
+                # after all global-only
+                after_globals = next(
+                    (i for i, n in enumerate(ordered) if group_rank(n) != 0), len(ordered)
+                )
+                ordered.insert(after_globals, ext)
+        elif r == 2:
+            # Append at end (local-only segment is last)
+            ordered.append(ext)
+        else:
+            ordered.append(ext)
 
     use_color = _use_color()
 
