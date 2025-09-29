@@ -241,21 +241,13 @@ def render_extension_table(
             rows.append([global_cell, local_cell, status_txt])
         return rows
 
-    def print_table(title: str, names: list[str]):
-        if not names:
-            return
-        heading = title
-        if use_color:
-            heading = f"{_Colors.CYAN}{_Colors.BOLD}{heading}{_Colors.RESET}"
-        print(heading)
+    # Single concatenated table (global-only + shared + local-only)
+    concatenated = global_only_names + shared_names + local_only_names
+    if concatenated:
         headers = ["Global", "Local", "Status"]
         if use_color:
             headers = [f"{_Colors.CYAN}{_Colors.BOLD}{h}{_Colors.RESET}" for h in headers]
-        print(tabulate(build_rows(names), headers=headers, tablefmt="plain"))
-
-    print_table("Global-only Extensions:", global_only_names)
-    print_table("Shared Extensions:", shared_names)
-    print_table("Local-only Extensions:", local_only_names)
+        print(tabulate(build_rows(concatenated), headers=headers, tablefmt="plain"))
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
