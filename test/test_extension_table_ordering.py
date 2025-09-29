@@ -50,3 +50,6 @@ def test_row_group_ordering_with_blacklist(capsys):
     # Blacklisted extensions should have status 'blacklisted' and NOT create an extra group label
     assert "blacklisted" in out
     assert "Blacklist" not in out  # no separate header/group name
+    # The redundant 'Extension' column header must be absent after spec clarification
+    header_line = out.splitlines()[1] if len(out.splitlines()) > 1 else ""
+    assert "Extension" not in header_line

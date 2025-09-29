@@ -71,9 +71,10 @@ def render_extension_table(
     """Render a provenance table of extensions.
 
     Consumes pre-computed metadata – does NOT perform merge/filter logic.
-    Columns: Global | Local | Extension | Status
+    Columns (updated): Global | Local | Status
+    The previous redundant 'Extension' column (duplicating the name) was removed.
     Group order: global-only, shared, local-only (stable original order).
-    Blacklisted entries appear with strikethrough & red status.
+    Blacklisted entries appear with strikethrough & red status in-place.
     """
 
     g_raw = original_global_args or []
@@ -187,7 +188,6 @@ def render_extension_table(
 
         global_cell = fmt_cell(ext, ext in g_set, status)
         local_cell = fmt_cell(ext, ext in p_set, status)
-        ext_cell = fmt_cell(ext, True, status)
 
         if status == "loaded":
             status_txt = color(status, _Colors.GREEN)
@@ -196,7 +196,7 @@ def render_extension_table(
         else:  # filtered
             status_txt = color(status, _Colors.YELLOW)
 
-        rows.append([global_cell, local_cell, ext_cell, status_txt])
+        rows.append([global_cell, local_cell, status_txt])
 
     # Heading
     heading = "Extensions:"
@@ -204,7 +204,7 @@ def render_extension_table(
         heading = f"{_Colors.CYAN}{_Colors.BOLD}{heading}{_Colors.RESET}"
     print(heading)
     # Column headers styled
-    headers = ["Global", "Local", "Extension", "Status"]
+    headers = ["Global", "Local", "Status"]
     if use_color:
         headers = [f"{_Colors.CYAN}{_Colors.BOLD}{h}{_Colors.RESET}" for h in headers]
     table = tabulate(rows, headers=headers, tablefmt="plain")
