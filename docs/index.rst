@@ -11,6 +11,7 @@ Welcome to rockerc's documentation!
 
    intro.rst 
 
+   unified_flow
 
 Indices and tables
 ==================

@@ -1117,8 +1117,8 @@ packages:
   requires_python: '>=3.0'
 - pypi: ./
   name: rockerc
-  version: 0.12.0
-  sha256: dedc6d9c78a7cb6fceec94ef0ef89753ebba6ba3e0efdbdf3de4b99cd542db31
+  version: 0.13.0
+  sha256: 61dec8bb943b20247c94e5b5a5ef29182cccf6783583c57622c694ac9a4a1444
   requires_dist:
   - rocker>=0.2.19
   - deps-rocker>=0.15

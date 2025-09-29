@@ -2,9 +2,15 @@ import sys
 import subprocess
 import pathlib
 import yaml
-import shlex
 import os
 import logging
+
+# Unified detached execution & VS Code attach flow helpers
+from rockerc.core import (
+    derive_container_name,
+    prepare_launch_plan,
+    execute_plan,
+)
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
@@ -128,7 +134,9 @@ def collect_arguments(path: str = ".") -> dict:
         project_blacklist = [project_blacklist] if project_blacklist else []
 
     if global_blacklist or project_blacklist:
-        final_dict["extension-blacklist"] = deduplicate_extensions(global_blacklist + project_blacklist)
+        final_dict["extension-blacklist"] = deduplicate_extensions(
+            global_blacklist + project_blacklist
+        )
 
     # Filter out blacklisted extensions from args
     if "extension-blacklist" in final_dict and "args" in final_dict:
@@ -214,14 +222,43 @@ def save_rocker_cmd(split_cmd: str):
         sys.exit(1)
 
 
-def run_rockerc(path: str = "."):
-    """run rockerc by searching for rocker.yaml in the specified directory and passing those arguments to rocker
+def _parse_extra_flags(argv: list[str]) -> tuple[bool, bool, list[str]]:
+    """Parse ad-hoc flags for --vsc and --force, returning (vsc, force, remaining_args).
 
-    Args:
-        path (str, optional): Search path for rockerc.yaml files. Defaults to ".".
+    We keep this lightweight to avoid introducing argparse changes that might surprise users.
+    """
+    vsc = False
+    force = False
+    remaining: list[str] = []
+    for a in argv:
+        if a in ("--vsc",):
+            vsc = True
+            continue
+        if a in ("--force", "-f"):
+            force = True
+            continue
+        remaining.append(a)
+    return vsc, force, remaining
+
+
+def run_rockerc(path: str = "."):
+    """Unified rockerc entry point (always-detached model).
+
+    Behavior:
+    1. Collect + merge configuration.
+    2. Optionally build Dockerfile if 'dockerfile' key present.
+    3. Support --create-dockerfile to emit a generated Dockerfile + run script.
+    4. Always ensure container is (or becomes) detached so we can exec a shell.
+    5. Optional VS Code attach with --vsc.
+    6. Reuse existing container unless --force provided.
     """
 
     logging.basicConfig(level=logging.INFO)
+
+    # Raw arguments after script name
+    cli_args = sys.argv[1:]
+    vsc, force, filtered_cli = _parse_extra_flags(cli_args)
+
     merged_dict = collect_arguments(path)
 
     if not merged_dict:
@@ -236,42 +273,49 @@ def run_rockerc(path: str = "."):
         )
         sys.exit(1)
 
+    # Dockerfile build handling
     if "dockerfile" in merged_dict:
         logging.info("Building dockerfile...")
         merged_dict["image"] = build_docker(merged_dict["dockerfile"])
         logging.info("disabling 'pull' extension as a Dockerfile is used instead")
         if "pull" in merged_dict["args"]:
-            merged_dict["args"].remove("pull")  # can't pull as we just build image
-        # remove the dockerfile command as it does not need to be passed onto rocker
+            merged_dict["args"].remove("pull")
         merged_dict.pop("dockerfile")
 
+    # create-dockerfile mode
     create_dockerfile = False
     if "create-dockerfile" in merged_dict["args"]:
         merged_dict["args"].remove("create-dockerfile")
         create_dockerfile = True
 
-    extra_args = ""
-    if len(sys.argv) > 1:
-        # this is quite hacky but we only really want 1 argument and to keep the rest as minimal as possible so not using argparse
-        dockerfile_arg = "--create-dockerfile"
-        if dockerfile_arg in sys.argv:
-            sys.argv.remove(dockerfile_arg)
-            create_dockerfile = True
-        extra_args = " ".join(sys.argv[1:])
+    # Detect explicit container name in user filtered args (very naive: look for --name <value>)
+    explicit_name = None
+    if "--name" in filtered_cli:
+        try:
+            idx = filtered_cli.index("--name")
+            explicit_name = filtered_cli[idx + 1]
+        except (ValueError, IndexError):  # pragma: no cover - defensive
+            pass
 
-    cmd_args = yaml_dict_to_args(merged_dict, extra_args)
-    if len(cmd_args) > 0:
-        cmd = f"rocker {cmd_args}"
-        logging.info(f"running cmd: {cmd}")
-        split_cmd = shlex.split(cmd)
-        if create_dockerfile:
-            save_rocker_cmd(split_cmd)
-        subprocess.run(split_cmd, check=True)
-    else:
-        logging.error(
-            "no arguments found in rockerc.yaml. Please add rocker arguments as described in rocker -h:"
-        )
-        subprocess.call("rocker -h", shell=True)
+    container_name = derive_container_name(explicit_name)
+
+    # Remaining CLI (space-preserved) for injection pass
+    extra_cli = " ".join(filtered_cli)
+
+    plan = prepare_launch_plan(
+        merged_dict,
+        extra_cli,
+        container_name,
+        vsc,
+        force,
+        pathlib.Path(path).absolute(),
+    )
+
+    if create_dockerfile and plan.rocker_cmd:
+        save_rocker_cmd(plan.rocker_cmd)
+
+    exit_code = execute_plan(plan)
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
