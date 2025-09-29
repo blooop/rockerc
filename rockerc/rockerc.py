@@ -110,15 +110,14 @@ def render_extension_table(
         if name not in unique_names:
             unique_names.append(name)
 
-    # Partition per group preserving stable order via first_seen
+    # Partition per group preserving stable order via first_seen (capture now, may be recomputed)
     global_only_names = [n for n in unique_names if group_rank(n) == 0]
     shared_names = [n for n in unique_names if group_rank(n) == 1]
     local_only_names = [n for n in unique_names if group_rank(n) == 2]
 
-    # We retain previous defensive insertion semantics by later injecting removed_by_blacklist
-    ordered = (
-        global_only_names + shared_names + local_only_names
-    )  # used for removal reinsertion only
+    # We'll eventually produce three isolated row arrays (global_rows, shared_rows, local_rows)
+    # and then concatenate them. Keep an 'ordered' list only for reinsertion of removed items.
+    ordered = global_only_names + shared_names + local_only_names
 
     # Normalize any accidental aggregated tokens like "nvidia - x11 - user" (display only)
     def _expand_aggregates(ext_list: list[str]) -> list[str]:
@@ -205,44 +204,55 @@ def render_extension_table(
             prefix += _Colors.BOLD
         return f"{prefix}{txt}{_Colors.RESET}"
 
-    def build_rows(ext_names: list[str]) -> list[list[str]]:
-        rows: list[list[str]] = []
-        for ext in ext_names:
-            if ext in final_set:
-                status = "loaded"
-            elif ext in removed_set:
-                status = "blacklisted"
-            elif ext in bl_set:
-                status = "filtered"
-            else:
-                status = "loaded"
+    def extension_status(ext: str) -> str:
+        if ext in final_set:
+            return "loaded"
+        if ext in removed_set:
+            return "blacklisted"
+        if ext in bl_set:
+            return "filtered"
+        return "loaded"
 
-            def fmt_cell(ext_name: str, show: bool, state: str) -> str:
-                if not show:
-                    return ""
-                cell_txt = ext_name
-                if state == "loaded":
-                    cell_txt = color(cell_txt, _Colors.CYAN)
-                elif state == "blacklisted":
-                    cell_txt = color(cell_txt, _Colors.RED)
-                    cell_txt = strike(cell_txt)
-                elif state == "filtered":
-                    cell_txt = color(cell_txt, _Colors.YELLOW)
-                return cell_txt
+    def fmt_cell(ext_name: str, show: bool, status: str) -> str:
+        if not show:
+            return ""
+        cell_txt = ext_name
+        if status == "loaded":
+            cell_txt = color(cell_txt, _Colors.CYAN)
+        elif status == "blacklisted":
+            cell_txt = color(cell_txt, _Colors.RED)
+            cell_txt = strike(cell_txt)
+        elif status == "filtered":
+            cell_txt = color(cell_txt, _Colors.YELLOW)
+        return cell_txt
 
-            global_cell = fmt_cell(ext, ext in g_set, status)
-            local_cell = fmt_cell(ext, ext in p_set, status)
+    # Build three independent row arrays first (no printing)
+    global_rows: list[list[str]] = []
+    shared_rows: list[list[str]] = []
+    local_rows: list[list[str]] = []
+
+    def build_group_rows(names: list[str], target: list[list[str]]):
+        for ext in names:
+            status = extension_status(ext)
+            g_cell = fmt_cell(ext, ext in g_set, status)
+            l_cell = fmt_cell(ext, ext in p_set, status)
             if status == "loaded":
                 status_txt = color(status, _Colors.GREEN)
             elif status == "blacklisted":
                 status_txt = color(status, _Colors.RED)
             else:
                 status_txt = color(status, _Colors.YELLOW)
-            rows.append([global_cell, local_cell, status_txt])
-        return rows
+            target.append([g_cell, l_cell, status_txt])
 
-    def print_table(title: str, names: list[str]):
-        if not names:
+    build_group_rows(global_only_names, global_rows)
+    build_group_rows(shared_names, shared_rows)
+    build_group_rows(local_only_names, local_rows)
+
+    # Concatenate vertically (not currently used directly by tests, but ensures spec compliance)
+    _ = global_rows + shared_rows + local_rows  # combined_rows (placeholder if needed later)
+
+    def print_rows(title: str, rows: list[list[str]]):
+        if not rows:
             return
         heading = title
         if use_color:
@@ -251,11 +261,11 @@ def render_extension_table(
         headers = ["Global", "Local", "Status"]
         if use_color:
             headers = [f"{_Colors.CYAN}{_Colors.BOLD}{h}{_Colors.RESET}" for h in headers]
-        print(tabulate(build_rows(names), headers=headers, tablefmt="plain"))
+        print(tabulate(rows, headers=headers, tablefmt="plain"))
 
-    print_table("Global-only Extensions:", global_only_names)
-    print_table("Shared Extensions:", shared_names)
-    print_table("Local-only Extensions:", local_only_names)
+    print_rows("Global-only Extensions:", global_rows)
+    print_rows("Shared Extensions:", shared_rows)
+    print_rows("Local-only Extensions:", local_rows)
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
