@@ -98,8 +98,9 @@ def render_extension_table(
             first_seen[name] = idx
 
     def group_rank(name: str) -> int:
-        in_g = name in g_set
-        in_p = name in p_set
+        # Consider both args and blacklist for grouping
+        in_g = (name in g_set) or (name in g_bl_set)
+        in_p = (name in p_set) or (name in p_bl_set)
         if in_g and not in_p:
             return 0  # global-only
         if in_g and in_p:
@@ -108,9 +109,9 @@ def render_extension_table(
             return 2  # local-only
         return 3  # unknown / fallback (should not happen)
 
-    # Collect unique names from provenance sets for grouping
+    # Collect unique names from provenance sets for grouping (include blacklists)
     unique_names: list[str] = []
-    for name in g_raw + p_raw:
+    for name in g_raw + p_raw + list(g_bl_set) + list(p_bl_set):
         if name not in unique_names:
             unique_names.append(name)
 
