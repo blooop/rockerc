@@ -205,49 +205,50 @@ def render_extension_table(
             prefix += _Colors.BOLD
         return f"{prefix}{txt}{_Colors.RESET}"
 
-    def build_rows(ext_names: list[str]) -> list[list[str]]:
-        rows: list[list[str]] = []
-        for ext in ext_names:
-            if ext in final_set:
-                status = "loaded"
-            elif ext in removed_set:
-                status = "blacklisted"
-            elif ext in bl_set:
-                status = "filtered"
-            else:
-                status = "loaded"
+    def build_single_row(ext: str) -> list[str]:
+        if ext in final_set:
+            status = "loaded"
+        elif ext in removed_set:
+            status = "blacklisted"
+        elif ext in bl_set:
+            status = "filtered"
+        else:
+            status = "loaded"
 
-            def fmt_cell(ext_name: str, show: bool, state: str) -> str:
-                if not show:
-                    return ""
-                cell_txt = ext_name
-                if state == "loaded":
-                    cell_txt = color(cell_txt, _Colors.CYAN)
-                elif state == "blacklisted":
-                    cell_txt = color(cell_txt, _Colors.RED)
-                    cell_txt = strike(cell_txt)
-                elif state == "filtered":
-                    cell_txt = color(cell_txt, _Colors.YELLOW)
-                return cell_txt
+        def fmt_cell(ext_name: str, show: bool, state: str) -> str:
+            if not show:
+                return ""
+            cell_txt = ext_name
+            if state == "loaded":
+                cell_txt = color(cell_txt, _Colors.CYAN)
+            elif state == "blacklisted":
+                cell_txt = color(cell_txt, _Colors.RED)
+                cell_txt = strike(cell_txt)
+            elif state == "filtered":
+                cell_txt = color(cell_txt, _Colors.YELLOW)
+            return cell_txt
 
-            global_cell = fmt_cell(ext, ext in g_set, status)
-            local_cell = fmt_cell(ext, ext in p_set, status)
-            if status == "loaded":
-                status_txt = color(status, _Colors.GREEN)
-            elif status == "blacklisted":
-                status_txt = color(status, _Colors.RED)
-            else:
-                status_txt = color(status, _Colors.YELLOW)
-            rows.append([global_cell, local_cell, status_txt])
-        return rows
+        global_cell = fmt_cell(ext, ext in g_set, status)
+        local_cell = fmt_cell(ext, ext in p_set, status)
+        if status == "loaded":
+            status_txt = color(status, _Colors.GREEN)
+        elif status == "blacklisted":
+            status_txt = color(status, _Colors.RED)
+        else:
+            status_txt = color(status, _Colors.YELLOW)
+        return [global_cell, local_cell, status_txt]
 
-    # Single concatenated table (global-only + shared + local-only)
-    concatenated = global_only_names + shared_names + local_only_names
-    if concatenated:
+    # Build three explicit 2D arrays
+    global_rows = [build_single_row(ext) for ext in global_only_names]
+    shared_rows = [build_single_row(ext) for ext in shared_names]
+    local_rows = [build_single_row(ext) for ext in local_only_names]
+
+    all_rows = global_rows + shared_rows + local_rows
+    if all_rows:
         headers = ["Global", "Local", "Status"]
         if use_color:
             headers = [f"{_Colors.CYAN}{_Colors.BOLD}{h}{_Colors.RESET}" for h in headers]
-        print(tabulate(build_rows(concatenated), headers=headers, tablefmt="plain"))
+        print(tabulate(all_rows, headers=headers, tablefmt="plain"))
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:

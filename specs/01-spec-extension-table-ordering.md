@@ -84,4 +84,9 @@ Blacklisted entries: remain in-place according to their provenance group; stylin
 Removed earlier (incorrect) spec revision that introduced alphabetical ordering.
 
 ### Update 2025-09-29 (Grouped Single Table Concatenation)
-Revised: We still build three logical groups (Global-only, Shared, Local-only) but we now output them as one contiguous table WITHOUT group titles or blank separators. The ordering rule remains: all global-only rows first, then shared, then local-only. Columns: Global | Local | Status. No headers beyond the single table header row. Blacklist styling unchanged.
+Revised: Construct three explicit 2D row arrays:
+	G = rows for global-only
+	S = rows for shared
+	L = rows for local-only
+Each row: [GlobalCell, LocalCell, StatusCell]
+Then final_rows = G + S + L and render exactly one table (single header line). No group titles printed. Ordering invariant: all rows in G precede all rows in S precede all rows in L. Within each array preserve encounter order from provenance logic (aggregate expansion included). Blacklist styling unchanged.
