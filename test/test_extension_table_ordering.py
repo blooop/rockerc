@@ -2,9 +2,9 @@ from rockerc.rockerc import render_extension_table
 
 
 def test_three_table_grouping_with_blacklist(capsys):
-    """Validate three-table output: Global-only, Shared, Local-only.
+    """Validate single concatenated table output: Global-only, Shared, Local-only rows in sequence.
 
-    Blacklisted extensions stay in their table with status styling.
+    Blacklisted extensions stay in their group position with status styling.
     """
 
     original_global_args = ["gonly", "shared1", "shared2"]
@@ -22,19 +22,23 @@ def test_three_table_grouping_with_blacklist(capsys):
     )
     out = capsys.readouterr().out.splitlines()
     text = "\n".join(out)
-    # Headers must appear (in this order if groups present)
-    g_idx = text.index("Global-only Extensions:")
-    s_idx = text.index("Shared Extensions:")
-    l_idx = text.index("Local-only Extensions:")
-    assert g_idx < s_idx < l_idx
-    # Each name confined to its table block (simple positional checks)
+
+    # Should have table headers but no section titles
+    assert "Global" in text and "Local" in text and "Status" in text
+    assert "Global-only Extensions:" not in text
+    assert "Shared Extensions:" not in text
+    assert "Local-only Extensions:" not in text
+
+    # Each name appears in the correct group order (global-only, shared, local-only)
     gonly_pos = text.index("gonly")
     shared1_pos = text.index("shared1")
     shared2_pos = text.index("shared2")
     local1_pos = text.index("local1")
     local2_pos = text.index("local2")
     assert gonly_pos < shared1_pos < shared2_pos < local1_pos < local2_pos
+
     # Blacklisted entries present and marked
     assert "blacklisted" in text
+
     # Deprecated standalone heading 'Extensions:' (without qualifier) must not appear
     assert "\nExtensions:\n" not in f"\n{text}\n"

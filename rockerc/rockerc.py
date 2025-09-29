@@ -248,24 +248,25 @@ def render_extension_table(
     build_group_rows(shared_names, shared_rows)
     build_group_rows(local_only_names, local_rows)
 
-    # Concatenate vertically (not currently used directly by tests, but ensures spec compliance)
-    _ = global_rows + shared_rows + local_rows  # combined_rows (placeholder if needed later)
+    # Print three separate tables
+    headers = ["Global", "Local", "Status"]
+    if use_color:
+        headers = [f"{_Colors.CYAN}{_Colors.BOLD}{h}{_Colors.RESET}" for h in headers]
 
-    def print_rows(title: str, rows: list[list[str]]):
-        if not rows:
-            return
-        heading = title
-        if use_color:
-            heading = f"{_Colors.CYAN}{_Colors.BOLD}{heading}{_Colors.RESET}"
-        print(heading)
-        headers = ["Global", "Local", "Status"]
-        if use_color:
-            headers = [f"{_Colors.CYAN}{_Colors.BOLD}{h}{_Colors.RESET}" for h in headers]
-        print(tabulate(rows, headers=headers, tablefmt="plain"))
+    if global_rows:
+        print(_header("Global Extensions:"))
+        print(tabulate(global_rows, headers=headers, tablefmt="plain"))
+        print()
 
-    print_rows("Global-only Extensions:", global_rows)
-    print_rows("Shared Extensions:", shared_rows)
-    print_rows("Local-only Extensions:", local_rows)
+    if shared_rows:
+        print(_header("Shared Extensions (Global + Local):"))
+        print(tabulate(shared_rows, headers=headers, tablefmt="plain"))
+        print()
+
+    if local_rows:
+        print(_header("Local Extensions:"))
+        print(tabulate(local_rows, headers=headers, tablefmt="plain"))
+        print()
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
