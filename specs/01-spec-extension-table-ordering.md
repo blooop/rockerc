@@ -66,3 +66,11 @@ Removed the redundant 'Extension' column from `render_extension_table`:
 - Row construction now appends only three cells.
 - Updated ordering test to assert absence of the word 'Extension' in header line.
 - CI after change: 43 passed, 1 skipped.
+
+### Clarification 2025-09-29 (Provenance Sorting Reinforced)
+Per latest instruction: The table MUST be sorted strictly by provenance groups, in this exact sequence:
+1. Global-only (extension appears only in Global column)
+2. Shared (appears in both Global and Local columns)
+3. Local-only (appears only in Local column)
+
+Within each group we retain the original (stable) encounter order taken from the source argument lists; no additional alphabetical sort is applied unless a future requirement states otherwise. This matches current implementation (`render_extension_table`) which constructs `global_only + shared + local_only` in that order.
