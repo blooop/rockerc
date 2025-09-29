@@ -59,3 +59,10 @@ Edge cases handled in code:
 No code changes were required for ordering; only the test enforcing the spec was added.
 
 All tests pass: 43 passed, 1 skipped (see CI run).
+
+### Update 2025-09-29 (Column Removal Implemented)
+Removed the redundant 'Extension' column from `render_extension_table`:
+- Adjusted docstring & headers to `Global | Local | Status`.
+- Row construction now appends only three cells.
+- Updated ordering test to assert absence of the word 'Extension' in header line.
+- CI after change: 43 passed, 1 skipped.
