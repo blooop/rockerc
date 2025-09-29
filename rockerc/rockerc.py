@@ -5,6 +5,7 @@ import yaml
 import os
 import logging
 from typing import List, Tuple, Dict, Any
+from tabulate import tabulate
 
 # Unified detached execution & VS Code attach flow helpers
 from rockerc.core import (
@@ -52,6 +53,162 @@ def _c(txt: str, color: str, *, bold: bool = False) -> str:
 
 def _header(txt: str) -> str:
     return _c(txt, _Colors.BLUE, bold=True)
+
+
+#############################################
+# Extension Table Renderer (new functionality)
+#############################################
+
+
+def render_extension_table(
+    final_args: list[str],
+    *,
+    original_global_args: list[str] | None,
+    original_project_args: list[str] | None,
+    blacklist: list[str],
+    removed_by_blacklist: list[str],
+) -> None:
+    """Render a provenance table of extensions.
+
+    Consumes pre-computed metadata – does NOT perform merge/filter logic.
+    Columns: Global | Local | Extension | Status
+    Group order: global-only, shared, local-only (stable original order).
+    Blacklisted entries appear with strikethrough & red status.
+    """
+
+    g_raw = original_global_args or []
+    p_raw = original_project_args or []
+    g_set = set(g_raw)
+    p_set = set(p_raw)
+    bl_set = set(blacklist)
+    removed_set = set(removed_by_blacklist)
+    final_set = set(final_args)
+
+    # Ordered grouping per spec
+    global_only = [g for g in g_raw if g not in p_set]
+    shared = [g for g in g_raw if g in p_set]
+    local_only = [p for p in p_raw if p not in g_set]
+    ordered = global_only + shared + local_only
+
+    # Normalize any accidental aggregated tokens like "nvidia - x11 - user" (display only)
+    def _expand_aggregates(ext_list: list[str]) -> list[str]:
+        expanded: list[str] = []
+        # We relax the requirement that parts already appear in provenance; if a tokenized
+        # aggregate arrives we still expand it for clearer display.
+        for item in ext_list:
+            if " - " in item and not item.strip().startswith("-"):
+                parts = [p.strip() for p in item.split(" - ") if p.strip()]
+                # Only expand if every part looks like a plausible extension token
+                if parts and all(part.replace("-", "").isalnum() for part in parts):
+                    for p in parts:
+                        if p not in expanded:  # avoid duplicating earlier entries
+                            expanded.append(p)
+                    continue
+            expanded.append(item)
+        return expanded
+
+    # Expand aggregates and, if expansion occurred in project or global lists, update provenance
+    expanded_ordered = _expand_aggregates(ordered)
+    if expanded_ordered != ordered:
+        # Rebuild raw lists similarly so membership columns reflect correct provenance
+        g_raw_exp = _expand_aggregates(g_raw)
+        p_raw_exp = _expand_aggregates(p_raw)
+        g_raw = g_raw_exp
+        p_raw = p_raw_exp
+        g_set = set(g_raw)
+        p_set = set(p_raw)
+        ordered = expanded_ordered
+    else:
+        ordered = expanded_ordered
+
+    # Defensive: ensure any removed/blacklisted that somehow not in ordered are appended
+    for ext in removed_by_blacklist:
+        if ext not in ordered:
+            # Decide group heuristically: preference global->shared->local patterns
+            if ext in g_set and ext in p_set:
+                # shared but missing – insert after last shared or after globals
+                if shared:
+                    insert_idx = len(global_only) + len(shared)
+                else:
+                    insert_idx = len(global_only)
+                ordered.insert(insert_idx, ext)
+            elif ext in g_set:
+                # treat as global-only
+                if ext not in global_only:
+                    ordered.insert(len(global_only), ext)
+            elif ext in p_set:
+                # treat as local-only (append at end within local segment)
+                ordered.append(ext)
+            else:
+                # Unknown provenance: append at end
+                ordered.append(ext)
+
+    use_color = _use_color()
+
+    def strike(txt: str) -> str:
+        if not txt:
+            return txt
+        if use_color:
+            return f"\033[9m{txt}\033[0m"
+        return f"<del>{txt}</del>"
+
+    def color(txt: str, code: str, bold: bool = False) -> str:
+        if not use_color:
+            return txt
+        prefix = code
+        if bold:
+            prefix += _Colors.BOLD
+        return f"{prefix}{txt}{_Colors.RESET}"
+
+    rows: list[list[str]] = []
+    for ext in ordered:
+        # Determine status strictly from provided metadata
+        if ext in final_set:
+            status = "loaded"
+        elif ext in removed_set:  # explicitly removed by blacklist
+            status = "blacklisted"
+        elif ext in bl_set:  # present in blacklist but not in merged list before? future-proof
+            status = "filtered"  # reserved potential future non-blacklist filtering
+        else:
+            status = "loaded"  # treat unknown as loaded (should not normally occur)
+
+        def fmt_cell(ext_name: str, show: bool, state: str) -> str:
+            if not show:
+                return ""
+            cell_txt = ext_name
+            if state == "loaded":
+                cell_txt = color(cell_txt, _Colors.CYAN)
+            elif state == "blacklisted":
+                cell_txt = color(cell_txt, _Colors.RED)
+                cell_txt = strike(cell_txt)
+            elif state == "filtered":
+                cell_txt = color(cell_txt, _Colors.YELLOW)
+            return cell_txt
+
+        global_cell = fmt_cell(ext, ext in g_set, status)
+        local_cell = fmt_cell(ext, ext in p_set, status)
+        ext_cell = fmt_cell(ext, True, status)
+
+        if status == "loaded":
+            status_txt = color(status, _Colors.GREEN)
+        elif status == "blacklisted":
+            status_txt = color(status, _Colors.RED)
+        else:  # filtered
+            status_txt = color(status, _Colors.YELLOW)
+
+        rows.append([global_cell, local_cell, ext_cell, status_txt])
+
+    # Heading
+    heading = "Extensions:"
+    if use_color:
+        heading = f"{_Colors.CYAN}{_Colors.BOLD}{heading}{_Colors.RESET}"
+    print(heading)
+    # Column headers styled
+    headers = ["Global", "Local", "Extension", "Status"]
+    if use_color:
+        headers = [f"{_Colors.CYAN}{_Colors.BOLD}{h}{_Colors.RESET}" for h in headers]
+    table = tabulate(rows, headers=headers, tablefmt="plain")
+    print(table)
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
@@ -465,29 +622,14 @@ def run_rockerc(path: str = "."):
         pathlib.Path(path).absolute(),
     )
 
-    # Show extensions (final list) early for user clarity (sorted for readability only)
-    ext_list = merged_dict.get("args", [])
-    blacklist = merged_dict.get("extension-blacklist", [])
-    display_exts = sorted(ext_list)
-
-    # Detailed extension info block
-    print(_c("Extensions:", _Colors.CYAN, bold=True), end=" ")
-    if display_exts:
-        print(_c(", ".join(display_exts), _Colors.CYAN))
-    else:  # pragma: no cover - defensive
-        print(_c("(none)", _Colors.YELLOW))
-
-    # Show blacklist & removed items
-    if blacklist:
-        print(
-            _c("Blacklist:", _Colors.RED, bold=True),
-            _c(", ".join(sorted(blacklist)), _Colors.RED),
-        )
-    if meta.get("removed_by_blacklist"):
-        print(
-            _c("Removed by blacklist:", _Colors.RED, bold=True),
-            _c(", ".join(sorted(meta["removed_by_blacklist"])), _Colors.RED),
-        )
+    # Render new provenance table (replaces prior summary block)
+    render_extension_table(
+        merged_dict.get("args", []),
+        original_global_args=meta.get("original_global_args"),
+        original_project_args=meta.get("original_project_args"),
+        blacklist=meta.get("blacklist", []),
+        removed_by_blacklist=meta.get("removed_by_blacklist", []),
+    )
 
     # Show origin info (only if verbose to reduce noise)
     if verbose:

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import pathlib
+import shlex
 import subprocess
 import time
 import logging
@@ -238,8 +239,8 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     rocker_argline = yaml_dict_to_args(args_copy, injections)
     rocker_cmd = []
     if not exists:
-        # Build full command list for subprocess
-        rocker_cmd = ["rocker"] + rocker_argline.split()
+        # Build full command list for subprocess (preserve quoted arguments correctly)
+        rocker_cmd = ["rocker"] + shlex.split(rocker_argline)
         created = True
     else:
         LOGGER.info("Container '%s' already exists; reusing.", container_name)
