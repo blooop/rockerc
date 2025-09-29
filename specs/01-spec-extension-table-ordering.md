@@ -82,3 +82,11 @@ Implementation detail: compute first-seen order index across the concatenation o
 Blacklisted entries: remain in-place according to their provenance group; styling only.
 
 Removed earlier (incorrect) spec revision that introduced alphabetical ordering.
+
+### Update 2025-09-29 (Three-Table Rendering)
+New requirement: Instead of a single merged table containing all provenance groups, render three separate tables (in this strict sequence) and concatenate their plain-text output:
+1. Global-only extensions
+2. Shared (global & local) extensions
+3. Local-only extensions
+
+Each table uses the same column schema: Global | Local | Status. Rows contain only extensions belonging to that specific provenance class; other provenance entries are omitted entirely from that table. If a table would be empty, skip printing it altogether (no blank header). Blacklist styling logic is unchanged. The net effect is a visually separated block-per-group while retaining prior styling.

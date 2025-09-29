@@ -1,24 +1,10 @@
 from rockerc.rockerc import render_extension_table
 
 
-def test_row_group_ordering_with_blacklist(capsys):
-    """Ensure ordering strictly follows: Global-only, Shared, Local-only.
+def test_three_table_grouping_with_blacklist(capsys):
+    """Validate three-table output: Global-only, Shared, Local-only.
 
-    Blacklisted extensions must appear in their natural group positions, not
-    segregated. We construct:
-      global args:   gonly, shared1, shared2
-      project args:  shared1, local1, shared2, local2
-      blacklist:     shared1, local2
-
-    Groups expected:
-      Global-only: gonly
-      Shared:      shared1 (blacklisted), shared2
-      Local-only:  local1, local2 (blacklisted)
-
-    Final merged args after blacklist (what rocker would actually load):
-      gonly, shared2, local1
-    removed_by_blacklist:
-      shared1, local2
+    Blacklisted extensions stay in their table with status styling.
     """
 
     original_global_args = ["gonly", "shared1", "shared2"]
@@ -34,22 +20,21 @@ def test_row_group_ordering_with_blacklist(capsys):
         blacklist=blacklist,
         removed_by_blacklist=removed,
     )
-
-    out = capsys.readouterr().out
-    # We operate in plain (non-color) mode under pytest capture, so simple substring index works.
-    expected_order = ["gonly", "shared1", "shared2", "local1", "local2"]
-    positions = {name: out.index(name) for name in expected_order}
-    # Assert strict ordering
-    assert (
-        positions["gonly"]
-        < positions["shared1"]
-        < positions["shared2"]
-        < positions["local1"]
-        < positions["local2"]
-    )
-    # Blacklisted extensions should have status 'blacklisted' and NOT create an extra group label
-    assert "blacklisted" in out
-    assert "Blacklist" not in out  # no separate header/group name
-    # The redundant 'Extension' column header must be absent after spec clarification
-    header_line = out.splitlines()[1] if len(out.splitlines()) > 1 else ""
-    assert "Extension" not in header_line
+    out = capsys.readouterr().out.splitlines()
+    text = "\n".join(out)
+    # Headers must appear (in this order if groups present)
+    g_idx = text.index("Global-only Extensions:")
+    s_idx = text.index("Shared Extensions:")
+    l_idx = text.index("Local-only Extensions:")
+    assert g_idx < s_idx < l_idx
+    # Each name confined to its table block (simple positional checks)
+    gonly_pos = text.index("gonly")
+    shared1_pos = text.index("shared1")
+    shared2_pos = text.index("shared2")
+    local1_pos = text.index("local1")
+    local2_pos = text.index("local2")
+    assert gonly_pos < shared1_pos < shared2_pos < local1_pos < local2_pos
+    # Blacklisted entries present and marked
+    assert "blacklisted" in text
+    # Deprecated standalone heading 'Extensions:' (without qualifier) must not appear
+    assert "\nExtensions:\n" not in f"\n{text}\n"
