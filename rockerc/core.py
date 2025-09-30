@@ -204,7 +204,8 @@ def interactive_shell(container_name: str, shell: str | None = None) -> int:
     """
     if not shell:
         shell = os.environ.get("SHELL", "/bin/bash")
-    exec_cmd = ["docker", "exec", "-it", container_name, shell]
+    # Use -l flag to start shell as login shell, ensuring .profile/.bashrc are sourced
+    exec_cmd = ["docker", "exec", "-it", container_name, shell, "-l"]
     LOGGER.info("Attaching interactive shell: %s", " ".join(exec_cmd))
     return subprocess.call(exec_cmd)
 
