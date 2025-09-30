@@ -64,14 +64,57 @@ rockerc
 
 This will search recursively for rockerc.yaml and pass those arguments to rocker
 
-### VS Code Integration
+### Unified Detached Execution & VS Code Integration
 
-For automatic VS Code integration, use `rockervsc` instead:
+`rockerc` now always launches (or reuses) the container in **detached** mode and then opens an interactive shell via `docker exec`. This avoids stdin/TTY interference and enables a reliable VS Code attach workflow.
+
+Basic run (detached + shell):
 ```
-rockervsc
+rockerc
 ```
 
-`rockervsc` functions the same as `rockerc` but will automatically launch and attach VS Code to the created container. This provides seamless development environment setup with VS Code running inside your rocker container.
+Attach VS Code as well (exact same container) using the new flag:
+```
+rockerc --vsc
+```
+
+For convenience, the `rockervsc` command is just an alias for:
+```
+rockerc --vsc
+```
+
+#### What Happens Under the Hood
+1. Merge global (`~/.rockerc.yaml`) and project `rockerc.yaml` config.
+2. If a `dockerfile` key exists, build a tagged image and strip the `pull` extension.
+3. Ensure required rocker flags are injected:
+	* `--detach`
+	* `--name <container>` / `--image-name <container>`
+	* Workspace volume mount: `<project>:/workspaces/<container>`
+4. Run `rocker` only if the container does not already exist.
+5. (Optional) Launch VS Code: `code --folder-uri vscode-remote://attached-container+<hex>/workspaces/<container>`
+6. Open an interactive shell with `docker exec -it <container> $SHELL`.
+
+#### Reusing Containers
+If a container with the derived name already exists, rockerc reuses it (skips rocker invocation) and simply attaches shell / VS Code (if `--vsc`).
+
+Force a fresh container (timestamp-rename the old one):
+```
+rockerc --force
+rockerc --vsc --force
+```
+
+#### Environment Variables
+You can tune startup wait timing (useful on slower hosts) with:
+* `ROCKERC_WAIT_TIMEOUT` (default: 20 seconds)
+* `ROCKERC_WAIT_INTERVAL` (default: 0.25 seconds)
+
+#### Create Dockerfile Artifacts
+If you include `create-dockerfile` in args or pass `--create-dockerfile`, a `Dockerfile.rocker` and `run_dockerfile.sh` script are generated using rocker's dry-run output.
+
+#### Notes & Caveats
+* Using `--rm` in custom extra args is discouraged with `--vsc` since closing the shell would remove the container out from under VS Code.
+* The volume mount path is standardized to `/workspaces/<container>` to match VS Code's remote container expectations.
+* Existing behavior of merging & deduplicating extensions (`args`) and blacklist remains unchanged.
 
 `rockervsc` forwards all arguments to `rockerc`, so you can use any `rockerc` options:
 ```
