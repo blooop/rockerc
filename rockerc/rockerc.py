@@ -328,7 +328,11 @@ def load_global_config() -> dict:
         return {}
     try:
         with open(config_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+            config = yaml.safe_load(f) or {}
+            # Validate args format
+            if config and "args" in config:
+                _validate_args_format(config["args"], str(config_path))
+            return config
     except yaml.YAMLError as e:
         logging.warning(f"Failed to parse YAML config at {config_path}: {e}")
         return {}
@@ -355,6 +359,47 @@ def deduplicate_extensions(extensions: list) -> list:
     return result
 
 
+def _validate_args_format(args: list, config_path: str) -> None:
+    """Validate that args list doesn't contain malformed aggregate strings.
+
+    Args:
+        args: List of extension arguments
+        config_path: Path to the config file for error messages
+
+    Raises:
+        ValueError: If malformed aggregate strings are detected
+    """
+    if not args:
+        return
+
+    for arg in args:
+        if not isinstance(arg, str):
+            continue
+
+        # Detect common YAML indentation issues that create aggregate strings
+        # Pattern: "word - word - word" (spaces around dashes)
+        if " - " in arg and not arg.strip().startswith("-"):
+            parts = [p.strip() for p in arg.split(" - ")]
+            # If we have multiple parts that look like extension names, it's likely a formatting issue
+            if len(parts) > 1 and all(
+                part and part.replace("-", "").replace("_", "").isalnum() for part in parts
+            ):
+                raise ValueError(
+                    f"Malformed args entry in {config_path}: '{arg}'\n"
+                    f"  This looks like a YAML indentation issue. Each extension should be a separate list item:\n"
+                    f"  \n"
+                    f"  ❌ Incorrect (inconsistent indentation):\n"
+                    f"  args:\n"
+                    f"   - {parts[0]}\n"
+                    f"    - {parts[1]}\n"
+                    f"  \n"
+                    f"  ✅ Correct (consistent indentation):\n"
+                    f"  args:\n"
+                    f"    - {parts[0]}\n"
+                    f"    - {parts[1]}"
+                )
+
+
 def collect_arguments(path: str = ".") -> dict:
     """Search for rockerc.yaml files and return a merged dictionary
 
@@ -374,7 +419,11 @@ def collect_arguments(path: str = ".") -> dict:
         print(f"loading {p}")
 
         with open(p.as_posix(), "r", encoding="utf-8") as f:
-            merged_dict.update(yaml.safe_load(f))
+            config = yaml.safe_load(f)
+            # Validate args format
+            if config and "args" in config:
+                _validate_args_format(config["args"], str(p))
+            merged_dict.update(config)
 
     # Start with global config as base, then override with project-specific settings
     final_dict = global_config | merged_dict
@@ -431,7 +480,11 @@ def collect_arguments_with_meta(path: str = ".") -> tuple[dict, dict]:
     for p in search_path.glob("rockerc.yaml"):
         project_files.append(p.as_posix())
         with open(p.as_posix(), "r", encoding="utf-8") as f:
-            project_config |= yaml.safe_load(f) or {}
+            config = yaml.safe_load(f) or {}
+            # Validate args format
+            if config and "args" in config:
+                _validate_args_format(config["args"], str(p))
+            project_config |= config
 
     # Extract metadata before merging
     g_args = global_config.get("args", []) or []
