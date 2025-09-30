@@ -8,7 +8,6 @@ from rockerc.rockerc import (
     yaml_dict_to_args,
     collect_arguments,
     deduplicate_extensions,
-    load_global_config,
     _parse_extra_flags,
 )
 

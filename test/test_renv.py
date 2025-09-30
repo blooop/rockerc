@@ -320,30 +320,30 @@ class TestManageContainer:
         assert result == 0
         mock_setup_worktree.assert_called_once_with(spec)
 
-    @patch("rockerc.renv.container_running")
-    @patch("rockerc.renv.container_exists")
-    @patch("rockerc.renv.run_rocker_command")
+    @patch("rockerc.core.execute_plan")
+    @patch("rockerc.core.prepare_launch_plan")
     @patch("rockerc.renv.setup_worktree")
     def test_manage_container_normal(self, *mocks):
         (
-            mock_setup_worktree,  # pylint: disable=unused-variable
-            mock_run_rocker,
-            mock_container_exists,
-            mock_container_running,
+            mock_setup_worktree,
+            mock_prepare_plan,
+            mock_execute_plan,
         ) = mocks
 
-        # Set up mocks for new container creation path
-        mock_container_exists.return_value = False
-        mock_container_running.return_value = False
-        mock_run_rocker.return_value = 0
+        # Set up mocks for new container creation path using core.py
+        mock_setup_worktree.return_value = pathlib.Path("/test/worktree")
+        mock_plan = Mock()
+        mock_prepare_plan.return_value = mock_plan
+        mock_execute_plan.return_value = 0
         spec = RepoSpec("blooop", "test_renv", "main")
 
         result = manage_container(spec)
 
         assert result == 0
         mock_setup_worktree.assert_called_once_with(spec)
-        # Should call run_rocker_command directly with no command (interactive mode)
-        mock_run_rocker.assert_called_once()
+        # Should call core.py's prepare_launch_plan and execute_plan
+        mock_prepare_plan.assert_called_once()
+        mock_execute_plan.assert_called_once_with(mock_plan)
 
     @patch("rockerc.renv.container_running")
     @patch("rockerc.renv.container_exists")

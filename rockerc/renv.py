@@ -123,12 +123,11 @@ def get_default_branch(repo_spec: RepoSpec) -> str:
     available_branches = get_available_branches(repo_spec)
     if "main" in available_branches:
         return "main"
-    elif "master" in available_branches:
+    if "master" in available_branches:
         return "master"
-    elif available_branches:
+    if available_branches:
         return available_branches[0]  # Return first available branch
-    else:
-        return "main"  # Default fallback
+    return "main"  # Default fallback
 
 
 def get_all_repo_branch_combinations() -> List[str]:
@@ -693,45 +692,54 @@ def _try_attach_with_fallback(
     return attach_to_container(container_name, command)
 
 
-def manage_container(
+def manage_container(  # pylint: disable=too-many-positional-arguments
     repo_spec: RepoSpec,
     command: Optional[List[str]] = None,
     force: bool = False,
     nocache: bool = False,
     no_container: bool = False,
+    vsc: bool = False,
 ) -> int:
-    """Manage container lifecycle and execution"""
+    """Manage container lifecycle and execution using core.py's unified flow"""
     if no_container:
         setup_worktree(repo_spec)
         logging.info(f"Worktree set up at: {get_worktree_dir(repo_spec)}")
         return 0
 
     # Set up worktree
-    setup_worktree(repo_spec)
-
+    worktree_dir = setup_worktree(repo_spec)
     container_name = get_container_name(repo_spec)
 
-    # Handle force rebuild by removing existing container
-    if force and container_exists(container_name):
-        logging.info(f"Force rebuild: removing existing container {container_name}")
-        subprocess.run(["docker", "rm", "-f", container_name], check=True)
+    # Build rocker configuration
+    config = build_rocker_config(repo_spec, force=force, nocache=nocache)
 
-    # Simplified approach: always use rocker to launch containers
-    # This avoids the complex reattachment logic that conflicts with rocker's security model
-    if force or not container_exists(container_name) or not container_running(container_name):
-        if container_exists(container_name) and not force:
-            # Remove stopped container and recreate with rocker
-            logging.info(f"Removing stopped container {container_name} to recreate with rocker")
-            subprocess.run(["docker", "rm", "-f", container_name], check=False)
+    # If a command is provided, use the legacy rocker command execution
+    # (core.py doesn't support passing commands through rocker yet)
+    if command:
+        from rockerc.core import (
+            container_exists as core_container_exists,
+            stop_and_remove_container,
+        )
 
-        logging.info(f"Using rocker to launch container {container_name}")
-        config = build_rocker_config(repo_spec, force=force, nocache=nocache)
+        if force and core_container_exists(container_name):
+            stop_and_remove_container(container_name)
+
         return run_rocker_command(config, command, detached=False)
 
-    # Container is running, try to attach but handle breakout detection
-    logging.info(f"Container {container_name} is running, attempting to attach")
-    setup_worktree(repo_spec)
-    return _try_attach_with_fallback(repo_spec, container_name, command)
+    # For interactive mode (no command), use core.py's unified flow
+    from rockerc.core import prepare_launch_plan, execute_plan
+
+    plan = prepare_launch_plan(
+        args_dict=config,
+        extra_cli="",  # renv builds complete config in build_rocker_config
+        container_name=container_name,
+        vscode=vsc,
+        force=force,
+        path=worktree_dir,
+        extensions=config.get("args", []),
+    )
+
+    return execute_plan(plan)
 
 
 def run_renv(args: Optional[List[str]] = None) -> int:
@@ -762,6 +770,8 @@ def run_renv(args: Optional[List[str]] = None) -> int:
 
     parser.add_argument("--install", action="store_true", help="Install shell autocompletion")
 
+    parser.add_argument("--vsc", action="store_true", help="Launch with VS Code integration")
+
     parsed_args = parser.parse_args(args)
 
     if parsed_args.install:
@@ -786,6 +796,7 @@ def run_renv(args: Optional[List[str]] = None) -> int:
             force=parsed_args.force,
             nocache=parsed_args.nocache,
             no_container=parsed_args.no_container,
+            vsc=parsed_args.vsc,
         )
 
     except ValueError as e:
