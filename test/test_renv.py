@@ -88,22 +88,20 @@ class TestRockerConfig:
         assert "ssh" in config["args"]  # Updated to match new default config
         assert "nocleanup" not in config["args"]  # Removed to let rocker manage security properly
         assert "cwd" in config["args"]  # cwd extension should be added automatically
-        assert config["cwd"] == "/workspace/test_renv"  # Check cwd parameter is set
         assert config["name"] == "test_renv-main"
         assert config["hostname"] == "test_renv-main"
         assert isinstance(config["volume"], list)
         assert any("/workspace/test_renv.git" in vol for vol in config["volume"])
         assert any("/workspace/test_renv" in vol for vol in config["volume"])
         assert len(config["volume"]) == 3  # bare repo, worktree, and worktree git directory
-        # workdir is now set via cwd extension, not oyr-run-arg
-        assert "--user=" not in config["oyr-run-arg"]  # User extension handles this
-        assert "REPO_NAME=test_renv" in config["oyr-run-arg"]
-        assert "BRANCH_NAME=main" in config["oyr-run-arg"]
+        # cwd extension picks up working directory, no explicit config needed
+        assert "_renv_target_dir" in config  # Internal marker for target directory
 
     def test_build_rocker_config_with_subfolder(self):
         spec = RepoSpec("blooop", "test_renv", "main", "src")
         config, _ = build_rocker_config(spec)
-        assert config["cwd"] == "/workspace/test_renv/src"  # cwd parameter should include subfolder
+        # Target directory should include subfolder
+        assert "src" in config["_renv_target_dir"]
         assert "cwd" in config["args"]  # cwd extension should be present
 
     def test_build_rocker_config_with_force(self):

@@ -412,10 +412,6 @@ def build_rocker_config(
     # Docker mount points
     docker_bare_repo_mount = f"/workspace/{repo_spec.repo}.git"
     docker_worktree_mount = f"/workspace/{repo_spec.repo}"
-    docker_workdir = docker_worktree_mount
-
-    if repo_spec.subfolder:
-        docker_workdir = f"{docker_worktree_mount}/{repo_spec.subfolder}"
 
     # For git worktrees, we need to mount the worktree git directory as well
     worktree_git_dir = repo_dir / "worktrees" / f"worktree-{repo_spec.branch.replace('/', '-')}"
@@ -440,7 +436,6 @@ def build_rocker_config(
     # Set renv-specific parameters
     config["name"] = container_name
     config["hostname"] = container_name
-    config["cwd"] = docker_workdir
 
     # Add renv-specific volumes
     config["volume"] = [
@@ -449,9 +444,10 @@ def build_rocker_config(
         f"{worktree_git_dir}:{docker_worktree_git_mount}",
     ]
 
-    # Add environment variables
-    config["oyr-run-arg"] = (
-        f"--env=REPO_NAME={repo_spec.repo} --env=BRANCH_NAME={repo_spec.branch.replace('/', '-')}"
+    # Store the target directory for changing cwd before launching
+    # The cwd extension will pick up the current working directory
+    config["_renv_target_dir"] = (
+        str(worktree_dir / repo_spec.subfolder) if repo_spec.subfolder else str(worktree_dir)
     )
 
     return config, meta
@@ -717,33 +713,46 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
         original_project_blacklist=meta.get("original_project_blacklist"),
     )
 
-    # If a command is provided, use the legacy rocker command execution
-    # (core.py doesn't support passing commands through rocker yet)
-    if command:
-        from rockerc.core import (
-            container_exists as core_container_exists,
-            stop_and_remove_container,
+    # Extract and remove the target directory from config
+    target_dir = config.pop("_renv_target_dir", str(worktree_dir))
+
+    # Change to the target directory so cwd extension picks it up
+    import os
+
+    original_cwd = os.getcwd()
+    os.chdir(target_dir)
+
+    try:
+        # If a command is provided, use the legacy rocker command execution
+        # (core.py doesn't support passing commands through rocker yet)
+        if command:
+            from rockerc.core import (
+                container_exists as core_container_exists,
+                stop_and_remove_container,
+            )
+
+            if force and core_container_exists(container_name):
+                stop_and_remove_container(container_name)
+
+            return run_rocker_command(config, command, detached=False)
+
+        # For interactive mode (no command), use core.py's unified flow
+        from rockerc.core import prepare_launch_plan, execute_plan
+
+        plan = prepare_launch_plan(
+            args_dict=config,
+            extra_cli="",  # renv builds complete config in build_rocker_config
+            container_name=container_name,
+            vscode=vsc,
+            force=force,
+            path=target_dir,
+            extensions=config.get("args", []),
         )
 
-        if force and core_container_exists(container_name):
-            stop_and_remove_container(container_name)
-
-        return run_rocker_command(config, command, detached=False)
-
-    # For interactive mode (no command), use core.py's unified flow
-    from rockerc.core import prepare_launch_plan, execute_plan
-
-    plan = prepare_launch_plan(
-        args_dict=config,
-        extra_cli="",  # renv builds complete config in build_rocker_config
-        container_name=container_name,
-        vscode=vsc,
-        force=force,
-        path=worktree_dir,
-        extensions=config.get("args", []),
-    )
-
-    return execute_plan(plan)
+        return execute_plan(plan)
+    finally:
+        # Restore original working directory
+        os.chdir(original_cwd)
 
 
 def run_renv(args: Optional[List[str]] = None) -> int:
