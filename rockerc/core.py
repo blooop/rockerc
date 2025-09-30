@@ -24,7 +24,6 @@ import subprocess
 import time
 import logging
 import binascii
-import datetime
 import os
 from typing import List
 
@@ -89,24 +88,30 @@ def container_exists(container_name: str) -> bool:
     return container_name in result.stdout.splitlines()
 
 
-def rename_existing_container(container_name: str) -> str:
-    """Rename an existing container to <name>_YYYYmmdd_HHMMSS and return new name.
+def stop_and_remove_container(container_name: str) -> None:
+    """Stop and remove an existing container.
 
-    Failure to rename is logged but not fatal; we proceed attempting to create a new container.
+    Failure to stop/remove is logged but not fatal; we proceed attempting to create a new container.
     """
-    new_name = f"{container_name}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
     try:
-        subprocess.run(
-            ["docker", "rename", container_name, new_name], check=True, capture_output=True
-        )
-        LOGGER.info("Renamed existing container '%s' -> '%s'", container_name, new_name)
+        subprocess.run(["docker", "stop", container_name], check=True, capture_output=True)
+        LOGGER.info("Stopped existing container '%s'", container_name)
     except subprocess.CalledProcessError as exc:  # pragma: no cover (hard to simulate reliably)
         LOGGER.warning(
-            "Failed to rename existing container '%s': %s. Attempting to continue.",
+            "Failed to stop existing container '%s': %s. Attempting to continue.",
             container_name,
             exc,
         )
-    return new_name
+
+    try:
+        subprocess.run(["docker", "rm", container_name], check=True, capture_output=True)
+        LOGGER.info("Removed existing container '%s'", container_name)
+    except subprocess.CalledProcessError as exc:  # pragma: no cover (hard to simulate reliably)
+        LOGGER.warning(
+            "Failed to remove existing container '%s': %s. Attempting to continue.",
+            container_name,
+            exc,
+        )
 
 
 def ensure_detached_args(base_args: str) -> str:
@@ -217,7 +222,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     force: bool,
     path: pathlib.Path,
 ) -> LaunchPlan:
-    """Prepare rocker command & rename existing container if forced.
+    """Prepare rocker command & stop/remove existing container if forced.
 
     If container exists and not force: we skip rocker run (rocker_cmd will be empty list).
     """
@@ -228,7 +233,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     created = False
 
     if exists and force:
-        rename_existing_container(container_name)
+        stop_and_remove_container(container_name)
         exists = False  # treat as not existing for creation phase
 
     injections = build_rocker_arg_injections(extra_cli, container_name, path)
