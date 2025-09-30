@@ -143,6 +143,51 @@ def extensions_changed(current: list[str], stored: list[str] | None) -> bool:
     return sorted(current) != sorted(stored)
 
 
+def render_extension_comparison_table(current: list[str], stored: list[str] | None) -> None:
+    """Render a comparison table showing current vs stored extensions.
+
+    Args:
+        current: Current extension list from configuration
+        stored: Extension list stored in container (or None if not available)
+    """
+    # Import here to avoid circular imports
+    from .rockerc import _format_table, _colorizer
+
+    col = _colorizer
+    current_set = set(current)
+    stored_set = set(stored) if stored else set()
+    all_extensions = sorted(current_set | stored_set)
+
+    rows = []
+    for ext in all_extensions:
+        in_current = ext in current_set
+        in_stored = ext in stored_set
+
+        # Determine status
+        if in_current and in_stored:
+            status = "unchanged"
+            status_txt = col.style(status, "CYAN")
+        elif in_current and not in_stored:
+            status = "added"
+            status_txt = col.style(status, "GREEN")
+        else:  # in_stored and not in_current
+            status = "removed"
+            status_txt = col.style(status, "RED")
+
+        # Format cells
+        current_cell = col.style(ext, "CYAN") if in_current else ""
+        stored_cell = col.style(ext, "CYAN") if in_stored else ""
+
+        rows.append([current_cell, stored_cell, status_txt])
+
+    # Print table
+    if rows:
+        headers = ["Current", "Stored", "Status"]
+        if col.enabled:
+            headers = [col.style(h, "CYAN", bold=True) for h in headers]
+        print(_format_table(rows, headers))
+
+
 def stop_and_remove_container(container_name: str) -> None:
     """Stop and remove an existing container.
 
@@ -323,8 +368,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
                 "Container '%s' exists but extensions have changed. Stopping and rebuilding...",
                 container_name,
             )
-            LOGGER.info("Current extensions: %s", sorted(current_extensions))
-            LOGGER.info("Stored extensions: %s", stored_extensions or "None")
+            render_extension_comparison_table(current_extensions, stored_extensions)
             stop_and_remove_container(container_name)
             exists = False
 
