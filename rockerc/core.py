@@ -88,6 +88,106 @@ def container_exists(container_name: str) -> bool:
     return container_name in result.stdout.splitlines()
 
 
+def get_container_extensions(container_name: str) -> list[str] | None:
+    """Retrieve the stored extension list from a container's environment variables.
+
+    Args:
+        container_name: Name of the container to inspect
+
+    Returns:
+        Sorted list of extension names, or None if container doesn't exist or env var is missing
+    """
+    try:
+        # Get environment variables from container config
+        result = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{range .Config.Env}}{{println .}}{{end}}",
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # Parse environment variables to find ROCKERC_EXTENSIONS
+        for line in result.stdout.splitlines():
+            if line.startswith("ROCKERC_EXTENSIONS="):
+                if ext_value := line.split("=", 1)[1]:
+                    # Split and sort to match how we store them
+                    return sorted(ext_value.split(","))
+        return None
+    except subprocess.CalledProcessError:
+        return None
+    except Exception as exc:  # pragma: no cover - unexpected system failure
+        LOGGER.warning("Failed to retrieve extensions from container '%s': %s", container_name, exc)
+        return None
+
+
+def extensions_changed(current: list[str], stored: list[str] | None) -> bool:
+    """Compare current extension configuration with stored configuration.
+
+    Args:
+        current: Current extension list from configuration
+        stored: Extension list stored in container label (or None if not available)
+
+    Returns:
+        True if extensions have changed or stored is None, False if they match
+    """
+    # No stored extensions means old container or missing label - treat as changed
+    return True if stored is None else sorted(current) != sorted(stored)
+
+
+def render_extension_comparison_table(current: list[str], stored: list[str] | None) -> str:
+    """Return a formatted comparison table showing current vs stored extensions.
+
+    Args:
+        current: Current extension list from configuration
+        stored: Extension list stored in container (or None if not available)
+
+    Returns:
+        Formatted table string showing extension comparison
+    """
+    # Import here to avoid circular imports
+    from .rockerc import _format_table, _colorizer
+
+    col = _colorizer
+    current_set = set(current)
+    stored_set = set(stored) if stored else set()
+    all_extensions = sorted(current_set | stored_set)
+
+    rows = []
+    for ext in all_extensions:
+        in_current = ext in current_set
+        in_stored = ext in stored_set
+
+        # Determine status - use same colors as main extension table
+        if in_current and in_stored:
+            status = "unchanged"
+            status_txt = col.style(status, "GREEN")  # like "loaded"
+        elif in_current:
+            status = "added"
+            status_txt = col.style(status, "GREEN")  # like "loaded"
+        else:  # in_stored and not in_current
+            status = "removed"
+            status_txt = col.style(status, "RED")  # like "blacklisted"
+
+        # Format cells - extension names in CYAN (consistent with main table)
+        current_cell = col.style(ext, "CYAN") if in_current else ""
+        stored_cell = col.style(ext, "CYAN") if in_stored else ""
+
+        rows.append([current_cell, stored_cell, status_txt])
+
+    # Return formatted table
+    if rows:
+        headers = ["Current", "Stored", "Status"]
+        if col.enabled:
+            headers = [col.style(h, "CYAN", bold=True) for h in headers]
+        return _format_table(rows, headers)
+    return ""
+
+
 def stop_and_remove_container(container_name: str) -> None:
     """Stop and remove an existing container.
 
@@ -135,6 +235,40 @@ def ensure_name_args(base_args: str, container_name: str) -> str:
     return " ".join(segments)
 
 
+def add_extension_env(base_args: str, extensions: list[str]) -> str:
+    """Add an environment variable storing the extension list for later comparison.
+
+    Args:
+        base_args: Current rocker argument string
+        extensions: List of extension names to store
+
+    Returns:
+        Updated argument string with environment variable
+
+    Note:
+        Extension names are validated to contain only alphanumeric, dash, and underscore
+        characters to prevent shell injection issues.
+    """
+    if not extensions:
+        return base_args
+
+    # Validate extension names for safety (alphanumeric, dash, underscore only)
+    import re
+
+    for ext in extensions:
+        if not re.match(r"^[a-zA-Z0-9_-]+$", ext):
+            LOGGER.warning(
+                "Extension name '%s' contains invalid characters. Skipping environment storage.",
+                ext,
+            )
+            return base_args
+
+    # Sort to normalize order for comparison
+    ext_value = ",".join(sorted(extensions))
+    env_arg = f"--env ROCKERC_EXTENSIONS={ext_value}"
+    return f"{base_args} {env_arg}".strip()
+
+
 def ensure_volume_binding(base_args: str, container_name: str, path: pathlib.Path) -> str:
     """Ensure a volume mount for the workspace folder to /workspaces/<container_name>.
 
@@ -147,7 +281,11 @@ def ensure_volume_binding(base_args: str, container_name: str, path: pathlib.Pat
 
 
 def build_rocker_arg_injections(
-    extra_cli: str, container_name: str, path: pathlib.Path, always_mount: bool = True
+    extra_cli: str,
+    container_name: str,
+    path: pathlib.Path,
+    extensions: list[str],
+    always_mount: bool = True,
 ) -> str:
     """Inject required arguments into the user-specified (or config) rocker args string.
 
@@ -156,6 +294,7 @@ def build_rocker_arg_injections(
     argline = extra_cli or ""
     argline = ensure_detached_args(argline)
     argline = ensure_name_args(argline, container_name)
+    argline = add_extension_env(argline, extensions)
     if always_mount:
         argline = ensure_volume_binding(argline, container_name, path)
     return argline
@@ -222,22 +361,56 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     vscode: bool,
     force: bool,
     path: pathlib.Path,
+    extensions: list[str] | None = None,
 ) -> LaunchPlan:
     """Prepare rocker command & stop/remove existing container if forced.
 
-    If container exists and not force: we skip rocker run (rocker_cmd will be empty list).
+    Args:
+        args_dict: Configuration dictionary (must contain 'args' key with extension list)
+        extra_cli: Additional CLI arguments to pass to rocker
+        container_name: Name for the container
+        vscode: Whether to attach VS Code
+        force: Whether to force rebuild
+        path: Working directory path
+        extensions: Optional explicit extension list; if None, extracted from args_dict["args"]
+
+    Returns:
+        LaunchPlan with container configuration and rocker command
+
+    Notes:
+        - If container exists and not force: we skip rocker run (rocker_cmd will be empty list)
+        - If container exists but extensions changed: require rebuild
     """
     container_hex = container_hex_name(container_name)
+
+    # Extract current extensions from config or use provided list
+    current_extensions = extensions if extensions is not None else args_dict.get("args", [])
 
     # If container exists
     exists = container_exists(container_name)
     created = False
 
+    if exists and not force:
+        # Check if extensions have changed
+        stored_extensions = get_container_extensions(container_name)
+        if extensions_changed(current_extensions, stored_extensions):
+            LOGGER.warning(
+                "Container '%s' exists but extensions have changed. Stopping and rebuilding...",
+                container_name,
+            )
+            comparison_table = render_extension_comparison_table(
+                current_extensions, stored_extensions
+            )
+            if comparison_table:
+                print(comparison_table)
+            stop_and_remove_container(container_name)
+            exists = False
+
     if exists and force:
         stop_and_remove_container(container_name)
         exists = False  # treat as not existing for creation phase
 
-    injections = build_rocker_arg_injections(extra_cli, container_name, path)
+    injections = build_rocker_arg_injections(extra_cli, container_name, path, current_extensions)
     # Build base rocker args from config dictionary (copy because yaml_dict_to_args mutates)
     from .rockerc import yaml_dict_to_args  # type: ignore
 
