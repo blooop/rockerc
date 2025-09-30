@@ -4,7 +4,7 @@ import pathlib
 import yaml
 import os
 import logging
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 
 # Unified detached execution & VS Code attach flow helpers
 from rockerc.core import (
@@ -317,13 +317,15 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     return cmd_str
 
 
-def load_global_config() -> dict:
-    """Load global rockerc configuration from ~/.rockerc.yaml
+def _load_and_validate_config(config_path: pathlib.Path) -> dict:
+    """Load and validate a YAML config file.
+
+    Args:
+        config_path: Path to the config file
 
     Returns:
-        dict: Parsed configuration dictionary, or empty dict if parsing fails.
+        dict: Parsed and validated configuration dictionary, or empty dict if parsing fails
     """
-    config_path = pathlib.Path.home() / ".rockerc.yaml"
     if not config_path.exists():
         return {}
     try:
@@ -339,6 +341,16 @@ def load_global_config() -> dict:
     except Exception as e:
         logging.warning(f"Error loading config at {config_path}: {e}")
         return {}
+
+
+def load_global_config() -> dict:
+    """Load global rockerc configuration from ~/.rockerc.yaml
+
+    Returns:
+        dict: Parsed configuration dictionary, or empty dict if parsing fails.
+    """
+    config_path = pathlib.Path.home() / ".rockerc.yaml"
+    return _load_and_validate_config(config_path)
 
 
 def deduplicate_extensions(extensions: list) -> list:
@@ -359,17 +371,17 @@ def deduplicate_extensions(extensions: list) -> list:
     return result
 
 
-def _validate_args_format(args: list, config_path: str) -> None:
+def _validate_args_format(args: Optional[list], config_path: str) -> None:
     """Validate that args list doesn't contain malformed aggregate strings.
 
     Args:
-        args: List of extension arguments
+        args: List of extension arguments or None
         config_path: Path to the config file for error messages
 
     Raises:
         ValueError: If malformed aggregate strings are detected
     """
-    if not args:
+    if not args or not isinstance(args, list):
         return
 
     for arg in args:
@@ -417,13 +429,8 @@ def collect_arguments(path: str = ".") -> dict:
     merged_dict = {}
     for p in search_path.glob("rockerc.yaml"):
         print(f"loading {p}")
-
-        with open(p.as_posix(), "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-            # Validate args format
-            if config and "args" in config:
-                _validate_args_format(config["args"], str(p))
-            merged_dict.update(config)
+        config = _load_and_validate_config(p)
+        merged_dict |= config
 
     # Start with global config as base, then override with project-specific settings
     final_dict = global_config | merged_dict
@@ -479,12 +486,8 @@ def collect_arguments_with_meta(path: str = ".") -> tuple[dict, dict]:
     project_files: List[str] = []
     for p in search_path.glob("rockerc.yaml"):
         project_files.append(p.as_posix())
-        with open(p.as_posix(), "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f) or {}
-            # Validate args format
-            if config and "args" in config:
-                _validate_args_format(config["args"], str(p))
-            project_config |= config
+        config = _load_and_validate_config(p)
+        project_config |= config
 
     # Extract metadata before merging
     g_args = global_config.get("args", []) or []

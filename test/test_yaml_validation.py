@@ -54,3 +54,22 @@ def test_validate_args_format_valid_single_dash():
     """Test that single dash (flag) passes validation."""
     valid_args = ["-v", "--verbose"]
     _validate_args_format(valid_args, "test.yaml")  # Should not raise
+
+
+def test_validate_args_format_non_list_non_none():
+    """Test that non-list, non-None args are handled gracefully."""
+    # Test with string input
+    _validate_args_format("some_string", "test.yaml")  # Should not raise
+
+    # Test with integer input
+    _validate_args_format(42, "test.yaml")  # Should not raise
+
+    # Test with dict input
+    _validate_args_format({"key": "value"}, "test.yaml")  # Should not raise
+
+
+def test_validate_args_format_mixed_valid_and_malformed():
+    """Test that a mix of valid and malformed args raises for the first malformed entry."""
+    mixed_args = ["nvidia", "x11", "nvidia - x11 - user", "git"]
+    with pytest.raises(ValueError, match="Malformed args entry"):
+        _validate_args_format(mixed_args, "test.yaml")
