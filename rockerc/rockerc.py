@@ -4,6 +4,7 @@ import pathlib
 import yaml
 import os
 import logging
+from typing import List, Tuple, Dict, Any
 
 # Unified detached execution & VS Code attach flow helpers
 from rockerc.core import (
@@ -11,6 +12,267 @@ from rockerc.core import (
     prepare_launch_plan,
     execute_plan,
 )
+
+
+#############################################
+# Coloring / Formatting Helpers
+#############################################
+
+
+class Colorizer:
+    """Unified color and formatting helper for consistent styling."""
+
+    ANSI = {
+        "RESET": "\033[0m",
+        "BOLD": "\033[1m",
+        "DIM": "\033[2m",
+        "STRIKE": "\033[9m",
+        "CYAN": "\033[36m",
+        "GREEN": "\033[32m",
+        "YELLOW": "\033[33m",
+        "RED": "\033[31m",
+        "MAGENTA": "\033[35m",
+        "BLUE": "\033[34m",
+    }
+
+    def __init__(self):
+        self.enabled = os.environ.get("NO_COLOR") is None and sys.stdout.isatty()
+
+    def style(self, text: str, color: str, *, bold: bool = False, strike: bool = False) -> str:
+        """Apply color and styling to text."""
+        if not self.enabled or not text:
+            return text
+        parts = [self.ANSI[color]]
+        if bold:
+            parts.append(self.ANSI["BOLD"])
+        if strike:
+            parts.append(self.ANSI["STRIKE"])
+        parts.append(text)
+        parts.append(self.ANSI["RESET"])
+        return "".join(parts)
+
+    def header(self, text: str) -> str:
+        """Format text as a header (blue, bold)."""
+        return self.style(text, "BLUE", bold=True)
+
+
+# Global instance for backward compatibility
+_colorizer = Colorizer()
+
+
+class _Colors:  # pragma: no cover - trivial container for backward compatibility
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    CYAN = "\033[36m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    RED = "\033[31m"
+    MAGENTA = "\033[35m"
+    BLUE = "\033[34m"
+
+
+def _use_color() -> bool:
+    # Respect NO_COLOR (https://no-color.org/) and only colorize when stdout is a TTY
+    return _colorizer.enabled
+
+
+def _c(txt: str, color: str, *, bold: bool = False) -> str:
+    if not _use_color():
+        return txt
+    prefix = color
+    if bold:
+        prefix += _Colors.BOLD
+    return f"{prefix}{txt}{_Colors.RESET}"
+
+
+def _header(txt: str) -> str:
+    return _c(txt, _Colors.BLUE, bold=True)
+
+
+#############################################
+# Simple Table Formatter
+#############################################
+
+
+def _format_table(rows: list[list[str]], headers: list[str]) -> str:
+    """Format a simple table with aligned columns.
+
+    Args:
+        rows: List of row data (each row is a list of strings)
+        headers: List of header strings
+
+    Returns:
+        Formatted table string
+    """
+    if not rows:
+        return ""
+
+    # Calculate column widths - need to strip ANSI codes for proper width calculation
+    def strip_ansi(text: str) -> str:
+        """Strip ANSI escape sequences from text for width calculation."""
+        import re
+
+        return re.sub(r"\033\[[0-9;]*m", "", text)
+
+    all_rows = [headers] + rows
+    col_count = len(headers)
+    col_widths = [0] * col_count
+
+    for row in all_rows:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(strip_ansi(cell)))
+
+    # Format rows
+    lines = []
+    for i, row in enumerate(all_rows):
+        formatted_cells = []
+        for j, cell in enumerate(row):
+            # Pad with spaces (accounting for ANSI codes)
+            visible_len = len(strip_ansi(cell))
+            padding = col_widths[j] - visible_len
+            formatted_cells.append(cell + " " * padding)
+        lines.append("  ".join(formatted_cells))
+
+    return "\n".join(lines)
+
+
+#############################################
+# Extension Table Renderer (new functionality)
+#############################################
+
+
+def _expand_aggregates(ext_list: list[str]) -> list[str]:
+    """Normalize aggregated tokens like 'nvidia - x11 - user' into individual extensions."""
+    expanded: list[str] = []
+    for item in ext_list:
+        if " - " in item and not item.strip().startswith("-"):
+            parts = [p.strip() for p in item.split(" - ") if p.strip()]
+            # Only expand if every part looks like a plausible extension token
+            if parts and all(part.replace("-", "").isalnum() for part in parts):
+                for p in parts:
+                    if p not in expanded:
+                        expanded.append(p)
+                continue
+        # Add non-aggregate items only if not already present
+        if item not in expanded:
+            expanded.append(item)
+    return expanded
+
+
+def render_extension_table(
+    final_args: list[str],
+    *,
+    original_global_args: list[str] | None,
+    original_project_args: list[str] | None,
+    blacklist: list[str],
+    removed_by_blacklist: list[str],
+    original_global_blacklist: list[str] | None = None,
+    original_project_blacklist: list[str] | None = None,
+) -> None:
+    """Render a provenance table of extensions.
+
+    Consumes pre-computed metadata – does NOT perform merge/filter logic.
+    Columns: Global | Local | Status
+    Group order: global-only, shared, local-only (stable original order).
+    Blacklisted entries appear with strikethrough & red status in-place.
+    """
+    col = _colorizer
+
+    # Expand aggregates first
+    g_raw = _expand_aggregates(original_global_args or [])
+    p_raw = _expand_aggregates(original_project_args or [])
+    g_set = set(g_raw)
+    p_set = set(p_raw)
+    bl_set = set(blacklist)
+    removed_set = set(removed_by_blacklist)
+    final_set = set(final_args)
+    g_bl_set = set(original_global_blacklist or [])
+    p_bl_set = set(original_project_blacklist or [])
+
+    # Remember original order for stable sorting (keep first occurrence only)
+    raw_index = {}
+    for i, n in enumerate(g_raw + p_raw):
+        if n not in raw_index:
+            raw_index[n] = i
+
+    def group_rank(name: str) -> int:
+        """Return group rank: 0=global-only, 1=shared, 2=local-only, 3=unknown."""
+        in_g = (name in g_set) or (name in g_bl_set)
+        in_p = (name in p_set) or (name in p_bl_set)
+        if in_g and not in_p:
+            return 0
+        if in_g and in_p:
+            return 1
+        return 2 if in_p and not in_g else 3
+
+    # Collect all unique names and sort by (group_rank, original_index)
+    all_names = (
+        set(g_raw) | set(p_raw) | g_bl_set | p_bl_set | set(blacklist) | set(removed_by_blacklist)
+    )
+
+    def sort_key(name: str):
+        return (group_rank(name), raw_index.get(name, float("inf")))
+
+    ordered = sorted(all_names, key=sort_key)
+
+    def extension_status(ext: str) -> str:
+        """Return status: loaded, blacklisted, or filtered."""
+        if ext in final_set:
+            return "loaded"
+        if ext in removed_set:
+            return "blacklisted"
+        return "filtered" if ext in bl_set else "loaded"
+
+    def fmt_cell(ext_name: str, show: bool, status: str, is_blacklisted_here: bool) -> str:
+        """Format a table cell with appropriate styling."""
+        if not show:
+            return ""
+
+        if status == "loaded":
+            return col.style(ext_name, "CYAN")
+        if status == "blacklisted":
+            if is_blacklisted_here:
+                return col.style(ext_name, "RED", strike=True)
+            # Required here but blacklisted elsewhere
+            return col.style(ext_name, "CYAN")
+        # filtered
+        return col.style(ext_name, "YELLOW")
+
+    # Build rows
+    rows = []
+    for ext in ordered:
+        status = extension_status(ext)
+
+        # Show extension in a column if:
+        # - It was in that column's args, OR
+        # - It was blacklisted in that column (to show what's being blocked)
+        show_in_global = (ext in g_set) or (ext in g_bl_set)
+        show_in_local = (ext in p_set) or (ext in p_bl_set)
+
+        # Apply strikethrough only in the column where it's blacklisted
+        # NOT in columns where it's just present in args
+        is_blacklisted_in_global = ext in g_bl_set
+        is_blacklisted_in_local = ext in p_bl_set
+
+        g_cell = fmt_cell(ext, show_in_global, status, is_blacklisted_in_global)
+        l_cell = fmt_cell(ext, show_in_local, status, is_blacklisted_in_local)
+
+        if status == "loaded":
+            status_txt = col.style(status, "GREEN")
+        elif status == "blacklisted":
+            status_txt = col.style(status, "RED")
+        else:
+            status_txt = col.style(status, "YELLOW")
+
+        rows.append([g_cell, l_cell, status_txt])
+
+    # Print table
+    if rows:
+        headers = ["Global", "Local", "Status"]
+        if col.enabled:
+            headers = [col.style(h, "CYAN", bold=True) for h in headers]
+        print(_format_table(rows, headers))
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
@@ -147,6 +409,64 @@ def collect_arguments(path: str = ".") -> dict:
     return final_dict
 
 
+def collect_arguments_with_meta(path: str = ".") -> tuple[dict, dict]:
+    """Enhanced variant of collect_arguments returning (final_config, metadata).
+
+    Metadata contains:
+      original_global_args: list | None
+      original_project_args: list | None
+      merged_args_before_blacklist: list
+      removed_by_blacklist: list
+      blacklist: list
+      global_config_used: bool
+      project_config_used: bool
+      source_files: list[str]
+    """
+    # Load configs to capture metadata
+    global_config = load_global_config()
+
+    search_path = pathlib.Path(path)
+    project_config: Dict[str, Any] = {}
+    project_files: List[str] = []
+    for p in search_path.glob("rockerc.yaml"):
+        project_files.append(p.as_posix())
+        with open(p.as_posix(), "r", encoding="utf-8") as f:
+            project_config |= yaml.safe_load(f) or {}
+
+    # Extract metadata before merging
+    g_args = global_config.get("args", []) or []
+    p_args = project_config.get("args", []) or []
+    merged_args = deduplicate_extensions(g_args + p_args) if (g_args or p_args) else []
+
+    g_bl = global_config.get("extension-blacklist", []) or []
+    p_bl = project_config.get("extension-blacklist", []) or []
+
+    if not isinstance(g_bl, list):
+        g_bl = [g_bl] if g_bl else []
+    if not isinstance(p_bl, list):
+        p_bl = [p_bl] if p_bl else []
+
+    blacklist = deduplicate_extensions(g_bl + p_bl) if (g_bl or p_bl) else []
+    removed = [a for a in merged_args if a in set(blacklist)] if (blacklist and merged_args) else []
+
+    # Now use collect_arguments to get the final merged result
+    final_dict = collect_arguments(path)
+
+    meta = {
+        "original_global_args": g_args or None,
+        "original_project_args": p_args or None,
+        "merged_args_before_blacklist": merged_args,
+        "removed_by_blacklist": removed,
+        "blacklist": blacklist,
+        "original_global_blacklist": g_bl or None,
+        "original_project_blacklist": p_bl or None,
+        "global_config_used": bool(global_config),
+        "project_config_used": bool(project_config),
+        "source_files": project_files,
+    }
+    return final_dict, meta
+
+
 def build_docker(dockerfile_path: str = ".") -> str:
     """Build a Docker image from a Dockerfile and return an autogenerated image tag based on where rocker was run.
 
@@ -163,47 +483,64 @@ def build_docker(dockerfile_path: str = ".") -> str:
     return tag
 
 
-def save_rocker_cmd(split_cmd: str):
+def _format_docker_run_script(run_command_section: str) -> str:
+    """Format docker run command as a bash script."""
+    lines = run_command_section.split()
+    formatted_lines = [
+        "#!/bin/bash",
+        "# This file was autogenerated by rockerc",
+        "docker run \\",
+    ]
+
+    # Skip 'docker run' which is split in the first two items
+    for i, line in enumerate(lines[2:], start=2):
+        suffix = " \\" if i < len(lines) - 1 else ""
+        formatted_lines.append(f"  {line}{suffix}")
+
+    return "\n".join(formatted_lines)
+
+
+def _write_dockerfile(dockerfile_content: str) -> None:
+    """Write Dockerfile content to Dockerfile.rocker."""
+    with open("Dockerfile.rocker", "w", encoding="utf-8") as dockerfile:
+        dockerfile.write("#This file was autogenerated by rockerc\n")
+        dockerfile.write(dockerfile_content)
+
+
+def _write_run_script(script_content: str, script_path: str) -> None:
+    """Write and make executable the run script."""
+    with open(script_path, "w", encoding="utf-8") as bash_script:
+        bash_script.write(script_content)
+    os.chmod(script_path, 0o755)
+
+
+def save_rocker_cmd(split_cmd: List[str]) -> str | None:
     dry_run = split_cmd + ["--mode", "dry-run"]
     try:
         s = subprocess.run(dry_run, capture_output=True, text=True, check=True)
         output = s.stdout
+
         # Split by "vvvvvv" to discard the top section
         _, after_vvvvvv = output.split("vvvvvv", 1)
         # Split by "^^^^^^" to get the second section
         section_to_save, after_caret = after_vvvvvv.split("^^^^^^", 1)
+
         # Save the Dockerfile section
-        with open("Dockerfile.rocker", "w", encoding="utf-8") as dockerfile:
-            dockerfile.write("#This file was autogenerated by rockerc\n")  # Add the shebang
-            dockerfile.write(section_to_save.strip())
+        dockerfile_content = section_to_save.strip()
+        _write_dockerfile(dockerfile_content)
+
         # Find the "run this command" section
         run_command_section = after_caret.split("Run this command: ", 1)[-1].strip()
-        formatted_script_lines = []
-        lines = run_command_section.split()
-        formatted_script_lines.append("#!/bin/bash")
-        formatted_script_lines.append("# This file was autogenerated by rockerc")
-        formatted_script_lines.append("docker run \\")
-
-        for i, line in enumerate(
-            lines[2:], start=2
-        ):  # Skip 'docker run' which is split in the first two items
-            if i < len(lines) - 1:
-                formatted_script_lines.append(f"  {line} \\")
-            else:
-                formatted_script_lines.append(f"  {line}")
-
-        formatted_script_content = "\n".join(formatted_script_lines)
+        formatted_script_content = _format_docker_run_script(run_command_section)
 
         bash_script_path = "run_dockerfile.sh"
-        with open(bash_script_path, "w", encoding="utf-8") as bash_script:
-            bash_script.write(formatted_script_content)
-
-        # Make the bash script executable
-        os.chmod(bash_script_path, 0o755)
+        _write_run_script(formatted_script_content, bash_script_path)
 
         logging.info(
-            f"Files have been saved:\n - Dockerfile.rocker\n - {bash_script_path} (executable)"
+            "Saved generated Dockerfile to Dockerfile.rocker and launch script to %s",
+            bash_script_path,
         )
+        return dockerfile_content
     except subprocess.CalledProcessError as e:
         logging.error("[rockerc] Error: rocker dry-run failed.")
         logging.error(f"[rockerc] Command: {' '.join(dry_run)}")
@@ -220,25 +557,87 @@ def save_rocker_cmd(split_cmd: str):
             "[rockerc] The output format may have changed or rocker failed to generate the expected output."
         )
         sys.exit(1)
+    return None
 
 
-def _parse_extra_flags(argv: list[str]) -> tuple[bool, bool, list[str]]:
-    """Parse ad-hoc flags for --vsc and --force, returning (vsc, force, remaining_args).
+def _parse_extra_flags(argv: List[str]) -> Tuple[bool, bool, bool, List[str]]:
+    """Parse ad-hoc flags for --vsc, --force and --verbose.
 
-    We keep this lightweight to avoid introducing argparse changes that might surprise users.
+    Returns: (vsc, force, verbose, remaining_args)
     """
     vsc = False
     force = False
-    remaining: list[str] = []
+    verbose = False
+    remaining: List[str] = []
     for a in argv:
-        if a in ("--vsc",):
+        if a == "--vsc":
             vsc = True
             continue
         if a in ("--force", "-f"):
             force = True
             continue
+        if a in ("--verbose", "-v"):
+            verbose = True
+            continue
         remaining.append(a)
-    return vsc, force, remaining
+    return vsc, force, verbose, remaining
+
+
+def _configure_logging(verbose: bool):  # pragma: no cover - formatting only
+    # Remove any existing handlers (avoid duplicate logs when called multiple times)
+    root = logging.getLogger()
+    if root.handlers:
+        for h in list(root.handlers):
+            root.removeHandler(h)
+
+    level = logging.DEBUG if verbose else logging.INFO
+    handler = logging.StreamHandler()
+
+    def format_record(record: logging.LogRecord) -> str:
+        level_color = {
+            "DEBUG": _Colors.MAGENTA,
+            "INFO": _Colors.GREEN,
+            "WARNING": _Colors.YELLOW,
+            "ERROR": _Colors.RED,
+            "CRITICAL": _Colors.RED,
+        }.get(record.levelname, _Colors.CYAN)
+        prefix = _c(record.levelname, level_color, bold=True)
+        msg = record.getMessage()
+        return f"{prefix}: {msg}"
+
+    class _Formatter(logging.Formatter):  # pragma: no cover - trivial
+        def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+            return format_record(record)
+
+    handler.setFormatter(_Formatter())
+    root.addHandler(handler)
+    root.setLevel(level)
+
+
+def _print_verbose_metadata(meta: dict) -> None:
+    """Print verbose metadata about configuration sources and merging."""
+    origins: List[str] = []
+    if meta.get("global_config_used"):
+        origins.append("global ~/.rockerc.yaml")
+    if meta.get("project_config_used"):
+        origins.append("project rockerc.yaml")
+    if origins:
+        print(_c("Sources:", _Colors.DIM, bold=True), _c(", ".join(origins), _Colors.DIM))
+    if meta.get("original_global_args"):
+        print(
+            _c("Global args:", _Colors.DIM, bold=True),
+            _c(", ".join(meta["original_global_args"]), _Colors.DIM),
+        )
+    if meta.get("original_project_args"):
+        print(
+            _c("Project args:", _Colors.DIM, bold=True),
+            _c(", ".join(meta["original_project_args"]), _Colors.DIM),
+        )
+    if meta.get("merged_args_before_blacklist"):
+        print(
+            _c("Merged (pre-blacklist):", _Colors.DIM, bold=True),
+            _c(", ".join(meta["merged_args_before_blacklist"]), _Colors.DIM),
+        )
 
 
 def run_rockerc(path: str = "."):
@@ -253,13 +652,15 @@ def run_rockerc(path: str = "."):
     6. Reuse existing container unless --force provided.
     """
 
-    logging.basicConfig(level=logging.INFO)
-
     # Raw arguments after script name
     cli_args = sys.argv[1:]
-    vsc, force, filtered_cli = _parse_extra_flags(cli_args)
+    vsc, force, verbose, filtered_cli = _parse_extra_flags(cli_args)
 
-    merged_dict = collect_arguments(path)
+    _configure_logging(verbose)
+
+    # Suppress banner printing per user request (previously printed 'rockerc' header)
+
+    merged_dict, meta = collect_arguments_with_meta(path)
 
     if not merged_dict:
         logging.error(
@@ -275,9 +676,9 @@ def run_rockerc(path: str = "."):
 
     # Dockerfile build handling
     if "dockerfile" in merged_dict:
-        logging.info("Building dockerfile...")
+        logging.info("Dockerfile specified -> building image locally")
         merged_dict["image"] = build_docker(merged_dict["dockerfile"])
-        logging.info("disabling 'pull' extension as a Dockerfile is used instead")
+        logging.info("Disabling 'pull' extension because a local Dockerfile was used")
         if "pull" in merged_dict["args"]:
             merged_dict["args"].remove("pull")
         merged_dict.pop("dockerfile")
@@ -311,8 +712,27 @@ def run_rockerc(path: str = "."):
         pathlib.Path(path).absolute(),
     )
 
+    # Render new provenance table (replaces prior summary block)
+    render_extension_table(
+        merged_dict.get("args", []),
+        original_global_args=meta.get("original_global_args"),
+        original_project_args=meta.get("original_project_args"),
+        blacklist=meta.get("blacklist", []),
+        removed_by_blacklist=meta.get("removed_by_blacklist", []),
+        original_global_blacklist=meta.get("original_global_blacklist"),
+        original_project_blacklist=meta.get("original_project_blacklist"),
+    )
+
+    # Show origin info (only if verbose to reduce noise)
+    if verbose:
+        _print_verbose_metadata(meta)
+
     if create_dockerfile and plan.rocker_cmd:
-        save_rocker_cmd(plan.rocker_cmd)
+        dockerfile_content = save_rocker_cmd(plan.rocker_cmd)
+        if verbose and dockerfile_content:
+            print(_header("Generated Dockerfile (Dockerfile.rocker):"))
+            print(_c(dockerfile_content, _Colors.DIM))
+            print(_c("(End Dockerfile)", _Colors.DIM))
 
     exit_code = execute_plan(plan)
     sys.exit(exit_code)
