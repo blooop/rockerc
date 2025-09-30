@@ -4,7 +4,7 @@ import pathlib
 import yaml
 import os
 import logging
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 
 # Unified detached execution & VS Code attach flow helpers
 from rockerc.core import (
@@ -317,6 +317,32 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     return cmd_str
 
 
+def _load_and_validate_config(config_path: pathlib.Path) -> dict:
+    """Load and validate a YAML config file.
+
+    Args:
+        config_path: Path to the config file
+
+    Returns:
+        dict: Parsed and validated configuration dictionary, or empty dict if parsing fails
+    """
+    if not config_path.exists():
+        return {}
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
+            # Validate args format
+            if config and "args" in config:
+                _validate_args_format(config["args"], str(config_path))
+            return config
+    except yaml.YAMLError as e:
+        logging.warning(f"Failed to parse YAML config at {config_path}: {e}")
+        return {}
+    except Exception as e:
+        logging.warning(f"Error loading config at {config_path}: {e}")
+        return {}
+
+
 def load_global_config() -> dict:
     """Load global rockerc configuration from ~/.rockerc.yaml
 
@@ -324,17 +350,7 @@ def load_global_config() -> dict:
         dict: Parsed configuration dictionary, or empty dict if parsing fails.
     """
     config_path = pathlib.Path.home() / ".rockerc.yaml"
-    if not config_path.exists():
-        return {}
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    except yaml.YAMLError as e:
-        logging.warning(f"Failed to parse YAML config at {config_path}: {e}")
-        return {}
-    except Exception as e:
-        logging.warning(f"Error loading config at {config_path}: {e}")
-        return {}
+    return _load_and_validate_config(config_path)
 
 
 def deduplicate_extensions(extensions: list) -> list:
@@ -355,6 +371,47 @@ def deduplicate_extensions(extensions: list) -> list:
     return result
 
 
+def _validate_args_format(args: Optional[list], config_path: str) -> None:
+    """Validate that args list doesn't contain malformed aggregate strings.
+
+    Args:
+        args: List of extension arguments or None
+        config_path: Path to the config file for error messages
+
+    Raises:
+        ValueError: If malformed aggregate strings are detected
+    """
+    if not args or not isinstance(args, list):
+        return
+
+    for arg in args:
+        if not isinstance(arg, str):
+            continue
+
+        # Detect common YAML indentation issues that create aggregate strings
+        # Pattern: "word - word - word" (spaces around dashes)
+        if " - " in arg and not arg.strip().startswith("-"):
+            parts = [p.strip() for p in arg.split(" - ")]
+            # If we have multiple parts that look like extension names, it's likely a formatting issue
+            if len(parts) > 1 and all(
+                part and part.replace("-", "").replace("_", "").isalnum() for part in parts
+            ):
+                raise ValueError(
+                    f"Malformed args entry in {config_path}: '{arg}'\n"
+                    f"  This looks like a YAML indentation issue. Each extension should be a separate list item:\n"
+                    f"  \n"
+                    f"  ❌ Incorrect (inconsistent indentation):\n"
+                    f"  args:\n"
+                    f"   - {parts[0]}\n"
+                    f"    - {parts[1]}\n"
+                    f"  \n"
+                    f"  ✅ Correct (consistent indentation):\n"
+                    f"  args:\n"
+                    f"    - {parts[0]}\n"
+                    f"    - {parts[1]}"
+                )
+
+
 def collect_arguments(path: str = ".") -> dict:
     """Search for rockerc.yaml files and return a merged dictionary
 
@@ -372,9 +429,8 @@ def collect_arguments(path: str = ".") -> dict:
     merged_dict = {}
     for p in search_path.glob("rockerc.yaml"):
         print(f"loading {p}")
-
-        with open(p.as_posix(), "r", encoding="utf-8") as f:
-            merged_dict.update(yaml.safe_load(f))
+        config = _load_and_validate_config(p)
+        merged_dict |= config
 
     # Start with global config as base, then override with project-specific settings
     final_dict = global_config | merged_dict
@@ -430,8 +486,8 @@ def collect_arguments_with_meta(path: str = ".") -> tuple[dict, dict]:
     project_files: List[str] = []
     for p in search_path.glob("rockerc.yaml"):
         project_files.append(p.as_posix())
-        with open(p.as_posix(), "r", encoding="utf-8") as f:
-            project_config |= yaml.safe_load(f) or {}
+        config = _load_and_validate_config(p)
+        project_config |= config
 
     # Extract metadata before merging
     g_args = global_config.get("args", []) or []
