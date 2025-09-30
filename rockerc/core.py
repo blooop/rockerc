@@ -163,18 +163,18 @@ def render_extension_comparison_table(current: list[str], stored: list[str] | No
         in_current = ext in current_set
         in_stored = ext in stored_set
 
-        # Determine status
+        # Determine status - use same colors as main extension table
         if in_current and in_stored:
             status = "unchanged"
-            status_txt = col.style(status, "CYAN")
+            status_txt = col.style(status, "GREEN")  # like "loaded"
         elif in_current and not in_stored:
             status = "added"
-            status_txt = col.style(status, "GREEN")
+            status_txt = col.style(status, "GREEN")  # like "loaded"
         else:  # in_stored and not in_current
             status = "removed"
-            status_txt = col.style(status, "RED")
+            status_txt = col.style(status, "RED")  # like "blacklisted"
 
-        # Format cells
+        # Format cells - extension names in CYAN (consistent with main table)
         current_cell = col.style(ext, "CYAN") if in_current else ""
         stored_cell = col.style(ext, "CYAN") if in_stored else ""
 
