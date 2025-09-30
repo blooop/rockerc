@@ -92,6 +92,13 @@ class TestGetContainerExtensions:
 
         assert result is None
 
+    def test_get_extensions_unexpected_exception(self):
+        """Test retrieving extensions when unexpected exception occurs."""
+        with patch("subprocess.run", side_effect=RuntimeError("Unexpected error")):
+            result = get_container_extensions("test_container")
+
+        assert result is None
+
 
 class TestExtensionsChanged:
     """Tests for extensions_changed function."""
@@ -197,3 +204,16 @@ class TestIntegration:
 
         # Check if changed
         assert extensions_changed(updated, stored)
+
+    def test_extensions_with_duplicates(self):
+        """Test that duplicate extension names are detected as changed."""
+        # Duplicates in current list
+        current_with_dups = ["nvidia", "x11", "nvidia", "user"]
+        # Stored list without duplicates
+        stored = ["nvidia", "user", "x11"]
+
+        # sorted() keeps duplicates, so lists differ
+        # sorted(current_with_dups) = ['nvidia', 'nvidia', 'user', 'x11']
+        # sorted(stored) = ['nvidia', 'user', 'x11']
+        # These are different, so should detect as changed
+        assert extensions_changed(current_with_dups, stored)

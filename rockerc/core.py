@@ -114,8 +114,7 @@ def get_container_extensions(container_name: str) -> list[str] | None:
         # Parse environment variables to find ROCKERC_EXTENSIONS
         for line in result.stdout.splitlines():
             if line.startswith("ROCKERC_EXTENSIONS="):
-                ext_value = line.split("=", 1)[1]
-                if ext_value:
+                if ext_value := line.split("=", 1)[1]:
                     # Split and sort to match how we store them
                     return sorted(ext_value.split(","))
         return None
@@ -136,19 +135,19 @@ def extensions_changed(current: list[str], stored: list[str] | None) -> bool:
     Returns:
         True if extensions have changed or stored is None, False if they match
     """
-    if stored is None:
-        # No stored extensions means old container or missing label - treat as changed
-        return True
-    # Sort both lists to normalize order before comparison
-    return sorted(current) != sorted(stored)
+    # No stored extensions means old container or missing label - treat as changed
+    return True if stored is None else sorted(current) != sorted(stored)
 
 
-def render_extension_comparison_table(current: list[str], stored: list[str] | None) -> None:
-    """Render a comparison table showing current vs stored extensions.
+def render_extension_comparison_table(current: list[str], stored: list[str] | None) -> str:
+    """Return a formatted comparison table showing current vs stored extensions.
 
     Args:
         current: Current extension list from configuration
         stored: Extension list stored in container (or None if not available)
+
+    Returns:
+        Formatted table string showing extension comparison
     """
     # Import here to avoid circular imports
     from .rockerc import _format_table, _colorizer
@@ -167,7 +166,7 @@ def render_extension_comparison_table(current: list[str], stored: list[str] | No
         if in_current and in_stored:
             status = "unchanged"
             status_txt = col.style(status, "GREEN")  # like "loaded"
-        elif in_current and not in_stored:
+        elif in_current:
             status = "added"
             status_txt = col.style(status, "GREEN")  # like "loaded"
         else:  # in_stored and not in_current
@@ -180,12 +179,13 @@ def render_extension_comparison_table(current: list[str], stored: list[str] | No
 
         rows.append([current_cell, stored_cell, status_txt])
 
-    # Print table
+    # Return formatted table
     if rows:
         headers = ["Current", "Stored", "Status"]
         if col.enabled:
             headers = [col.style(h, "CYAN", bold=True) for h in headers]
-        print(_format_table(rows, headers))
+        return _format_table(rows, headers)
+    return ""
 
 
 def stop_and_remove_container(container_name: str) -> None:
@@ -244,9 +244,25 @@ def add_extension_env(base_args: str, extensions: list[str]) -> str:
 
     Returns:
         Updated argument string with environment variable
+
+    Note:
+        Extension names are validated to contain only alphanumeric, dash, and underscore
+        characters to prevent shell injection issues.
     """
     if not extensions:
         return base_args
+
+    # Validate extension names for safety (alphanumeric, dash, underscore only)
+    import re
+
+    for ext in extensions:
+        if not re.match(r"^[a-zA-Z0-9_-]+$", ext):
+            LOGGER.warning(
+                "Extension name '%s' contains invalid characters. Skipping environment storage.",
+                ext,
+            )
+            return base_args
+
     # Sort to normalize order for comparison
     ext_value = ",".join(sorted(extensions))
     env_arg = f"--env ROCKERC_EXTENSIONS={ext_value}"
@@ -345,16 +361,30 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     vscode: bool,
     force: bool,
     path: pathlib.Path,
+    extensions: list[str] | None = None,
 ) -> LaunchPlan:
     """Prepare rocker command & stop/remove existing container if forced.
 
-    If container exists and not force: we skip rocker run (rocker_cmd will be empty list).
-    If container exists but extensions changed: require rebuild.
+    Args:
+        args_dict: Configuration dictionary (must contain 'args' key with extension list)
+        extra_cli: Additional CLI arguments to pass to rocker
+        container_name: Name for the container
+        vscode: Whether to attach VS Code
+        force: Whether to force rebuild
+        path: Working directory path
+        extensions: Optional explicit extension list; if None, extracted from args_dict["args"]
+
+    Returns:
+        LaunchPlan with container configuration and rocker command
+
+    Notes:
+        - If container exists and not force: we skip rocker run (rocker_cmd will be empty list)
+        - If container exists but extensions changed: require rebuild
     """
     container_hex = container_hex_name(container_name)
 
-    # Extract current extensions from config
-    current_extensions = args_dict.get("args", [])
+    # Extract current extensions from config or use provided list
+    current_extensions = extensions if extensions is not None else args_dict.get("args", [])
 
     # If container exists
     exists = container_exists(container_name)
@@ -368,7 +398,11 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
                 "Container '%s' exists but extensions have changed. Stopping and rebuilding...",
                 container_name,
             )
-            render_extension_comparison_table(current_extensions, stored_extensions)
+            comparison_table = render_extension_comparison_table(
+                current_extensions, stored_extensions
+            )
+            if comparison_table:
+                print(comparison_table)
             stop_and_remove_container(container_name)
             exists = False
 
