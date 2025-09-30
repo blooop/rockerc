@@ -18,12 +18,13 @@ class TestVscodeHelpers:
         container_hex = binascii.hexlify(container_name.encode()).decode()
         assert container_hex == "746573745f636f6e7461696e6572"
 
-        injections = build_rocker_arg_injections("", container_name, path)
-        # Order of injection is deterministic: --detach --name ... --image-name ... --volume ...
-        # build_rocker_arg_injections ensures detach, name, image-name, volume
+        extensions = ["nvidia", "user"]
+        injections = build_rocker_arg_injections("", container_name, path, extensions)
+        # Order of injection is deterministic: --detach --name ... --image-name ... --label ... --volume ...
+        # build_rocker_arg_injections ensures detach, name, image-name, label, volume
         assert (
             f"{injections}".strip()
-            == "--detach --name test_container --image-name test_container --volume /some/path:/workspaces/test_container:Z"
+            == "--detach --name test_container --image-name test_container --label rockerc.extensions=nvidia,user --volume /some/path:/workspaces/test_container:Z"
         )
 
     def test_handles_empty_container_name_string(self):
@@ -32,7 +33,8 @@ class TestVscodeHelpers:
         container_hex = binascii.hexlify(container_name.encode()).decode()
         assert container_hex == ""
 
-        injections = build_rocker_arg_injections("", container_name, path)
+        extensions = []
+        injections = build_rocker_arg_injections("", container_name, path, extensions)
         # Empty container name still produces flags (edge but retained for parity with legacy test)
         assert injections == "--detach --name  --image-name  --volume /some/path:/workspaces/:Z"
 

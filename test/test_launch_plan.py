@@ -10,9 +10,11 @@ def _base_args():
 def test_prepare_launch_plan_reuse_existing_container():
     name = derive_container_name("example")
     with patch("rockerc.core.container_exists", return_value=True):
-        plan = prepare_launch_plan(
-            _base_args(), "", name, vscode=False, force=False, path=pathlib.Path(".")
-        )
+        # Mock get_container_extensions to return matching extensions
+        with patch("rockerc.core.get_container_extensions", return_value=["user"]):
+            plan = prepare_launch_plan(
+                _base_args(), "", name, vscode=False, force=False, path=pathlib.Path(".")
+            )
     assert plan.container_name == name
     assert plan.rocker_cmd == []  # reuse means no rocker invocation
     assert plan.created is False
