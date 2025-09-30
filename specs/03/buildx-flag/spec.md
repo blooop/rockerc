@@ -1,8 +1,8 @@
 # Buildx Flag
 
-Add a `buildx` flag to enable Docker Buildx for building images.
+Enable Docker Buildx by default via environment variable.
 
 ## Scope
-- Add `--buildx` CLI flag
-- Modify `build_docker()` to use `docker buildx build` when flag is set
-- Default behavior remains `docker build` (no flag)
+- Set `DOCKER_BUILDKIT=1` environment variable by default
+- Enables buildx functionality for extensions that use docker commands
+- Add `--buildx` CLI flag (enabled by default)
