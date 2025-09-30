@@ -89,32 +89,36 @@ def container_exists(container_name: str) -> bool:
 
 
 def get_container_extensions(container_name: str) -> list[str] | None:
-    """Retrieve the stored extension list from a container's labels.
+    """Retrieve the stored extension list from a container's environment variables.
 
     Args:
         container_name: Name of the container to inspect
 
     Returns:
-        Sorted list of extension names, or None if container doesn't exist or label is missing
+        Sorted list of extension names, or None if container doesn't exist or env var is missing
     """
     try:
+        # Get environment variables from container config
         result = subprocess.run(
             [
                 "docker",
                 "inspect",
                 "--format",
-                '{{index .Config.Labels "rockerc.extensions"}}',
+                "{{range .Config.Env}}{{println .}}{{end}}",
                 container_name,
             ],
             capture_output=True,
             text=True,
             check=True,
         )
-        ext_value = result.stdout.strip()
-        if not ext_value or ext_value == "<no value>":
-            return None
-        # Split and sort to match how we store them
-        return sorted(ext_value.split(","))
+        # Parse environment variables to find ROCKERC_EXTENSIONS
+        for line in result.stdout.splitlines():
+            if line.startswith("ROCKERC_EXTENSIONS="):
+                ext_value = line.split("=", 1)[1]
+                if ext_value:
+                    # Split and sort to match how we store them
+                    return sorted(ext_value.split(","))
+        return None
     except subprocess.CalledProcessError:
         return None
     except Exception as exc:  # pragma: no cover - unexpected system failure
@@ -186,22 +190,22 @@ def ensure_name_args(base_args: str, container_name: str) -> str:
     return " ".join(segments)
 
 
-def add_extension_label(base_args: str, extensions: list[str]) -> str:
-    """Add a Docker label storing the extension list for later comparison.
+def add_extension_env(base_args: str, extensions: list[str]) -> str:
+    """Add an environment variable storing the extension list for later comparison.
 
     Args:
         base_args: Current rocker argument string
         extensions: List of extension names to store
 
     Returns:
-        Updated argument string with label
+        Updated argument string with environment variable
     """
     if not extensions:
         return base_args
     # Sort to normalize order for comparison
     ext_value = ",".join(sorted(extensions))
-    label_arg = f"--label rockerc.extensions={ext_value}"
-    return f"{base_args} {label_arg}".strip()
+    env_arg = f"--env ROCKERC_EXTENSIONS={ext_value}"
+    return f"{base_args} {env_arg}".strip()
 
 
 def ensure_volume_binding(base_args: str, container_name: str, path: pathlib.Path) -> str:
@@ -229,7 +233,7 @@ def build_rocker_arg_injections(
     argline = extra_cli or ""
     argline = ensure_detached_args(argline)
     argline = ensure_name_args(argline, container_name)
-    argline = add_extension_label(argline, extensions)
+    argline = add_extension_env(argline, extensions)
     if always_mount:
         argline = ensure_volume_binding(argline, container_name, path)
     return argline

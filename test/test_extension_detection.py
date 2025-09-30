@@ -5,43 +5,43 @@ from unittest.mock import Mock, patch
 
 
 from rockerc.core import (
-    add_extension_label,
+    add_extension_env,
     extensions_changed,
     get_container_extensions,
 )
 
 
-class TestAddExtensionLabel:
-    """Tests for add_extension_label function."""
+class TestAddExtensionEnv:
+    """Tests for add_extension_env function."""
 
-    def test_add_label_with_extensions(self):
-        """Test adding extension label with extensions."""
+    def test_add_env_with_extensions(self):
+        """Test adding extension env var with extensions."""
         base = "--detach --name test"
         extensions = ["nvidia", "x11", "user"]
-        result = add_extension_label(base, extensions)
+        result = add_extension_env(base, extensions)
         # Extensions should be sorted
-        assert "--label rockerc.extensions=nvidia,user,x11" in result
+        assert "--env ROCKERC_EXTENSIONS=nvidia,user,x11" in result
         assert "--detach" in result
         assert "--name test" in result
 
-    def test_add_label_empty_extensions(self):
-        """Test adding label with empty extension list."""
+    def test_add_env_empty_extensions(self):
+        """Test adding env var with empty extension list."""
         base = "--detach --name test"
         extensions = []
-        result = add_extension_label(base, extensions)
+        result = add_extension_env(base, extensions)
         assert result == base
-        assert "rockerc.extensions" not in result
+        assert "ROCKERC_EXTENSIONS" not in result
 
-    def test_add_label_normalizes_order(self):
+    def test_add_env_normalizes_order(self):
         """Test that extension order is normalized by sorting."""
         base = "--detach"
         extensions1 = ["z", "a", "m"]
         extensions2 = ["a", "m", "z"]
-        result1 = add_extension_label(base, extensions1)
-        result2 = add_extension_label(base, extensions2)
+        result1 = add_extension_env(base, extensions1)
+        result2 = add_extension_env(base, extensions2)
         # Both should produce same sorted order
-        assert "rockerc.extensions=a,m,z" in result1
-        assert "rockerc.extensions=a,m,z" in result2
+        assert "ROCKERC_EXTENSIONS=a,m,z" in result1
+        assert "ROCKERC_EXTENSIONS=a,m,z" in result2
 
 
 class TestGetContainerExtensions:
@@ -50,7 +50,7 @@ class TestGetContainerExtensions:
     def test_get_extensions_success(self):
         """Test successfully retrieving extensions from container."""
         mock_result = Mock()
-        mock_result.stdout = "nvidia,user,x11\n"
+        mock_result.stdout = "PATH=/usr/bin\nROCKERC_EXTENSIONS=nvidia,user,x11\nHOME=/root\n"
         mock_result.returncode = 0
 
         with patch("subprocess.run", return_value=mock_result) as mock_run:
@@ -63,10 +63,10 @@ class TestGetContainerExtensions:
         assert "inspect" in call_args
         assert "test_container" in call_args
 
-    def test_get_extensions_no_label(self):
-        """Test retrieving extensions when label is missing."""
+    def test_get_extensions_no_env_var(self):
+        """Test retrieving extensions when env var is missing."""
         mock_result = Mock()
-        mock_result.stdout = "<no value>\n"
+        mock_result.stdout = "PATH=/usr/bin\nHOME=/root\n"
         mock_result.returncode = 0
 
         with patch("subprocess.run", return_value=mock_result):
@@ -149,17 +149,17 @@ class TestIntegration:
         extensions = ["nvidia", "x11", "user", "git"]
         base_args = "--detach --name test"
 
-        # Add label
-        labeled_args = add_extension_label(base_args, extensions)
-        assert "rockerc.extensions=" in labeled_args
+        # Add env var
+        env_args = add_extension_env(base_args, extensions)
+        assert "ROCKERC_EXTENSIONS=" in env_args
 
         # Simulate storing in container
-        expected_label_value = "git,nvidia,user,x11"  # sorted
-        assert f"rockerc.extensions={expected_label_value}" in labeled_args
+        expected_value = "git,nvidia,user,x11"  # sorted
+        assert f"ROCKERC_EXTENSIONS={expected_value}" in env_args
 
         # Simulate retrieving
         mock_result = Mock()
-        mock_result.stdout = f"{expected_label_value}\n"
+        mock_result.stdout = f"PATH=/usr/bin\nROCKERC_EXTENSIONS={expected_value}\n"
         mock_result.returncode = 0
 
         with patch("subprocess.run", return_value=mock_result):
@@ -170,12 +170,11 @@ class TestIntegration:
 
     def test_detect_added_extension(self):
         """Test detecting when an extension is added."""
-        original = ["nvidia", "x11"]
         updated = ["nvidia", "x11", "user"]
 
         # Original stored in container
         mock_result = Mock()
-        mock_result.stdout = "nvidia,x11\n"
+        mock_result.stdout = "ROCKERC_EXTENSIONS=nvidia,x11\n"
         mock_result.returncode = 0
 
         with patch("subprocess.run", return_value=mock_result):
@@ -186,12 +185,11 @@ class TestIntegration:
 
     def test_detect_removed_extension(self):
         """Test detecting when an extension is removed."""
-        original = ["nvidia", "x11", "user"]
         updated = ["nvidia", "x11"]
 
         # Original stored in container
         mock_result = Mock()
-        mock_result.stdout = "nvidia,user,x11\n"
+        mock_result.stdout = "ROCKERC_EXTENSIONS=nvidia,user,x11\n"
         mock_result.returncode = 0
 
         with patch("subprocess.run", return_value=mock_result):

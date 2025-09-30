@@ -20,11 +20,11 @@ class TestVscodeHelpers:
 
         extensions = ["nvidia", "user"]
         injections = build_rocker_arg_injections("", container_name, path, extensions)
-        # Order of injection is deterministic: --detach --name ... --image-name ... --label ... --volume ...
-        # build_rocker_arg_injections ensures detach, name, image-name, label, volume
+        # Order of injection is deterministic: --detach --name ... --image-name ... --env ... --volume ...
+        # build_rocker_arg_injections ensures detach, name, image-name, env, volume
         assert (
             f"{injections}".strip()
-            == "--detach --name test_container --image-name test_container --label rockerc.extensions=nvidia,user --volume /some/path:/workspaces/test_container:Z"
+            == "--detach --name test_container --image-name test_container --env ROCKERC_EXTENSIONS=nvidia,user --volume /some/path:/workspaces/test_container:Z"
         )
 
     def test_handles_empty_container_name_string(self):
