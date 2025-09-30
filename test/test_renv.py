@@ -76,9 +76,10 @@ class TestPathHelpers:
 class TestRockerConfig:
     def test_build_rocker_config_basic(self):
         spec = RepoSpec("blooop", "test_renv", "main")
-        config = build_rocker_config(spec)
+        config, _ = build_rocker_config(spec)
 
-        assert config["image"] == "ubuntu:22.04"
+        # Image comes from rockerc.yaml config
+        assert "image" in config
         assert "user" in config["args"]
         assert "pull" in config["args"]
         assert "git" in config["args"]
@@ -86,37 +87,39 @@ class TestRockerConfig:
         assert "x11" in config["args"]  # Updated to match new default config
         assert "ssh" in config["args"]  # Updated to match new default config
         assert "nocleanup" not in config["args"]  # Removed to let rocker manage security properly
-        assert "cwd" not in config["args"]  # Should be removed per spec
+        assert "cwd" in config["args"]  # cwd extension should be added automatically
+        assert config["cwd"] == "/workspace/test_renv"  # Check cwd parameter is set
         assert config["name"] == "test_renv-main"
         assert config["hostname"] == "test_renv-main"
         assert isinstance(config["volume"], list)
         assert any("/workspace/test_renv.git" in vol for vol in config["volume"])
         assert any("/workspace/test_renv" in vol for vol in config["volume"])
         assert len(config["volume"]) == 3  # bare repo, worktree, and worktree git directory
-        assert "--workdir=/workspace/test_renv" in config["oyr-run-arg"]
+        # workdir is now set via cwd extension, not oyr-run-arg
         assert "--user=" not in config["oyr-run-arg"]  # User extension handles this
         assert "REPO_NAME=test_renv" in config["oyr-run-arg"]
         assert "BRANCH_NAME=main" in config["oyr-run-arg"]
 
     def test_build_rocker_config_with_subfolder(self):
         spec = RepoSpec("blooop", "test_renv", "main", "src")
-        config = build_rocker_config(spec)
-        assert "--workdir=/workspace/test_renv/src" in config["oyr-run-arg"]
+        config, _ = build_rocker_config(spec)
+        assert config["cwd"] == "/workspace/test_renv/src"  # cwd parameter should include subfolder
+        assert "cwd" in config["args"]  # cwd extension should be present
 
     def test_build_rocker_config_with_force(self):
         # Force rebuild is handled by container removal, not rocker extensions
         spec = RepoSpec("blooop", "test_renv", "main")
-        config = build_rocker_config(spec, force=True)
+        config, _ = build_rocker_config(spec, force=True)
         # Config should be the same regardless of force flag
-        assert config["image"] == "ubuntu:22.04"
+        assert "image" in config
         assert "user" in config["args"]
 
     def test_build_rocker_config_with_nocache(self):
         # Nocache is handled at container level, not rocker extensions
         spec = RepoSpec("blooop", "test_renv", "main")
-        config = build_rocker_config(spec, nocache=True)
+        config, _ = build_rocker_config(spec, nocache=True)
         # Config should be the same regardless of nocache flag
-        assert config["image"] == "ubuntu:22.04"
+        assert "image" in config
         assert "user" in config["args"]
 
 

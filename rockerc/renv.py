@@ -399,19 +399,15 @@ def build_rocker_config(
     force: bool = False,  # pylint: disable=unused-argument
     nocache: bool = False,  # pylint: disable=unused-argument
 ) -> Dict[str, Any]:
-    """Build rocker configuration combining renv and repository configurations"""
+    """Build rocker configuration using rockerc's config loading"""
+    from rockerc.rockerc import collect_arguments_with_meta
+
     container_name = get_container_name(repo_spec)
     repo_dir = get_repo_dir(repo_spec)
     worktree_dir = get_worktree_dir(repo_spec)
 
-    # Load and combine rockerc configurations
-    renv_config = load_renv_rockerc_config()
-    repo_config = load_repo_rockerc_config(worktree_dir)
-    combined_config = combine_rockerc_configs(renv_config, repo_config)
-
-    logging.info(f"Loaded renv config: {renv_config}")
-    logging.info(f"Loaded repo config: {repo_config}")
-    logging.info(f"Combined config: {combined_config}")
+    # Use rockerc's config loading from the worktree directory
+    config, meta = collect_arguments_with_meta(str(worktree_dir))
 
     # Docker mount points
     docker_bare_repo_mount = f"/workspace/{repo_spec.repo}.git"
@@ -435,35 +431,30 @@ def build_rocker_config(
     with open(git_config_file, "w", encoding="utf-8") as f:
         f.write(git_config_content)
 
-    # Start with base renv configuration
-    config = {
-        "image": combined_config.get("image", "ubuntu:22.04"),
-        "args": combined_config.get(
-            "args",
-            [
-                "user",
-                "pull",
-                "git-clone",
-                "git",
-                "persist-image",
-            ],
-        ),
-        "name": container_name,
-        "hostname": container_name,
-        "volume": [
-            f"{repo_dir}:{docker_bare_repo_mount}",
-            f"{worktree_dir}:{docker_worktree_mount}",
-            f"{worktree_git_dir}:{docker_worktree_git_mount}",
-        ],
-        "oyr-run-arg": f"--workdir={docker_workdir} --env=REPO_NAME={repo_spec.repo} --env=BRANCH_NAME={repo_spec.branch.replace('/', '-')}",
-    }
+    # Add cwd extension if not already present
+    if "args" not in config:
+        config["args"] = []
+    if "cwd" not in config["args"]:
+        config["args"].append("cwd")
 
-    # Add any additional configuration parameters from the combined config
-    for key, value in combined_config.items():
-        if key not in ["image", "args"]:
-            config[key] = value
+    # Set renv-specific parameters
+    config["name"] = container_name
+    config["hostname"] = container_name
+    config["cwd"] = docker_workdir
 
-    return config
+    # Add renv-specific volumes
+    config["volume"] = [
+        f"{repo_dir}:{docker_bare_repo_mount}",
+        f"{worktree_dir}:{docker_worktree_mount}",
+        f"{worktree_git_dir}:{docker_worktree_git_mount}",
+    ]
+
+    # Add environment variables
+    config["oyr-run-arg"] = (
+        f"--env=REPO_NAME={repo_spec.repo} --env=BRANCH_NAME={repo_spec.branch.replace('/', '-')}"
+    )
+
+    return config, meta
 
 
 def container_exists(container_name: str) -> bool:
@@ -654,7 +645,7 @@ def _handle_container_corruption(
 
     # Use rocker directly to launch a new container instead of trying to reattach
     logging.info("Using rocker to launch new container directly")
-    config = build_rocker_config(repo_spec, force=True, nocache=False)
+    config, _ = build_rocker_config(repo_spec, force=True, nocache=False)
     return run_rocker_command(config, command, detached=False)
 
 
@@ -710,8 +701,21 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
     worktree_dir = setup_worktree(repo_spec)
     container_name = get_container_name(repo_spec)
 
-    # Build rocker configuration
-    config = build_rocker_config(repo_spec, force=force, nocache=nocache)
+    # Build rocker configuration and get metadata
+    config, meta = build_rocker_config(repo_spec, force=force, nocache=nocache)
+
+    # Print extension table using rockerc's logic
+    from rockerc.rockerc import render_extension_table
+
+    render_extension_table(
+        config.get("args", []),
+        original_global_args=meta.get("original_global_args"),
+        original_project_args=meta.get("original_project_args"),
+        blacklist=meta.get("blacklist", []),
+        removed_by_blacklist=meta.get("removed_by_blacklist", []),
+        original_global_blacklist=meta.get("original_global_blacklist"),
+        original_project_blacklist=meta.get("original_project_blacklist"),
+    )
 
     # If a command is provided, use the legacy rocker command execution
     # (core.py doesn't support passing commands through rocker yet)
