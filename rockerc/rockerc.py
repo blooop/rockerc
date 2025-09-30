@@ -5,7 +5,6 @@ import yaml
 import os
 import logging
 from typing import List, Tuple, Dict, Any
-from tabulate import tabulate
 
 # Unified detached execution & VS Code attach flow helpers
 from rockerc.core import (
@@ -89,6 +88,53 @@ def _c(txt: str, color: str, *, bold: bool = False) -> str:
 
 def _header(txt: str) -> str:
     return _c(txt, _Colors.BLUE, bold=True)
+
+
+#############################################
+# Simple Table Formatter
+#############################################
+
+
+def _format_table(rows: list[list[str]], headers: list[str]) -> str:
+    """Format a simple table with aligned columns.
+
+    Args:
+        rows: List of row data (each row is a list of strings)
+        headers: List of header strings
+
+    Returns:
+        Formatted table string
+    """
+    if not rows:
+        return ""
+
+    # Calculate column widths - need to strip ANSI codes for proper width calculation
+    def strip_ansi(text: str) -> str:
+        """Strip ANSI escape sequences from text for width calculation."""
+        import re
+
+        return re.sub(r"\033\[[0-9;]*m", "", text)
+
+    all_rows = [headers] + rows
+    col_count = len(headers)
+    col_widths = [0] * col_count
+
+    for row in all_rows:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(strip_ansi(cell)))
+
+    # Format rows
+    lines = []
+    for i, row in enumerate(all_rows):
+        formatted_cells = []
+        for j, cell in enumerate(row):
+            # Pad with spaces (accounting for ANSI codes)
+            visible_len = len(strip_ansi(cell))
+            padding = col_widths[j] - visible_len
+            formatted_cells.append(cell + " " * padding)
+        lines.append("  ".join(formatted_cells))
+
+    return "\n".join(lines)
 
 
 #############################################
@@ -226,7 +272,7 @@ def render_extension_table(
         headers = ["Global", "Local", "Status"]
         if col.enabled:
             headers = [col.style(h, "CYAN", bold=True) for h in headers]
-        print(tabulate(rows, headers=headers, tablefmt="plain"))
+        print(_format_table(rows, headers))
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
