@@ -93,6 +93,7 @@ def stop_and_remove_container(container_name: str) -> None:
 
     Failure to stop/remove is logged but not fatal; we proceed attempting to create a new container.
     """
+    LOGGER.info("Stopping existing container '%s'...", container_name)
     try:
         subprocess.run(["docker", "stop", container_name], check=True, capture_output=True)
         LOGGER.info("Stopped existing container '%s'", container_name)
