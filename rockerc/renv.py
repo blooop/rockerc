@@ -183,6 +183,9 @@ _renv_completion() {
     
     # Complete repository specifications
     if [[ ${COMP_CWORD} -eq 1 ]]; then
+        # Disable automatic space after completion to allow typing @ immediately
+        compopt -o nospace
+
         local renv_root="$HOME/renv"
         if [[ -d "$renv_root" ]]; then
             local users=$(find "$renv_root" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^renv$")

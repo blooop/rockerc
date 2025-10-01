@@ -9,5 +9,5 @@ Modify bash completion logic in `renv.py` to:
 2. Allow user to manually type `@` to specify branch if needed
 
 ## Expected Behavior
-- `renv blo`<tab> → `renv blooop/test_renv` (with trailing space)
-- User can then type `@` to get branch completions
+- `renv blo`<tab> → `renv blooop/test_renv` (no trailing characters)
+- User can immediately type `@` to get branch completions
