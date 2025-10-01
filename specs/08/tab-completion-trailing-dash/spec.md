@@ -1,13 +1,16 @@
-# Tab Completion Trailing Dash Fix
+# Tab Completion and Cache Location Fix
 
-## Problem
-Tab completion for renv repo names adds a trailing dash (e.g., `renv blooop/test_renv-`) when it should complete without it (e.g., `renv blooop/test_renv`).
+## Problems
+1. Tab completion adds trailing space after repo name
+2. Cache directories visible in ~/renv/{owner}/ directory listings
+3. Branch completion after @ not working
 
 ## Solution
-Modify bash completion logic in `renv.py` to:
-1. Complete repo names without trailing characters
-2. Allow user to manually type `@` to specify branch if needed
+1. Move cache from `~/renv/{owner}/{repo}-cache` to `~/renv/.cache/{owner}/{repo}`
+2. Update completion to use nospace and properly handle branch completion
+3. Parse repo name from current word when @ is present
 
 ## Expected Behavior
-- `renv blo`<tab> → `renv blooop/test_renv` (no trailing characters)
-- User can immediately type `@` to get branch completions
+- `renv blo`<tab> → `renv blooop/test_renv` (no trailing space)
+- `renv blooop/test_renv@`<tab> → shows available branches
+- Cache hidden in `~/renv/.cache/` (starts with dot)
