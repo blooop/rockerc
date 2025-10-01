@@ -58,7 +58,7 @@ class TestPathHelpers:
     def test_get_repo_dir(self):
         spec = RepoSpec("blooop", "test_renv", "main")
         repo_dir = get_repo_dir(spec)
-        expected = pathlib.Path.home() / "renv" / "blooop" / "test_renv-cache"
+        expected = pathlib.Path.home() / "renv" / ".cache" / "blooop" / "test_renv"
         assert repo_dir == expected
 
     def test_get_worktree_dir(self):

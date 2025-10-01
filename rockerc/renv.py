@@ -183,38 +183,43 @@ _renv_completion() {
     
     # Complete repository specifications
     if [[ ${COMP_CWORD} -eq 1 ]]; then
-        # Disable automatic space after completion to allow typing @ immediately
-        compopt -o nospace
-
         local renv_root="$HOME/renv"
-        if [[ -d "$renv_root" ]]; then
-            local users=$(find "$renv_root" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^renv$")
-            local repos=""
-            for user in $users; do
-                if [[ -d "$renv_root/$user" ]]; then
-                    # Find cache directories (pattern: *-cache) to identify base repo names
-                    local cache_dirs=$(find "$renv_root/$user" -maxdepth 1 -type d -name "*-cache" -exec basename {} \\;)
-                    for cache_dir in $cache_dirs; do
-                        # Extract repo name by removing -cache suffix
-                        local repo="${cache_dir%-cache}"
+        local cache_root="$renv_root/.cache"
 
-                        # Add branches if @ is present in current word
-                        if [[ "$cur" == *"@"* ]]; then
-                            local repo_dir="$renv_root/$user/$cache_dir"
-                            if [[ -d "$repo_dir" ]]; then
-                                local branches=$(git -C "$repo_dir" branch -r 2>/dev/null | sed 's/origin\\///' | grep -v HEAD | xargs)
-                                for branch in $branches; do
-                                    repos="$repos $user/$repo@$branch"
-                                done
-                            fi
-                        else
-                            # Complete just the repo name without trailing dash
+        # Check if we're completing branches (after @)
+        if [[ "$cur" == *"@"* ]]; then
+            # Extract owner/repo from before @
+            local repo_part="${cur%%@*}"
+            local branch_part="${cur##*@}"
+            local owner="${repo_part%%/*}"
+            local repo="${repo_part##*/}"
+
+            local repo_dir="$cache_root/$owner/$repo"
+            if [[ -d "$repo_dir" ]]; then
+                local branches=$(git -C "$repo_dir" branch -r 2>/dev/null | sed 's/.*origin\\///' | grep -v HEAD | xargs)
+                local completions=""
+                for branch in $branches; do
+                    completions="$completions $repo_part@$branch"
+                done
+                COMPREPLY=( $(compgen -W "${completions}" -- ${cur}) )
+            fi
+        else
+            # Complete repository names without trailing space
+            compopt -o nospace
+
+            if [[ -d "$cache_root" ]]; then
+                local repos=""
+                local users=$(find "$cache_root" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^\\.cache$")
+                for user in $users; do
+                    if [[ -d "$cache_root/$user" ]]; then
+                        local user_repos=$(find "$cache_root/$user" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^$user$")
+                        for repo in $user_repos; do
                             repos="$repos $user/$repo"
-                        fi
-                    done
-                fi
-            done
-            COMPREPLY=( $(compgen -W "${repos}" -- ${cur}) )
+                        done
+                    fi
+                done
+                COMPREPLY=( $(compgen -W "${repos}" -- ${cur}) )
+            fi
         fi
     fi
     
@@ -252,7 +257,7 @@ complete -F _renv_completion renvvsc
 
 def get_repo_dir(repo_spec: RepoSpec) -> pathlib.Path:
     """Get the directory path for a repository cache"""
-    return get_renv_root() / repo_spec.owner / f"{repo_spec.repo}-cache"
+    return get_renv_root() / ".cache" / repo_spec.owner / repo_spec.repo
 
 
 def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
