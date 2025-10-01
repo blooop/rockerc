@@ -9,8 +9,8 @@ from rockerc.renv import (
     build_rocker_config,
     container_exists,
     container_running,
-    setup_bare_repo,
-    setup_worktree,
+    setup_cache_repo,
+    setup_branch_copy,
     manage_container,
     run_renv,
 )
@@ -58,7 +58,7 @@ class TestPathHelpers:
     def test_get_repo_dir(self):
         spec = RepoSpec("blooop", "test_renv", "main")
         repo_dir = get_repo_dir(spec)
-        expected = pathlib.Path.home() / "renv" / "blooop" / "test_renv"
+        expected = pathlib.Path.home() / "renv" / "blooop" / "test_renv-cache"
         assert repo_dir == expected
 
     def test_get_worktree_dir(self):
@@ -91,10 +91,8 @@ class TestRockerConfig:
         assert config["name"] == "test_renv-main"
         assert config["hostname"] == "test_renv-main"
         assert isinstance(config["volume"], list)
-        assert any("/workspace/test_renv" in vol for vol in config["volume"])
         assert any("/workspace/test_renv-main" in vol for vol in config["volume"])
-        assert any(":/test_renv" in vol for vol in config["volume"])
-        assert len(config["volume"]) == 3  # bare repo mounted for workspace and root access
+        assert len(config["volume"]) == 1  # only branch copy mounted
         # cwd extension picks up working directory, no explicit config needed
         assert "_renv_target_dir" in config  # Internal marker for target directory
 
@@ -160,16 +158,16 @@ class TestContainerHelpers:
 class TestGitOperations:
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
-    def test_setup_bare_repo_clone(self, mock_exists, mock_run):
+    def test_setup_cache_repo_clone(self, mock_exists, mock_run):
         mock_exists.return_value = False
         spec = RepoSpec("blooop", "test_renv", "main")
 
-        result = setup_bare_repo(spec)
+        result = setup_cache_repo(spec)
 
         expected_dir = get_repo_dir(spec)
         assert result == expected_dir
 
-        # Check git clone was called
+        # Check git clone was called (not bare)
         clone_call = None
         for call in mock_run.call_args_list:
             if "clone" in call[0][0]:
@@ -179,16 +177,16 @@ class TestGitOperations:
         assert clone_call is not None
         assert "git" in clone_call[0][0]
         assert "clone" in clone_call[0][0]
-        assert "--bare" in clone_call[0][0]
+        assert "--bare" not in clone_call[0][0]  # Should NOT be bare
         assert "git@github.com:blooop/test_renv.git" in clone_call[0][0]
 
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
-    def test_setup_bare_repo_fetch(self, mock_exists, mock_run):
+    def test_setup_cache_repo_fetch(self, mock_exists, mock_run):
         mock_exists.return_value = True
         spec = RepoSpec("blooop", "test_renv", "main")
 
-        setup_bare_repo(spec)
+        setup_cache_repo(spec)
 
         # Check git fetch was called
         fetch_call = None
@@ -202,40 +200,35 @@ class TestGitOperations:
         assert "fetch" in fetch_call[0][0]
         assert "--all" in fetch_call[0][0]
 
-    @patch("rockerc.renv.setup_bare_repo")
+    @patch("rockerc.renv.setup_cache_repo")
+    @patch("shutil.copytree")
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
-    @patch("pathlib.Path.write_text")
-    def test_setup_worktree_create(self, mock_write, mock_exists, mock_run, mock_setup_bare):
-        # Mock worktree_dir.exists() to return False, .git file to return False initially
+    def test_setup_branch_copy_create(self, mock_exists, mock_run, mock_copytree, mock_setup_cache):
+        # Mock branch_dir.exists() to return False
         mock_exists.return_value = False
         spec = RepoSpec("blooop", "test_renv", "main")
 
-        result = setup_worktree(spec)
+        result = setup_branch_copy(spec)
 
         expected_dir = get_worktree_dir(spec)
         assert result == expected_dir
 
-        mock_setup_bare.assert_called_once_with(spec)
+        mock_setup_cache.assert_called_once_with(spec)
 
-        # Check git worktree add was called with relative path
-        worktree_call = None
+        # Check that copytree was called to copy cache to branch directory
+        mock_copytree.assert_called_once()
+
+        # Check git checkout was called
+        checkout_call = None
         for call in mock_run.call_args_list:
-            if "worktree" in call[0][0]:
-                worktree_call = call
+            if "checkout" in call[0][0]:
+                checkout_call = call
                 break
 
-        assert worktree_call is not None
-        assert "git" in worktree_call[0][0]
-        assert "worktree" in worktree_call[0][0]
-        assert "add" in worktree_call[0][0]
-        # Check relative path is used
-        assert "../test_renv-main" in worktree_call[0][0]
-
-        # Check that relative gitdir was written
-        mock_write.assert_called_once()
-        written_content = mock_write.call_args[0][0]
-        assert "gitdir: ../test_renv/worktrees/test_renv-main" in written_content
+        assert checkout_call is not None
+        assert "git" in checkout_call[0][0]
+        assert "checkout" in checkout_call[0][0]
 
 
 class TestMainFunction:
@@ -322,40 +315,40 @@ class TestMainFunction:
 
 
 class TestManageContainer:
-    @patch("rockerc.renv.setup_worktree")
-    def test_manage_container_no_container(self, mock_setup_worktree):
+    @patch("rockerc.renv.setup_branch_copy")
+    def test_manage_container_no_container(self, mock_setup_branch_copy):
         spec = RepoSpec("blooop", "test_renv", "main")
 
         result = manage_container(spec, no_container=True)
 
         assert result == 0
-        mock_setup_worktree.assert_called_once_with(spec)
+        mock_setup_branch_copy.assert_called_once_with(spec)
 
     @patch("os.chdir")
     @patch("rockerc.renv.build_rocker_config")
     @patch("rockerc.renv.run_rocker_command")
     @patch("rockerc.core.container_exists")
-    @patch("rockerc.renv.setup_worktree")
+    @patch("rockerc.renv.setup_branch_copy")
     def test_manage_container_normal(self, *mocks):
         (
-            mock_setup_worktree,
+            mock_setup_branch_copy,
             mock_container_exists,
             mock_run_rocker,
             mock_build_config,
             mock_chdir,  # pylint: disable=unused-variable
         ) = mocks
 
-        mock_setup_worktree.return_value = pathlib.Path("/test/worktree")
+        mock_setup_branch_copy.return_value = pathlib.Path("/test/branch")
         mock_container_exists.return_value = False
         mock_run_rocker.return_value = 0
-        mock_build_config.return_value = ({"args": [], "_renv_target_dir": "/test/worktree"}, {})
+        mock_build_config.return_value = ({"args": [], "_renv_target_dir": "/test/branch"}, {})
 
         spec = RepoSpec("blooop", "test_renv", "main")
 
         result = manage_container(spec)
 
         assert result == 0
-        mock_setup_worktree.assert_called_once_with(spec)
+        mock_setup_branch_copy.assert_called_once_with(spec)
         mock_build_config.assert_called_once()
         mock_container_exists.assert_called_once()
         mock_run_rocker.assert_called_once()
@@ -364,10 +357,10 @@ class TestManageContainer:
     @patch("rockerc.renv.build_rocker_config")
     @patch("rockerc.core.container_exists")
     @patch("rockerc.renv.run_rocker_command")
-    @patch("rockerc.renv.setup_worktree")
+    @patch("rockerc.renv.setup_branch_copy")
     def test_manage_container_with_command(self, *mocks):
         (
-            mock_setup_worktree,  # pylint: disable=unused-variable
+            mock_setup_branch_copy,  # pylint: disable=unused-variable
             mock_run_rocker,
             mock_container_exists,
             mock_build_config,
@@ -377,7 +370,7 @@ class TestManageContainer:
         # Set up mocks for new container creation path
         mock_container_exists.return_value = False
         mock_run_rocker.return_value = 0
-        mock_build_config.return_value = ({"args": [], "_renv_target_dir": "/test/worktree"}, {})
+        mock_build_config.return_value = ({"args": [], "_renv_target_dir": "/test/branch"}, {})
         spec = RepoSpec("blooop", "test_renv", "main")
 
         result = manage_container(spec, command=["git", "status"])
@@ -412,9 +405,7 @@ class TestRockerCommandWorkingDirectory:
             "name": "test-container",
             "hostname": "test-container",
             "volume": [
-                "/path/to/worktree:/workspace/test_repo-main",
-                "/path/to/bare/repo:/workspace/test_repo",
-                "/path/to/bare/repo:/test_repo",
+                "/path/to/branch:/workspace/test_repo-main",
             ],
         }
 
@@ -425,7 +416,7 @@ class TestRockerCommandWorkingDirectory:
 
         # Check that subprocess.run was called with the correct cwd
         call_args = mock_subprocess_run.call_args
-        assert call_args[1]["cwd"] == "/path/to/worktree"
+        assert call_args[1]["cwd"] == "/path/to/branch"
 
         # Verify the command contains the deps extension
         cmd_parts = call_args[0][0]
@@ -437,10 +428,10 @@ class TestRockerCommandWorkingDirectory:
     def test_run_rocker_command_sets_cwd_even_without_deps(
         self, mock_path_exists, mock_subprocess_run
     ):
-        """Test that even without deps extension, rocker runs from worktree directory"""
+        """Test that even without deps extension, rocker runs from branch directory"""
         from rockerc.renv import run_rocker_command
 
-        # Mock path exists to return True for worktree directory
+        # Mock path exists to return True for branch directory
         mock_path_exists.return_value = True
         mock_subprocess_run.return_value.returncode = 0
 
@@ -451,9 +442,7 @@ class TestRockerCommandWorkingDirectory:
             "name": "test-container",
             "hostname": "test-container",
             "volume": [
-                "/path/to/worktree:/workspace/test_repo-main",
-                "/path/to/bare/repo:/workspace/test_repo",
-                "/path/to/bare/repo:/test_repo",
+                "/path/to/branch:/workspace/test_repo-main",
             ],
         }
 
@@ -462,26 +451,24 @@ class TestRockerCommandWorkingDirectory:
         assert result == 0
         mock_subprocess_run.assert_called_once()
 
-        # Check that subprocess.run was called with the worktree cwd
+        # Check that subprocess.run was called with the branch cwd
         call_args = mock_subprocess_run.call_args
-        assert call_args[1]["cwd"] == "/path/to/worktree"
+        assert call_args[1]["cwd"] == "/path/to/branch"
 
     @patch("subprocess.run")
-    def test_run_rocker_command_no_cwd_when_no_worktree_volume(self, mock_subprocess_run):
-        """Test that no cwd is set when there's no worktree volume mount"""
+    def test_run_rocker_command_no_cwd_when_no_branch_volume(self, mock_subprocess_run):
+        """Test that no cwd is set when there's no branch volume mount"""
         from rockerc.renv import run_rocker_command
 
         mock_subprocess_run.return_value.returncode = 0
 
-        # Create config without worktree volume (only bare repo)
+        # Create config without branch volume mount
         config = {
             "image": "ubuntu:22.04",
             "args": ["user", "git"],
             "name": "test-container",
             "hostname": "test-container",
-            "volume": [
-                "/path/to/bare/repo:/workspace/test_repo",
-            ],
+            "volume": [],
         }
 
         result = run_rocker_command(config)
@@ -510,9 +497,7 @@ class TestRockerCommandWorkingDirectory:
             "name": "test-container",
             "hostname": "test-container",
             "volume": [
-                "/path/to/worktree:/workspace/test_repo-main",
-                "/path/to/bare/repo:/workspace/test_repo",
-                "/path/to/bare/repo:/test_repo",
+                "/path/to/branch:/workspace/test_repo-main",
             ],
         }
 

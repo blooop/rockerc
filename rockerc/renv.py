@@ -242,18 +242,17 @@ complete -F _renv_completion renvvsc
 
 
 def get_repo_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Get the directory path for a repository"""
-    return get_renv_root() / repo_spec.owner / repo_spec.repo
+    """Get the directory path for a repository cache"""
+    return get_renv_root() / repo_spec.owner / f"{repo_spec.repo}-cache"
 
 
 def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Get the worktree directory path for a repository and branch
+    """Get the branch copy directory path for a repository and branch
 
-    Returns sibling path to bare repo: ~/renv/{owner}/{repo}-{branch}
+    Returns: ~/renv/{owner}/{repo}-{branch}
     """
     safe_branch = repo_spec.branch.replace("/", "-")
-    repo_dir = get_repo_dir(repo_spec)
-    return repo_dir.parent / f"{repo_dir.name}-{safe_branch}"
+    return get_renv_root() / repo_spec.owner / f"{repo_spec.repo}-{safe_branch}"
 
 
 def load_renv_rockerc_config() -> dict:
@@ -343,72 +342,79 @@ def get_container_name(repo_spec: RepoSpec) -> str:
     return f"{repo_spec.repo}-{safe_branch}"
 
 
-def setup_bare_repo(repo_spec: RepoSpec) -> pathlib.Path:
-    """Clone or update bare repository"""
+def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
+    """Clone or update cache repository (full clone, not bare)"""
     repo_dir = get_repo_dir(repo_spec)
     repo_url = f"git@github.com:{repo_spec.owner}/{repo_spec.repo}.git"
 
     if not repo_dir.exists():
-        logging.info(f"Cloning bare repository: {repo_url}")
+        logging.info(f"Cloning cache repository: {repo_url}")
         repo_dir.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["git", "clone", "--bare", repo_url, str(repo_dir)], check=True)
+        subprocess.run(["git", "clone", repo_url, str(repo_dir)], check=True)
     else:
-        logging.info(f"Fetching updates for: {repo_url}")
+        logging.info(f"Fetching updates for cache: {repo_url}")
         subprocess.run(["git", "-C", str(repo_dir), "fetch", "--all"], check=True)
 
     return repo_dir
 
 
-def setup_worktree(repo_spec: RepoSpec) -> pathlib.Path:
-    """Set up git worktree for the specified branch as sibling to bare repo"""
-    repo_dir = get_repo_dir(repo_spec)
-    worktree_dir = get_worktree_dir(repo_spec)
+def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
+    """Set up branch copy by copying from cache and checking out branch"""
+    cache_dir = get_repo_dir(repo_spec)
+    branch_dir = get_worktree_dir(repo_spec)
 
-    # Ensure bare repo exists
-    setup_bare_repo(repo_spec)
+    # Ensure cache repo exists and is updated
+    setup_cache_repo(repo_spec)
 
-    if not worktree_dir.exists():
-        # Check if the branch exists
+    if not branch_dir.exists():
+        logging.info(f"Creating branch copy for: {repo_spec.branch}")
+
+        # Copy entire cache directory to branch directory
+        shutil.copytree(cache_dir, branch_dir)
+
+        # Check if the branch exists in cache
         if not branch_exists(repo_spec, repo_spec.branch):
             default_branch = get_default_branch(repo_spec)
             logging.info(
                 f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default_branch}'"
             )
-
             # Create the new branch from the default branch
             subprocess.run(
-                ["git", "-C", str(repo_dir), "branch", repo_spec.branch, default_branch],
+                [
+                    "git",
+                    "-C",
+                    str(branch_dir),
+                    "checkout",
+                    "-b",
+                    repo_spec.branch,
+                    f"origin/{default_branch}",
+                ],
                 check=True,
             )
-
-        logging.info(f"Creating worktree for branch: {repo_spec.branch}")
-        # Create worktree as sibling using relative path
-        worktree_name = worktree_dir.name
+        else:
+            # Checkout the existing branch
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "checkout", repo_spec.branch],
+                check=True,
+            )
+            # Pull latest changes
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "pull"],
+                check=False,  # Don't fail if already up to date
+            )
+    else:
+        logging.info(f"Branch copy already exists: {branch_dir}")
+        # Fetch and pull latest changes
         subprocess.run(
-            [
-                "git",
-                "-C",
-                str(repo_dir),
-                "worktree",
-                "add",
-                f"../{worktree_name}",
-                repo_spec.branch,
-            ],
+            ["git", "-C", str(branch_dir), "fetch", "--all"],
             check=True,
         )
+        subprocess.run(
+            ["git", "-C", str(branch_dir), "pull"],
+            check=False,  # Don't fail if already up to date
+        )
 
-        # Convert absolute path to relative in .git file for host/container compatibility
-        git_file = worktree_dir / ".git"
-        if not git_file.exists():
-            time.sleep(0.5)  # Wait for filesystem to sync
-
-        relative_gitdir = f"../{repo_dir.name}/worktrees/{worktree_name}"
-        git_file.write_text(f"gitdir: {relative_gitdir}\n")
-        logging.info(f"Set relative gitdir: {relative_gitdir}")
-    else:
-        logging.info(f"Worktree already exists: {worktree_dir}")
-
-    return worktree_dir
+    return branch_dir
 
 
 def build_rocker_config(
@@ -420,16 +426,14 @@ def build_rocker_config(
     from rockerc.rockerc import collect_arguments_with_meta
 
     container_name = get_container_name(repo_spec)
-    repo_dir = get_repo_dir(repo_spec)
-    worktree_dir = get_worktree_dir(repo_spec)
+    branch_dir = get_worktree_dir(repo_spec)
 
-    # Use rockerc's config loading from the worktree directory
-    config, meta = collect_arguments_with_meta(str(worktree_dir))
+    # Use rockerc's config loading from the branch directory
+    config, meta = collect_arguments_with_meta(str(branch_dir))
 
-    # Docker mount points - preserve same relative structure as on host
+    # Docker mount point for branch copy
     safe_branch = repo_spec.branch.replace("/", "-")
-    docker_bare_repo_mount = f"/workspace/{repo_spec.repo}"
-    docker_worktree_mount = f"/workspace/{repo_spec.repo}-{safe_branch}"
+    docker_branch_mount = f"/workspace/{repo_spec.repo}-{safe_branch}"
 
     # Add cwd extension if not already present
     if "args" not in config:
@@ -441,17 +445,15 @@ def build_rocker_config(
     config["name"] = container_name
     config["hostname"] = container_name
 
-    # Add renv-specific volumes - mount with same relative structure
+    # Add renv-specific volume - only mount the branch copy
     config["volume"] = [
-        f"{worktree_dir}:{docker_worktree_mount}",
-        f"{repo_dir}:{docker_bare_repo_mount}",
-        f"{repo_dir}:/{repo_spec.repo}",
+        f"{branch_dir}:{docker_branch_mount}",
     ]
 
     # Store the target directory for changing cwd before launching
     # The cwd extension will pick up the current working directory
     config["_renv_target_dir"] = (
-        str(worktree_dir / repo_spec.subfolder) if repo_spec.subfolder else str(worktree_dir)
+        str(branch_dir / repo_spec.subfolder) if repo_spec.subfolder else str(branch_dir)
     )
 
     return config, meta
@@ -693,12 +695,12 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
 ) -> int:
     """Manage container lifecycle and execution using core.py's unified flow"""
     if no_container:
-        setup_worktree(repo_spec)
-        logging.info(f"Worktree set up at: {get_worktree_dir(repo_spec)}")
+        setup_branch_copy(repo_spec)
+        logging.info(f"Branch copy set up at: {get_worktree_dir(repo_spec)}")
         return 0
 
-    # Set up worktree
-    worktree_dir = setup_worktree(repo_spec)
+    # Set up branch copy
+    branch_dir = setup_branch_copy(repo_spec)
     container_name = get_container_name(repo_spec)
 
     # Build rocker configuration and get metadata
@@ -718,7 +720,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
     )
 
     # Extract and remove the target directory from config
-    target_dir = config.pop("_renv_target_dir", str(worktree_dir))
+    target_dir = config.pop("_renv_target_dir", str(branch_dir))
 
     # Change to the target directory so cwd extension picks it up
     import os
