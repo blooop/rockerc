@@ -189,18 +189,24 @@ _renv_completion() {
             local repos=""
             for user in $users; do
                 if [[ -d "$renv_root/$user" ]]; then
-                    local user_repos=$(find "$renv_root/$user" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^$user$")
-                    for repo in $user_repos; do
-                        repos="$repos $user/$repo"
-                        # Add branches if @ is present
+                    # Find cache directories (pattern: *-cache) to identify base repo names
+                    local cache_dirs=$(find "$renv_root/$user" -maxdepth 1 -type d -name "*-cache" -exec basename {} \\;)
+                    for cache_dir in $cache_dirs; do
+                        # Extract repo name by removing -cache suffix
+                        local repo="${cache_dir%-cache}"
+
+                        # Add branches if @ is present in current word
                         if [[ "$cur" == *"@"* ]]; then
-                            local repo_dir="$renv_root/$user/$repo"
+                            local repo_dir="$renv_root/$user/$cache_dir"
                             if [[ -d "$repo_dir" ]]; then
                                 local branches=$(git -C "$repo_dir" branch -r 2>/dev/null | sed 's/origin\\///' | grep -v HEAD | xargs)
                                 for branch in $branches; do
                                     repos="$repos $user/$repo@$branch"
                                 done
                             fi
+                        else
+                            # Complete just the repo name without trailing dash
+                            repos="$repos $user/$repo"
                         fi
                     done
                 fi
