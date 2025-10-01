@@ -47,3 +47,4 @@ Relative path `../test_renv/worktrees/test_renv-main` resolves correctly in both
 4. Update volume mounts in `build_rocker_config()` (no separate git metadata mount needed)
 5. Remove all code that rewrites `.git` files with container paths
 6. Update container naming and workspace paths
+7. Make sure rocker launches from the worktree mount so the `cwd` extension resolves to `/workspace/{repo}-{branch}`
