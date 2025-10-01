@@ -696,33 +696,43 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
     os.chdir(target_dir)
 
     try:
-        # If a command is provided, use the legacy rocker command execution
-        # (core.py doesn't support passing commands through rocker yet)
-        if command:
-            from rockerc.core import (
-                container_exists as core_container_exists,
-                stop_and_remove_container,
-            )
-
-            if force and core_container_exists(container_name):
-                stop_and_remove_container(container_name)
-
-            return run_rocker_command(config, command, detached=False)
-
-        # For interactive mode (no command), use core.py's unified flow
-        from rockerc.core import prepare_launch_plan, execute_plan
-
-        plan = prepare_launch_plan(
-            args_dict=config,
-            extra_cli="",  # renv builds complete config in build_rocker_config
-            container_name=container_name,
-            vscode=vsc,
-            force=force,
-            path=target_dir,
-            extensions=config.get("args", []),
+        from rockerc.core import (
+            container_exists as core_container_exists,
+            stop_and_remove_container,
         )
 
-        return execute_plan(plan)
+        exists = core_container_exists(container_name)
+        running = container_running(container_name) if exists else False
+
+        if force and exists:
+            stop_and_remove_container(container_name)
+            exists = False
+            running = False
+
+        # Handle VSCode mode
+        if vsc:
+            # Launch detached container if it doesn't exist
+            if not exists:
+                ret = run_rocker_command(config, None, detached=True)
+                if ret != 0:
+                    return ret
+
+            # Launch VSCode attached to container
+            from rockerc.core import launch_vscode, container_hex_name
+
+            container_hex = container_hex_name(container_name)
+            launch_vscode(container_name, container_hex)
+            return 0
+
+        # Handle interactive terminal mode
+        if exists and running:
+            # Container already running, attach to it
+            if command:
+                return attach_to_container(container_name, command)
+            return _try_attach_with_fallback(repo_spec, container_name, None)
+
+        # Need to create/start container
+        return run_rocker_command(config, command, detached=False)
     finally:
         # Restore original working directory
         os.chdir(original_cwd)
