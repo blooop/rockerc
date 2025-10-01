@@ -247,9 +247,13 @@ def get_repo_dir(repo_spec: RepoSpec) -> pathlib.Path:
 
 
 def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Get the worktree directory path for a repository and branch"""
+    """Get the worktree directory path for a repository and branch
+
+    Returns sibling path to bare repo: ~/renv/{owner}/{repo}-{branch}
+    """
     safe_branch = repo_spec.branch.replace("/", "-")
-    return get_repo_dir(repo_spec) / f"worktree-{safe_branch}"
+    repo_dir = get_repo_dir(repo_spec)
+    return repo_dir.parent / f"{repo_dir.name}-{safe_branch}"
 
 
 def load_renv_rockerc_config() -> dict:
@@ -356,7 +360,7 @@ def setup_bare_repo(repo_spec: RepoSpec) -> pathlib.Path:
 
 
 def setup_worktree(repo_spec: RepoSpec) -> pathlib.Path:
-    """Set up git worktree for the specified branch"""
+    """Set up git worktree for the specified branch as sibling to bare repo"""
     repo_dir = get_repo_dir(repo_spec)
     worktree_dir = get_worktree_dir(repo_spec)
 
@@ -378,16 +382,29 @@ def setup_worktree(repo_spec: RepoSpec) -> pathlib.Path:
             )
 
         logging.info(f"Creating worktree for branch: {repo_spec.branch}")
+        # Create worktree as sibling using relative path
+        worktree_name = worktree_dir.name
         subprocess.run(
-            ["git", "-C", str(repo_dir), "worktree", "add", str(worktree_dir), repo_spec.branch],
+            [
+                "git",
+                "-C",
+                str(repo_dir),
+                "worktree",
+                "add",
+                f"../{worktree_name}",
+                repo_spec.branch,
+            ],
             check=True,
         )
-        # Ensure worktree is fully populated before returning
+
+        # Convert absolute path to relative in .git file for host/container compatibility
         git_file = worktree_dir / ".git"
         if not git_file.exists():
             time.sleep(0.5)  # Wait for filesystem to sync
-        # Additional check to ensure directory is fully ready
-        time.sleep(0.1)
+
+        relative_gitdir = f"../{repo_dir.name}/worktrees/{worktree_name}"
+        git_file.write_text(f"gitdir: {relative_gitdir}\n")
+        logging.info(f"Set relative gitdir: {relative_gitdir}")
     else:
         logging.info(f"Worktree already exists: {worktree_dir}")
 
@@ -409,23 +426,10 @@ def build_rocker_config(
     # Use rockerc's config loading from the worktree directory
     config, meta = collect_arguments_with_meta(str(worktree_dir))
 
-    # Docker mount points
-    docker_bare_repo_mount = f"/workspace/{repo_spec.repo}.git"
-    docker_worktree_mount = f"/workspace/{repo_spec.repo}"
-
-    # For git worktrees, we need to mount the worktree git directory as well
-    worktree_git_dir = repo_dir / "worktrees" / f"worktree-{repo_spec.branch.replace('/', '-')}"
-    docker_worktree_git_mount = (
-        f"/workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}"
-    )
-
-    # Set up git configuration file on host
-    git_config_content = f"gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}"
-    git_config_file = worktree_dir / ".git"
-
-    # Ensure the git config file exists and has the right content
-    with open(git_config_file, "w", encoding="utf-8") as f:
-        f.write(git_config_content)
+    # Docker mount points - preserve same relative structure as on host
+    safe_branch = repo_spec.branch.replace("/", "-")
+    docker_bare_repo_mount = f"/workspace/{repo_spec.repo}"
+    docker_worktree_mount = f"/workspace/{repo_spec.repo}-{safe_branch}"
 
     # Add cwd extension if not already present
     if "args" not in config:
@@ -437,11 +441,10 @@ def build_rocker_config(
     config["name"] = container_name
     config["hostname"] = container_name
 
-    # Add renv-specific volumes
+    # Add renv-specific volumes - mount with same relative structure
     config["volume"] = [
         f"{repo_dir}:{docker_bare_repo_mount}",
         f"{worktree_dir}:{docker_worktree_mount}",
-        f"{worktree_git_dir}:{docker_worktree_git_mount}",
     ]
 
     # Store the target directory for changing cwd before launching
@@ -523,20 +526,6 @@ def attach_to_container(container_name: str, command: Optional[List[str]] = None
 
     logging.info(f"Attaching to container: {' '.join(cmd_parts)}")
     return subprocess.run(cmd_parts, check=False).returncode
-
-
-def _setup_git_in_container(container_name: str, repo_spec: RepoSpec) -> bool:
-    """Set up git configuration in running container. Returns True on success."""
-    fix_git_cmd = [
-        "docker",
-        "exec",
-        container_name,
-        "bash",
-        "-c",
-        f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}' > /workspace/{repo_spec.repo}/.git",
-    ]
-    result = subprocess.run(fix_git_cmd, capture_output=True, text=True, check=False)
-    return result.returncode == 0
 
 
 def run_rocker_command(
@@ -658,22 +647,6 @@ def _try_attach_with_fallback(
     )
 
     if test_result.returncode != 0 or "container breakout" in test_result.stderr.lower():
-        return _handle_container_corruption(repo_spec, container_name, command)
-
-    # Container seems functional, try to fix git configuration if needed
-    fix_git_cmd = [
-        "/bin/bash",
-        "-c",
-        f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{repo_spec.branch.replace('/', '-')}' > /workspace/{repo_spec.repo}/.git",
-    ]
-    fix_result = subprocess.run(
-        ["docker", "exec", "--user", "root", container_name] + fix_git_cmd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if fix_result.returncode != 0:
-        logging.warning(f"Failed to fix git file, container may be corrupted: {fix_result.stderr}")
         return _handle_container_corruption(repo_spec, container_name, command)
 
     return attach_to_container(container_name, command)
