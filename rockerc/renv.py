@@ -443,8 +443,9 @@ def build_rocker_config(
 
     # Add renv-specific volumes - mount with same relative structure
     config["volume"] = [
-        f"{repo_dir}:{docker_bare_repo_mount}",
         f"{worktree_dir}:{docker_worktree_mount}",
+        f"{repo_dir}:{docker_bare_repo_mount}",
+        f"{repo_dir}:/{repo_spec.repo}",
     ]
 
     # Store the target directory for changing cwd before launching
@@ -575,20 +576,50 @@ def run_rocker_command(
 
     # Add command if provided, otherwise default to bash
     if command:
-        # Check if command contains shell metacharacters and needs bash -c wrapping
-        if len(command) == 1 and any(
-            char in command[0] for char in [";", "&&", "||", "|", ">", "<"]
+        # Pass through explicit bash -c commands unchanged
+        if (
+            len(command) >= 2
+            and command[0] in {"bash", "/bin/bash"}
+            and command[1] in {"-c", "-lc"}
         ):
-            # Check if it's already wrapped in bash -c
-            if command[0].startswith("bash -c "):
-                # Already wrapped, use as-is
-                cmd_parts.extend(command)
-            else:
-                # Compound command, wrap in bash -c
-                cmd_parts.extend(["bash", "-c", command[0]])
-        else:
-            # Simple command or multiple arguments
             cmd_parts.extend(command)
+        else:
+            command_str: Optional[str] = None
+
+            if len(command) == 1:
+                command_str = command[0]
+            else:
+                # Detect shell metacharacters spread across multiple tokens (e.g. ['git', 'status;'])
+                if any(
+                    any(meta in arg for meta in [";", "&&", "||", "|", ">", "<"]) for arg in command
+                ):
+                    command_str = " ".join(command)
+
+            if command_str is not None:
+
+                def _quote_for_rocker(cmd: str) -> str:
+                    if (cmd.startswith('"') and cmd.endswith('"')) or (
+                        cmd.startswith("'") and cmd.endswith("'")
+                    ):
+                        return cmd
+                    escaped = cmd.replace('"', r"\"")
+                    return f'"{escaped}"'
+
+                if command_str.startswith("bash -c "):
+                    actual_cmd = command_str[8:].strip()
+                    if (
+                        actual_cmd.startswith("'")
+                        and actual_cmd.endswith("'")
+                        or actual_cmd.startswith('"')
+                        and actual_cmd.endswith('"')
+                    ):
+                        actual_cmd = actual_cmd[1:-1]
+                    cmd_parts.extend(["bash", "-c", _quote_for_rocker(actual_cmd)])
+                else:
+                    cmd_parts.extend(["bash", "-c", _quote_for_rocker(command_str)])
+            else:
+                # Simple command or multiple arguments without shell metacharacters
+                cmd_parts.extend(command)
     else:
         cmd_parts.extend(["bash"])
 

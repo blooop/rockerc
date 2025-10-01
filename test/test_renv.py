@@ -93,7 +93,8 @@ class TestRockerConfig:
         assert isinstance(config["volume"], list)
         assert any("/workspace/test_renv" in vol for vol in config["volume"])
         assert any("/workspace/test_renv-main" in vol for vol in config["volume"])
-        assert len(config["volume"]) == 2  # bare repo and worktree only
+        assert any(":/test_renv" in vol for vol in config["volume"])
+        assert len(config["volume"]) == 3  # bare repo mounted for workspace and root access
         # cwd extension picks up working directory, no explicit config needed
         assert "_renv_target_dir" in config  # Internal marker for target directory
 
@@ -332,24 +333,23 @@ class TestManageContainer:
 
     @patch("os.chdir")
     @patch("rockerc.renv.build_rocker_config")
-    @patch("rockerc.core.execute_plan")
-    @patch("rockerc.core.prepare_launch_plan")
+    @patch("rockerc.renv.run_rocker_command")
+    @patch("rockerc.core.container_exists")
     @patch("rockerc.renv.setup_worktree")
     def test_manage_container_normal(self, *mocks):
         (
             mock_setup_worktree,
-            mock_prepare_plan,
-            mock_execute_plan,
+            mock_container_exists,
+            mock_run_rocker,
             mock_build_config,
             mock_chdir,  # pylint: disable=unused-variable
         ) = mocks
 
-        # Set up mocks for new container creation path using core.py
         mock_setup_worktree.return_value = pathlib.Path("/test/worktree")
+        mock_container_exists.return_value = False
+        mock_run_rocker.return_value = 0
         mock_build_config.return_value = ({"args": [], "_renv_target_dir": "/test/worktree"}, {})
-        mock_plan = Mock()
-        mock_prepare_plan.return_value = mock_plan
-        mock_execute_plan.return_value = 0
+
         spec = RepoSpec("blooop", "test_renv", "main")
 
         result = manage_container(spec)
@@ -357,9 +357,8 @@ class TestManageContainer:
         assert result == 0
         mock_setup_worktree.assert_called_once_with(spec)
         mock_build_config.assert_called_once()
-        # Should call core.py's prepare_launch_plan and execute_plan
-        mock_prepare_plan.assert_called_once()
-        mock_execute_plan.assert_called_once_with(mock_plan)
+        mock_container_exists.assert_called_once()
+        mock_run_rocker.assert_called_once()
 
     @patch("os.chdir")
     @patch("rockerc.renv.build_rocker_config")
@@ -413,11 +412,10 @@ class TestRockerCommandWorkingDirectory:
             "name": "test-container",
             "hostname": "test-container",
             "volume": [
-                "/path/to/bare/repo:/workspace/test_repo.git",
-                "/path/to/worktree:/workspace/test_repo",
-                "/path/to/worktree/.git:/workspace/test_repo.git/worktrees/worktree-main",
+                "/path/to/worktree:/workspace/test_repo-main",
+                "/path/to/bare/repo:/workspace/test_repo",
+                "/path/to/bare/repo:/test_repo",
             ],
-            "oyr-run-arg": "--workdir=/workspace/test_repo --env=REPO_NAME=test_repo --env=BRANCH_NAME=main",
         }
 
         result = run_rocker_command(config)
@@ -453,8 +451,9 @@ class TestRockerCommandWorkingDirectory:
             "name": "test-container",
             "hostname": "test-container",
             "volume": [
-                "/path/to/bare/repo:/workspace/test_repo.git",
-                "/path/to/worktree:/workspace/test_repo",
+                "/path/to/worktree:/workspace/test_repo-main",
+                "/path/to/bare/repo:/workspace/test_repo",
+                "/path/to/bare/repo:/test_repo",
             ],
         }
 
@@ -481,7 +480,7 @@ class TestRockerCommandWorkingDirectory:
             "name": "test-container",
             "hostname": "test-container",
             "volume": [
-                "/path/to/bare/repo:/workspace/test_repo.git",
+                "/path/to/bare/repo:/workspace/test_repo",
             ],
         }
 
@@ -493,3 +492,37 @@ class TestRockerCommandWorkingDirectory:
         # Check that subprocess.run was called without cwd
         call_args = mock_subprocess_run.call_args
         assert call_args[1]["cwd"] is None
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_run_rocker_command_wraps_compound_token_list(
+        self, mock_path_exists, mock_subprocess_run
+    ):
+        """Compound commands split into tokens should be wrapped with bash -c"""
+        from rockerc.renv import run_rocker_command
+
+        mock_path_exists.return_value = True
+        mock_subprocess_run.return_value.returncode = 0
+
+        config = {
+            "image": "ubuntu:22.04",
+            "args": ["user", "git"],
+            "name": "test-container",
+            "hostname": "test-container",
+            "volume": [
+                "/path/to/worktree:/workspace/test_repo-main",
+                "/path/to/bare/repo:/workspace/test_repo",
+                "/path/to/bare/repo:/test_repo",
+            ],
+        }
+
+        command = ["git", "reset", "--hard", "HEAD;", "git", "clean", "-fd"]
+        run_rocker_command(config, command)
+
+        mock_subprocess_run.assert_called_once()
+        cmd_parts = mock_subprocess_run.call_args[0][0]
+        # Ensure bash -c wrapper is present with joined command string
+        assert "bash" in cmd_parts
+        bash_index = cmd_parts.index("bash")
+        assert cmd_parts[bash_index + 1] == "-c"
+        assert cmd_parts[bash_index + 2] == '"git reset --hard HEAD; git clean -fd"'

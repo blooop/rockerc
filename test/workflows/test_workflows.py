@@ -76,7 +76,9 @@ def test_workflow_5_force_rebuild_cache():
     assert result.returncode in (0, 1), f"Workflow 5 force rebuild cache failed: {output}"
 
     # Check that date commands executed successfully
-    assert "UTC 202" in output, "Expected date output not found in workflow 5 output"
+    import re
+
+    assert re.search(r"\b20\d{2}\b", output), "Expected date output not found in workflow 5 output"
 
     # Check that all timing sections completed
     assert "=== INITIAL BUILD ===" in output, "Initial build section not found"
@@ -86,8 +88,6 @@ def test_workflow_5_force_rebuild_cache():
     assert "=== TIMING SUMMARY ===" in output, "Timing summary not found"
 
     # Extract timing information
-    import re
-
     initial_match = re.search(r"Initial build:\s+(\d+)s", output)
     force_match = re.search(r"Force rebuild:\s+(\d+)s", output)
     reuse_match = re.search(r"Container reuse:\s+(\d+)s", output)

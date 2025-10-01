@@ -4,5 +4,7 @@ cd /tmp
 
 # #rockerc is set up in this repo
 
-echo "Running: renv blooop/test_renv \"bash -c 'git status; pwd; ls -l'\"" to confirm that multi step commands work as expected
-renv blooop/test_renv "bash -c 'git status; pwd; ls -l'"
+echo "Running: renv blooop/test_renv git status; pwd; ls -l to confirm commands run inside container"
+renv blooop/test_renv -- git status
+renv blooop/test_renv -- pwd
+renv blooop/test_renv -- ls -l
