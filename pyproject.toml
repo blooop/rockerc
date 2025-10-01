@@ -45,7 +45,7 @@ test = [
   "hypothesis>=6.104.2,<=6.140.2",
   "ruff>=0.5.0,<=0.13.2",
   "coverage>=7.5.4,<=7.10.7",
-  "pre-commit<=4.2.0",
+  "pre-commit<=4.3.0",
 ]
 #These are a list of externally maintained rocker extensions. use pip install rockerc[extensions] to install all of them
 extensions = [
