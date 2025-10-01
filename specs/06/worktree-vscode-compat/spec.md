@@ -11,27 +11,39 @@ Current `.git` file content:
 gitdir: /workspace/test_renv.git/worktrees/worktree-main
 ```
 
-This path only exists inside the container, not on the host where VSCode and rockerc run before container launch.
+Root cause: Current folder structure places worktrees as children of bare repo, and container mounts rename directories:
+```
+Host: ~/renv/blooop/test_renv/worktree-main/
+Container: /workspace/test_renv.git (bare) + /workspace/test_renv (worktree)
+```
 
 ## Goal
-Enable renv-managed worktrees to work seamlessly with both:
-1. Host tools (VSCode, rockerc, git commands before container launch)
-2. Container tools (git commands inside container)
+Enable renv-managed worktrees to work seamlessly with both host and container tools using relative paths.
 
 ## Solution
-Use **relative paths** in worktree `.git` files instead of absolute container paths.
+Restructure folders so worktrees are **siblings** of bare repo, maintaining identical relative structure in both host and container.
 
-Git worktrees support relative paths. The `.git` file should contain:
+**New structure:**
 ```
-gitdir: ../../worktrees/worktree-main
+~/renv/blooop/
+├── test_renv/              # bare repo (no .git suffix)
+│   └── worktrees/
+└── test_renv-main/         # worktree (sibling, not child)
+    └── .git → ../test_renv/worktrees/test_renv-main
 ```
 
-This works because:
-- On host: `~/renv/blooop/test_renv/worktree-main/../../worktrees/worktree-main` resolves correctly
-- In container: `/workspace/test_renv/../../worktrees/worktree-main` resolves correctly (when bare repo is mounted at `/workspace/test_renv.git`)
+**Container mounts:**
+```
+/workspace/test_renv/       # bare repo
+/workspace/test_renv-main/  # worktree
+```
+
+Relative path `../test_renv/worktrees/test_renv-main` resolves correctly in both locations.
 
 ## Implementation
-1. Update `setup_worktree()` in renv.py to use relative gitdir paths
-2. Remove code that rewrites `.git` file with container paths
-3. Ensure volume mounts align with relative path assumptions
-4. Test with both VSCode and rockerc on host, and git commands in container
+1. Change `get_worktree_dir()` to return sibling directory: `{owner}/{repo}-{branch}`
+2. Update `setup_worktree()` to create worktree as sibling
+3. Convert absolute path to relative in `.git` file after creation
+4. Update volume mounts in `build_rocker_config()` (no separate git metadata mount needed)
+5. Remove all code that rewrites `.git` files with container paths
+6. Update container naming and workspace paths

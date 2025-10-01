@@ -64,45 +64,74 @@ Cons:
 
 Given the goal of "checkout the repo in some appropriate way" and making it work with VSCode/rockerc, regular clones might be more appropriate.
 
-## Recommendation
-Explore both approaches:
-1. **Test if removing `.git` file modifications works** (let git worktree handle it)
-2. **Consider switching to regular clones** for better compatibility
+## Validated Solution
+Restructure folders so worktrees are siblings of bare repo, maintaining same relative paths in both host and container.
 
-Let's start with #1 as it requires minimal changes.
+**Proof:** Tested with git - relative paths in `.git` files work correctly when directory structure is preserved.
 
 ## Implementation Steps
 
-### Phase 1: Remove `.git` File Modifications
-1. Comment out lines 422-428 in `build_rocker_config()` (don't write container path)
-2. Remove `_setup_git_in_container()` calls
-3. Remove git fixup logic in `_try_attach_with_fallback()`
-4. Test with:
-   - `renv` command (git should work in container)
-   - VSCode opening the worktree folder (should detect git)
-   - rockerc from the worktree folder (should detect git branch)
+### 1. Update Directory Functions
+- `get_repo_dir()`: Keep as `~/renv/{owner}/{repo}` (bare repo, no `.git` suffix)
+- `get_worktree_dir()`: Change to return `~/renv/{owner}/{repo}-{safe_branch}` (sibling, not child)
+- `get_container_name()`: Keep as `{repo}-{safe_branch}`
 
-### Phase 2: Verify Volume Mounts
-1. Ensure bare repo and worktree git metadata are accessible in container
-2. Current mounts in `build_rocker_config()`:
-   - Bare repo: `{repo_dir}:{docker_bare_repo_mount}`
-   - Worktree: `{worktree_dir}:{docker_worktree_mount}`
-   - Git metadata: `{worktree_git_dir}:{docker_worktree_git_mount}`
-3. Verify the worktree git metadata mount is correct
+### 2. Update `setup_worktree()`
+```python
+def setup_worktree(repo_spec: RepoSpec) -> pathlib.Path:
+    repo_dir = get_repo_dir(repo_spec)
+    worktree_dir = get_worktree_dir(repo_spec)  # Now returns sibling path
 
-### Phase 3: Test Scenarios
-1. Start renv on a repo/branch
-2. Open worktree folder in VSCode on host → should see git status
-3. Run rockerc in worktree folder → should detect branch
-4. Inside container, run `git status` → should work
-5. Test with renvvsc → VSCode should attach with git working
+    setup_bare_repo(repo_spec)
 
-### Phase 4 (If Phase 1 fails): Regular Clones
-1. Change `setup_worktree()` to `setup_clone()`
-2. Use `git clone -b {branch}` instead of `git worktree add`
-3. Adjust folder structure: `~/renv/{owner}/{repo}/{branch}/`
-4. Simplify volume mounts (no separate git metadata mount needed)
-5. Update tests
+    if not worktree_dir.exists():
+        # Create worktree as sibling (use relative path from parent dir)
+        worktree_name = worktree_dir.name
+        subprocess.run(
+            ["git", "-C", str(repo_dir), "worktree", "add",
+             f"../{worktree_name}", repo_spec.branch],
+            check=True
+        )
+
+        # Convert absolute path to relative in .git file
+        git_file = worktree_dir / ".git"
+        relative_gitdir = f"../{repo_dir.name}/worktrees/{worktree_name}"
+        git_file.write_text(f"gitdir: {relative_gitdir}\n")
+
+    return worktree_dir
+```
+
+### 3. Update `build_rocker_config()` Volume Mounts
+```python
+# Old (3 mounts with renaming):
+volumes = [
+    f"{repo_dir}:{docker_bare_repo_mount}",  # → /workspace/test_renv.git
+    f"{worktree_dir}:{docker_worktree_mount}",  # → /workspace/test_renv
+    f"{worktree_git_dir}:{docker_worktree_git_mount}",  # metadata
+]
+
+# New (2 mounts preserving structure):
+volumes = [
+    f"{repo_dir}:/workspace/{repo_spec.repo}",  # bare repo
+    f"{worktree_dir}:/workspace/{repo_spec.repo}-{safe_branch}",  # worktree
+]
+```
+
+### 4. Remove `.git` File Rewriting
+- Remove lines 422-428 in `build_rocker_config()` (git config file writing)
+- Remove `_setup_git_in_container()` function
+- Remove git fixup in `_try_attach_with_fallback()`
+
+### 5. Update Container Working Directory
+The cwd extension should target `/workspace/{repo}-{branch}` instead of `/workspace/{repo}`
+
+### 6. Test Scenarios
+1. Fresh setup: `renv blooop/test_renv@main`
+2. Verify on host: `cd ~/renv/blooop/test_renv-main && git status`
+3. Verify in container: enter and run `git status`
+4. VSCode on host: open worktree folder, should detect git
+5. rockerc from worktree: should detect branch
+6. renvvsc: VSCode should attach with working git
 
 ## Files to Modify
 - `rockerc/renv.py`:
