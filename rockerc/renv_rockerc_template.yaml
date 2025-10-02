@@ -1,9 +1,10 @@
 image: ubuntu:22.04
 args:
+  - pull
   - persist-image
   - x11
   - user
-  - pull
+  - cwd
   - git
   - git-clone
   - ssh
