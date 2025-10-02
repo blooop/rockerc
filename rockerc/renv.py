@@ -633,6 +633,9 @@ def run_rocker_command(
 
     # Add named parameters (but skip special ones we handle separately)
     for key, value in config.items():
+        # Skip internal markers (keys starting with underscore) and special keys
+        if key.startswith("_"):
+            continue
         if key not in ["image", "args", "volume", "oyr-run-arg"]:
             cmd_parts.extend([f"--{key}", str(value)])
 
