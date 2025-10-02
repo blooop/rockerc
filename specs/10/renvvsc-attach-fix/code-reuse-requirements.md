@@ -175,11 +175,35 @@ renv.run_renv(--vsc)
 
 4. **Timing matters:** Restore cwd **between** launch and attach phases, not at the end
 
-## Future Refactoring Opportunities
+## Final Implementation (Completed)
 
-If more commonality is needed:
-1. Extract config transformation layer to normalize renv → rockerc format
-2. Make prepare_launch_plan() accept a "custom_cwd_handler" callback
-3. Create a "launch_and_restore_cwd()" helper in core.py
+### VSCode Mode - Full Unified Backend
+**Status:** ✅ Complete - Uses prepare_launch_plan() directly
 
-However, current approach (individual component reuse) is clean and maintainable given the architectural constraints.
+renvvsc now uses the exact same flow as rockervsc:
+1. Remove volume from config dict
+2. Call `prepare_launch_plan()` which adds volume via `build_rocker_arg_injections()`
+3. Launch container with correct cwd (for cwd extension)
+4. **Restore cwd immediately after launch** (critical for clean TTY)
+5. Wait for container
+6. Launch VSCode
+7. Attach interactive shell
+
+### Terminal Mode - Helper Function Reuse
+**Status:** ✅ Complete - Uses core.py helpers for consistency
+
+Terminal mode calls core.py helper functions directly:
+- `ensure_name_args()` - Adds --name and --image-name
+- `add_extension_env()` - Adds ROCKERC_EXTENSIONS env var
+- `ensure_volume_binding()` - Adds volume mount
+
+Cannot use full `prepare_launch_plan()` because:
+- Terminal mode must NOT be detached (needs to run command directly)
+- prepare_launch_plan always adds --detach
+
+### Result
+Maximum code reuse achieved while respecting architectural differences:
+- VSCode mode: 100% unified with rockervsc
+- Terminal mode: Reuses all config building helpers from core.py
+- Both modes handle cwd correctly for the cwd extension
+- All tests pass
