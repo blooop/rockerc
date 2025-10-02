@@ -765,11 +765,13 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
                     return ret
 
             # Launch VSCode attached to container
-            from rockerc.core import launch_vscode, container_hex_name
+            from rockerc.core import launch_vscode, container_hex_name, interactive_shell
 
             container_hex = container_hex_name(container_name)
             launch_vscode(container_name, container_hex)
-            return 0
+
+            # Attach to container terminal (matching rockervsc behavior)
+            return interactive_shell(container_name)
 
         # Handle interactive terminal mode
         if exists and running:
