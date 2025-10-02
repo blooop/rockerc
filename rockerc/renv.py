@@ -746,24 +746,12 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
         from rockerc.core import (
             container_exists as core_container_exists,
             stop_and_remove_container,
+            wait_for_container,
+            launch_vscode,
+            container_hex_name,
+            interactive_shell,
         )
 
-        # Handle VSCode mode using unified flow from core.py (same as rockervsc)
-        if vsc:
-            from rockerc.core import prepare_launch_plan, execute_plan
-
-            plan = prepare_launch_plan(
-                args_dict=config,
-                extra_cli="",
-                container_name=container_name,
-                vscode=True,
-                force=force,
-                path=branch_dir,
-                extensions=config.get("args", []),
-            )
-            return execute_plan(plan)
-
-        # Terminal mode: handle container lifecycle manually
         exists = core_container_exists(container_name)
         running = container_running(container_name) if exists else False
 
@@ -771,6 +759,26 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
             stop_and_remove_container(container_name)
             exists = False
             running = False
+
+        # Handle VSCode mode using core.py flow components
+        if vsc:
+            # Launch detached container if it doesn't exist
+            if not exists:
+                ret = run_rocker_command(config, None, detached=True)
+                if ret != 0:
+                    return ret
+
+                # Wait for container to be ready
+                if not wait_for_container(container_name):
+                    logging.error(f"Timed out waiting for container '{container_name}'")
+                    return 1
+
+            # Launch VSCode
+            container_hex = container_hex_name(container_name)
+            launch_vscode(container_name, container_hex)
+
+            # Attach interactive shell (matching rockervsc flow)
+            return interactive_shell(container_name)
 
         # Handle interactive terminal mode
         if exists and running:
