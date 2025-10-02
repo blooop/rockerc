@@ -1,12 +1,10 @@
-# Fix SSH URL to HTTPS for Git Clone
+# Fix SSH Authentication in GitHub CI
 
 ## Problem
-The `setup_cache_repo()` function in `renv.py:362` uses SSH URL format (`git@github.com:...`) which fails in CI environments without SSH keys configured.
+The `setup_cache_repo()` function uses SSH URL format (`git@github.com:...`) which fails in CI environments without SSH keys configured.
 
 ## Solution
-Change repository URL from SSH format to HTTPS format for public repository cloning.
+Keep SSH URLs (preferred) and configure GitHub Actions to use SSH keys for git operations.
 
 ## Implementation
-Update `rockerc/renv.py:362` to use HTTPS URL format:
-- From: `git@github.com:{owner}/{repo}.git`
-- To: `https://github.com/{owner}/{repo}.git`
+Add SSH key setup step to `.github/workflows/ci.yml` before running tests to enable SSH git cloning.

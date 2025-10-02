@@ -359,7 +359,7 @@ def get_container_name(repo_spec: RepoSpec) -> str:
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
     """Clone or update cache repository (full clone, not bare)"""
     repo_dir = get_repo_dir(repo_spec)
-    repo_url = f"https://github.com/{repo_spec.owner}/{repo_spec.repo}.git"
+    repo_url = f"git@github.com:{repo_spec.owner}/{repo_spec.repo}.git"
 
     if not repo_dir.exists():
         logging.info(f"Cloning cache repository: {repo_url}")
