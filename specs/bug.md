@@ -1,7 +1,7 @@
-ags@ags-7510:~$ renv blooop/bencher
+user@user-7510:~$ renv blooop/bencher
 INFO: Working with: blooop/bencher@main
 INFO: Cloning cache repository: git@github.com:blooop/bencher.git
-Cloning into '/home/ags/renv/.cache/blooop/bencher'...
+Cloning into '/home/user/renv/.cache/blooop/bencher'...
 remote: Enumerating objects: 29012, done.
 remote: Counting objects: 100% (1102/1102), done.
 remote: Compressing objects: 100% (418/418), done.
@@ -32,7 +32,7 @@ INFO: Container appears corrupted (possible breakout detection), launching new c
 bencher-main
 Error response from daemon: removal of container bencher-main is already in progress
 INFO: Using rocker to launch new container directly
-INFO: Running rocker: rocker --persist-image --x11 --user --pull --git --git-clone --fzf --ssh --ssh-client --lazygit --neovim --cwd --deps --pixi --extension-blacklist ['nvidia'] --name bencher-main --hostname bencher-main --_renv_target_dir /home/ags/renv/blooop/bencher-main ubuntu:22.04 bash
+INFO: Running rocker: rocker --persist-image --x11 --user --pull --git --git-clone --fzf --ssh --ssh-client --lazygit --neovim --cwd --deps --pixi --extension-blacklist ['nvidia'] --name bencher-main --hostname bencher-main --_renv_target_dir /home/user/renv/blooop/bencher-main ubuntu:22.04 bash
 Extension oyr_cap_add doesn't support default arguments. Please extend it.
 Extension oyr_cap_drop doesn't support default arguments. Please extend it.
 Extension oyr_colcon doesn't support default arguments. Please extend it.
