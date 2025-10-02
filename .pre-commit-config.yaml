@@ -15,7 +15,7 @@
 repos:
   # Standard hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-added-large-files
       - id: check-ast
@@ -42,7 +42,7 @@ repos:
 
   # Formatter for python
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.2
+    rev: v0.13.2
     hooks:
 
       # Run the formatter.
@@ -50,7 +50,7 @@ repos:
         types_or: [ python, pyi ]
   # Checks for spelling mistakes
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.3.0 
+    rev: v2.4.1 
     hooks:
       - id: codespell
         args: ["--write-changes","--ignore-words=./codespell-ignore.txt"]
