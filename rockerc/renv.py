@@ -459,8 +459,9 @@ def build_rocker_config(
     config["hostname"] = container_name
 
     # Add renv-specific volume - only mount the branch copy
+    # Use :Z flag for SELinux support (same as rockerc)
     config["volume"] = [
-        f"{branch_dir}:{docker_branch_mount}",
+        f"{branch_dir}:{docker_branch_mount}:Z",
     ]
 
     # Store the target directory for changing cwd before launching
