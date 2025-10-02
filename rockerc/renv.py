@@ -451,7 +451,6 @@ def build_rocker_config(
     """
     from rockerc.rockerc import (
         load_global_config,
-        deduplicate_extensions,
         _load_and_validate_config,
     )
 
