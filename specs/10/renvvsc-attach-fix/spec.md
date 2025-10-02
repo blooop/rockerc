@@ -13,5 +13,6 @@ Match `rockervsc` clean terminal handling:
 3. Launch VSCode - with original cwd
 4. Attach interactive shell - with original cwd
 
+
 ## Solution
 Restore working directory immediately after container launch, before VSCode and shell attach operations.
