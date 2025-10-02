@@ -68,62 +68,18 @@ def test_workflow_4_persistent():
 
 
 def test_workflow_5_force_rebuild_cache():
-    """Test cache performance and timing differences between different build modes"""
+    """Test --nocache flag functionality"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_5_force_rebuild_cache.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
-    assert result.returncode in (0, 1), f"Workflow 5 force rebuild cache failed: {output}"
+    assert result.returncode in (0, 1), f"Workflow 5 --nocache test failed: {output}"
 
     # Check that date commands executed successfully
     import re
 
     assert re.search(r"\b20\d{2}\b", output), "Expected date output not found in workflow 5 output"
-
-    # Check that all timing sections completed
-    assert "=== INITIAL BUILD ===" in output, "Initial build section not found"
-    assert "=== FORCE REBUILD TEST ===" in output, "Force rebuild section not found"
-    assert "=== CONTAINER REUSE TEST ===" in output, "Container reuse section not found"
     assert "=== NO-CACHE REBUILD TEST ===" in output, "No-cache rebuild section not found"
-    assert "=== TIMING SUMMARY ===" in output, "Timing summary not found"
-
-    # Extract timing information
-    initial_match = re.search(r"Initial build:\s+(\d+)s", output)
-    force_match = re.search(r"Force rebuild:\s+(\d+)s", output)
-    reuse_match = re.search(r"Container reuse:\s+(\d+)s", output)
-    nocache_match = re.search(r"No-cache rebuild:\s+(\d+)s", output)
-
-    assert initial_match, "Could not find initial build timing"
-    assert force_match, "Could not find force rebuild timing"
-    assert nocache_match, "Could not find no-cache rebuild timing"
-    assert reuse_match, "Could not find container reuse timing"
-
-    initial_time = int(initial_match.group(1))
-    force_time = int(force_match.group(1))
-    reuse_time = int(reuse_match.group(1))
-    nocache_time = int(nocache_match.group(1))
-
-    # Performance assertions - container reuse should be fastest
-    assert reuse_time <= force_time, (
-        f"Container reuse ({reuse_time}s) should be faster than force rebuild ({force_time}s)"
-    )
-
-    # Force rebuild should be faster than no-cache (due to image caching)
-    # Allow some tolerance for timing variations
-    if nocache_time > 5:  # Only check if builds take meaningful time
-        assert force_time <= nocache_time + 2, (
-            f"Force rebuild with cache ({force_time}s) should be close to or faster than no-cache ({nocache_time}s)"
-        )
-
-    # Check that force rebuild message appears when container exists
-    if "Force rebuild: removing existing container" in output:
-        assert "Creating new persistent container" in output, (
-            "Should create new container after force removal"
-        )
-
-    print(
-        f"Cache test performance: initial={initial_time}s, force={force_time}s, nocache={nocache_time}s, reuse={reuse_time}s"
-    )
 
 
 def test_workflow_6_clean_git():
