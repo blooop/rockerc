@@ -1129,7 +1129,7 @@ packages:
 - pypi: ./
   name: rockerc
   version: 0.13.0
-  sha256: c5a77f45b624cb66b979aceb9419317a5c22e6ad7c35af7310b544f6c5688a0c
+  sha256: 800b68ee52fc87ea466105b892a5cb4b99857b7af3e8d8bdd31f615a48846f26
   requires_dist:
   - rocker>=0.2.19
   - deps-rocker>=0.15
@@ -1139,7 +1139,7 @@ packages:
   - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
   - pytest>=7.4,<=8.4.2 ; extra == 'test'
   - hypothesis>=6.104.2,<=6.140.2 ; extra == 'test'
-  - ruff>=0.5.0,<=0.13.2 ; extra == 'test'
+  - ruff>=0.13.2,<=0.13.2 ; extra == 'test'
   - coverage>=7.5.4,<=7.10.7 ; extra == 'test'
   - pre-commit<=4.3.0 ; extra == 'test'
   - ghrocker==0.0.10 ; extra == 'extensions'
