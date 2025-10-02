@@ -56,9 +56,61 @@ Application Layer:
    - `container_exists()`, `stop_and_remove_container()` - Container utilities
 
 ### What CANNOT be reused directly:
-❌ `prepare_launch_plan()` - Expects rockerc.yaml config format
+❌ `prepare_launch_plan()` - Multiple incompatibilities (see detailed analysis below)
 ❌ `execute_plan()` - Full flow incompatible with renv's cwd management
 ❌ Config loading - Different formats (rockerc.yaml vs renv's custom building)
+
+## Detailed: Why prepare_launch_plan() Cannot Be Used
+
+### Problem 1: Config Format Incompatibility
+
+**rockerc expects volume as STRING:**
+```yaml
+# rockerc.yaml
+volume: '"${PWD}":/workspaces/"${CONTAINER_NAME}":Z'
+```
+
+**renv creates volume as LIST:**
+```python
+config["volume"] = [
+    f"{branch_dir}:{docker_branch_mount}:Z",
+]
+```
+
+### Problem 2: yaml_dict_to_args() Doesn't Handle Lists
+
+`yaml_dict_to_args()` in rockerc.py line 306:
+```python
+for k, v in d.items():
+    segments.extend([f"--{k}", str(v)])  # <-- str(v) on a list!
+```
+
+This converts a Python list to a STRING REPRESENTATION:
+```
+Input:  volume = ['/path:/mount:Z']
+Output: --volume ['/path:/mount:Z']  # Malformed! Includes brackets
+```
+
+### Problem 3: Duplicate Volume Mounts
+
+`prepare_launch_plan()` calls `build_rocker_arg_injections()` which adds volume via `ensure_volume_binding()`.
+
+Combined with renv's existing volume in config dict:
+```bash
+# From renv's config dict (malformed):
+--volume ['/home/ags/renv/blooop/bencher-main:/workspaces/bencher-main:Z']
+
+# From build_rocker_arg_injections (correct):
+--volume /home/ags/renv/blooop/bencher-main:/workspaces/bencher-main:Z
+```
+
+Result: Docker error due to duplicate/malformed volume arguments
+
+### Problem 4: Working Directory Management
+
+`prepare_launch_plan()` doesn't support renv's cwd management pattern where cwd must be:
+1. Changed BEFORE launch (for `cwd` extension)
+2. Restored AFTER launch (for clean TTY)
 
 ## Critical Implementation Details
 
