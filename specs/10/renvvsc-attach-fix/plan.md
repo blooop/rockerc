@@ -1,19 +1,29 @@
 # Implementation Plan
 
+## Root Cause Analysis
+`renv` has architectural differences from `rockerc`:
+1. Changes working directory to allow `cwd` extension to detect correct path during launch
+2. Keeps cwd changed during attach operations (VSCode + shell)
+3. Uses try/finally for cwd restoration
+
+`rockerc` in contrast:
+1. Never changes working directory
+2. Exits immediately via `sys.exit()` after `execute_plan()`
+
+The cwd change during interactive shell attach causes TTY handling issues.
+
+## Solution
+Restore working directory **between** container launch and attach operations:
+1. Change cwd before launching container (needed for `cwd` extension)
+2. **Restore cwd immediately after container launch**
+3. Launch VSCode with original cwd
+4. Attach shell with original cwd
+
 ## Changes Required
 
-1. **renv.py:763-781** - Replace custom VSCode handling with core.py flow components:
-   - Import `wait_for_container`, `launch_vscode`, `container_hex_name`, `interactive_shell` from core
-   - After launching detached container, call `wait_for_container()` to ensure readiness
-   - Call `launch_vscode()` with proper container hex name
-   - Call `interactive_shell()` to attach terminal
-   - This matches the flow in `core.py:execute_plan()` used by `rockervsc`
-
-## Implementation Notes
-- Cannot use `prepare_launch_plan()` directly due to config format mismatch
-- `renv` uses custom config building incompatible with `prepare_launch_plan()`
-- Instead, use individual flow components to achieve same behavior
+1. **renv.py:771-773** - Add `os.chdir(original_cwd)` after container launch, before attach operations
 
 ## Testing
 - Verify `renvvsc owner/repo@branch` launches container, VSCode, and attaches terminal cleanly
 - Ensure terminal formatting is correct and keypresses work properly
+- Verify `cwd` extension still works correctly (container launches with correct working directory)

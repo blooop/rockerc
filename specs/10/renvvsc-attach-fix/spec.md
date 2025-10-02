@@ -1,16 +1,17 @@
-# Fix renvvsc to use unified flow from core.py
+# Fix renvvsc terminal formatting and keypress issues
 
 ## Problem
-`renvvsc` uses custom container management causing terminal formatting issues and missed keypresses, unlike `rockervsc` which works cleanly.
+`renvvsc` has terminal formatting issues and misses keypresses, unlike `rockervsc` which works cleanly.
+
+## Root Cause
+`renv` changes working directory for container launch (needed for `cwd` extension) but keeps it changed during VSCode attach and interactive shell. This differs from `rockervsc` which never changes cwd and exits immediately via `sys.exit()`.
 
 ## Expected Behavior
-Match `rockervsc` flow using `core.py`'s unified flow:
-1. Build/start container (detached)
-2. Launch VSCode
-3. Attach interactive shell to container
-
-## Current Behavior
-`renv.py` uses custom `run_rocker_command()` and manual `interactive_shell()` call instead of unified flow.
+Match `rockervsc` clean terminal handling:
+1. Build/start container (detached) - with cwd change
+2. Restore original cwd before attach operations
+3. Launch VSCode - with original cwd
+4. Attach interactive shell - with original cwd
 
 ## Solution
-Use `core.py:prepare_launch_plan()` and `core.py:execute_plan()` for VSCode mode to match `rockervsc` behavior.
+Restore working directory immediately after container launch, before VSCode and shell attach operations.
