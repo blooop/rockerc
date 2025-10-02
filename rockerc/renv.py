@@ -748,6 +748,22 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
             stop_and_remove_container,
         )
 
+        # Handle VSCode mode using unified flow from core.py (same as rockervsc)
+        if vsc:
+            from rockerc.core import prepare_launch_plan, execute_plan
+
+            plan = prepare_launch_plan(
+                args_dict=config,
+                extra_cli="",
+                container_name=container_name,
+                vscode=True,
+                force=force,
+                path=branch_dir,
+                extensions=config.get("args", []),
+            )
+            return execute_plan(plan)
+
+        # Terminal mode: handle container lifecycle manually
         exists = core_container_exists(container_name)
         running = container_running(container_name) if exists else False
 
@@ -755,23 +771,6 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
             stop_and_remove_container(container_name)
             exists = False
             running = False
-
-        # Handle VSCode mode
-        if vsc:
-            # Launch detached container if it doesn't exist
-            if not exists:
-                ret = run_rocker_command(config, None, detached=True)
-                if ret != 0:
-                    return ret
-
-            # Launch VSCode attached to container
-            from rockerc.core import launch_vscode, container_hex_name, interactive_shell
-
-            container_hex = container_hex_name(container_name)
-            launch_vscode(container_name, container_hex)
-
-            # Attach to container terminal (matching rockervsc behavior)
-            return interactive_shell(container_name)
 
         # Handle interactive terminal mode
         if exists and running:
