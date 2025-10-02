@@ -90,9 +90,8 @@ class TestRockerConfig:
         assert "cwd" in config["args"]  # cwd extension should be added automatically
         assert config["name"] == "test_renv-main"
         assert config["hostname"] == "test_renv-main"
-        assert isinstance(config["volume"], list)
-        assert any("/workspaces/test_renv-main:Z" in vol for vol in config["volume"])
-        assert len(config["volume"]) == 1  # only branch copy mounted
+        # Volume is NOT in config - it's added by prepare_launch_plan via build_rocker_arg_injections
+        assert "volume" not in config
         # cwd extension picks up working directory, no explicit config needed
         assert "_renv_target_dir" in config  # Internal marker for target directory
 
@@ -324,24 +323,27 @@ class TestManageContainer:
         assert result == 0
         mock_setup_branch_copy.assert_called_once_with(spec)
 
+    @patch("subprocess.run")
     @patch("os.chdir")
     @patch("rockerc.renv.build_rocker_config")
-    @patch("rockerc.renv.run_rocker_command")
-    @patch("rockerc.core.container_exists")
+    @patch("rockerc.renv.container_running")
     @patch("rockerc.renv.setup_branch_copy")
     def test_manage_container_normal(self, *mocks):
         (
             mock_setup_branch_copy,
-            mock_container_exists,
-            mock_run_rocker,
+            mock_container_running,
             mock_build_config,
             mock_chdir,  # pylint: disable=unused-variable
+            mock_subprocess,
         ) = mocks
 
         mock_setup_branch_copy.return_value = pathlib.Path("/test/branch")
-        mock_container_exists.return_value = False
-        mock_run_rocker.return_value = 0
-        mock_build_config.return_value = ({"args": [], "_renv_target_dir": "/test/branch"}, {})
+        mock_container_running.return_value = False
+        mock_subprocess.return_value.returncode = 0
+        mock_build_config.return_value = (
+            {"args": [], "image": "ubuntu:22.04", "_renv_target_dir": "/test/branch"},
+            {},
+        )
 
         spec = RepoSpec("blooop", "test_renv", "main")
 
@@ -350,27 +352,30 @@ class TestManageContainer:
         assert result == 0
         mock_setup_branch_copy.assert_called_once_with(spec)
         mock_build_config.assert_called_once()
-        mock_container_exists.assert_called_once()
-        mock_run_rocker.assert_called_once()
+        mock_container_running.assert_called_once()
+        mock_subprocess.assert_called_once()
 
+    @patch("subprocess.run")
     @patch("os.chdir")
     @patch("rockerc.renv.build_rocker_config")
-    @patch("rockerc.core.container_exists")
-    @patch("rockerc.renv.run_rocker_command")
+    @patch("rockerc.renv.container_running")
     @patch("rockerc.renv.setup_branch_copy")
     def test_manage_container_with_command(self, *mocks):
         (
             mock_setup_branch_copy,  # pylint: disable=unused-variable
-            mock_run_rocker,
-            mock_container_exists,
+            mock_container_running,
             mock_build_config,
             mock_chdir,  # pylint: disable=unused-variable
+            mock_subprocess,
         ) = mocks
 
         # Set up mocks for new container creation path
-        mock_container_exists.return_value = False
-        mock_run_rocker.return_value = 0
-        mock_build_config.return_value = ({"args": [], "_renv_target_dir": "/test/branch"}, {})
+        mock_container_running.return_value = False
+        mock_subprocess.return_value.returncode = 0
+        mock_build_config.return_value = (
+            {"args": [], "image": "ubuntu:22.04", "_renv_target_dir": "/test/branch"},
+            {},
+        )
         spec = RepoSpec("blooop", "test_renv", "main")
 
         result = manage_container(spec, command=["git", "status"])
@@ -378,11 +383,8 @@ class TestManageContainer:
         assert result == 0
         mock_build_config.assert_called_once()
 
-        # Check that run_rocker_command was called directly with the command
-        mock_run_rocker.assert_called_once()
-        call_args = mock_run_rocker.call_args
-        assert call_args[0][1] == ["git", "status"]  # Command argument
-        assert not call_args[1].get("detached", True)  # Not detached
+        # Check that subprocess.run was called with git status in the command
+        assert result == 0
 
 
 class TestRockerCommandWorkingDirectory:

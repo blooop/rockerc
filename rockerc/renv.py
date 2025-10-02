@@ -28,6 +28,7 @@ import argparse
 import time
 import yaml
 import shutil
+import shlex
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 
@@ -445,9 +446,6 @@ def build_rocker_config(
     # Use rockerc's config loading from the branch directory
     config, meta = collect_arguments_with_meta(str(branch_dir))
 
-    # Docker mount point for branch copy - use /workspaces/{container_name} to match rockerc convention
-    docker_branch_mount = f"/workspaces/{container_name}"
-
     # Add cwd extension if not already present
     if "args" not in config:
         config["args"] = []
@@ -458,11 +456,8 @@ def build_rocker_config(
     config["name"] = container_name
     config["hostname"] = container_name
 
-    # Add renv-specific volume - only mount the branch copy
-    # Use :Z flag for SELinux support (same as rockerc)
-    config["volume"] = [
-        f"{branch_dir}:{docker_branch_mount}:Z",
-    ]
+    # NOTE: Volume mount is NOT added here - prepare_launch_plan() will add it
+    # via build_rocker_arg_injections() -> ensure_volume_binding()
 
     # Store the target directory for changing cwd before launching
     # The cwd extension will pick up the current working directory
@@ -744,32 +739,33 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
 
     try:
         from rockerc.core import (
-            container_exists as core_container_exists,
-            stop_and_remove_container,
+            prepare_launch_plan,
+            launch_rocker,
             wait_for_container,
             launch_vscode,
-            container_hex_name,
             interactive_shell,
         )
 
-        exists = core_container_exists(container_name)
-        running = container_running(container_name) if exists else False
-
-        if force and exists:
-            stop_and_remove_container(container_name)
-            exists = False
-            running = False
-
-        # Handle VSCode mode using core.py flow components
+        # Handle VSCode mode using unified backend (same as rockervsc)
         if vsc:
-            # Launch detached container if it doesn't exist
-            if not exists:
-                ret = run_rocker_command(config, None, detached=True)
+            # Prepare launch plan - this handles container existence, force rebuild, etc.
+            plan = prepare_launch_plan(
+                args_dict=config,
+                extra_cli="",
+                container_name=container_name,
+                vscode=True,
+                force=force,
+                path=branch_dir,
+                extensions=config.get("args", []),
+            )
+
+            # If we need to launch a new container, do it with correct cwd
+            if plan.rocker_cmd:
+                ret = launch_rocker(plan.rocker_cmd)
                 if ret != 0:
                     return ret
 
             # Restore working directory before attach operations
-            # (cwd change only needed for container launch, not for attach)
             os.chdir(original_cwd)
 
             # Wait for container to be ready
@@ -777,22 +773,64 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
                 logging.error(f"Timed out waiting for container '{container_name}'")
                 return 1
 
-            # Launch VSCode
-            container_hex = container_hex_name(container_name)
-            launch_vscode(container_name, container_hex)
+            # Launch VSCode if requested
+            if plan.vscode:
+                launch_vscode(plan.container_name, plan.container_hex)
 
-            # Attach interactive shell (matching rockervsc flow)
+            # Attach interactive shell
             return interactive_shell(container_name)
 
-        # Handle interactive terminal mode
-        if exists and running:
+        # Terminal mode: check if container already running and reuse it
+        from rockerc.core import stop_and_remove_container as core_stop_and_remove
+
+        exists = container_running(container_name)
+
+        if force and exists:
+            core_stop_and_remove(container_name)
+            exists = False
+
+        if exists:
+            # Restore cwd before attaching
+            os.chdir(original_cwd)
+
             # Container already running, attach to it
             if command:
                 return attach_to_container(container_name, command)
             return _try_attach_with_fallback(repo_spec, container_name, None)
 
-        # Need to create/start container
-        return run_rocker_command(config, command, detached=False)
+        # Container doesn't exist - launch it with rocker
+        # For terminal mode, we use rocker directly (NOT detached) so it handles the command/shell
+        # But we need to add volume mount since it's not in config dict anymore
+        from rockerc.core import ensure_name_args, add_extension_env, ensure_volume_binding
+        from rockerc.rockerc import yaml_dict_to_args
+
+        # Build injections manually (without --detach for terminal mode)
+        injections = ""
+        injections = ensure_name_args(injections, container_name)
+        injections = add_extension_env(injections, config.get("args", []))
+        injections = ensure_volume_binding(injections, container_name, branch_dir)
+
+        args_copy = dict(config)
+        rocker_argline = yaml_dict_to_args(args_copy, injections)
+        rocker_cmd = ["rocker"] + shlex.split(rocker_argline)
+
+        # Add command if provided
+        if command:
+            rocker_cmd.extend(command)
+        else:
+            rocker_cmd.append("bash")
+
+        logging.info(f"Running rocker: {' '.join(rocker_cmd)}")
+
+        # Run rocker (not detached for terminal mode)
+        # Use target_dir as cwd if it exists, otherwise use current dir
+        run_cwd = target_dir if pathlib.Path(target_dir).exists() else None
+        result = subprocess.run(rocker_cmd, check=False, cwd=run_cwd)
+
+        # Restore cwd
+        os.chdir(original_cwd)
+
+        return result.returncode
     finally:
         # Restore original working directory
         os.chdir(original_cwd)
