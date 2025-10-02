@@ -98,10 +98,10 @@ Output: --volume ['/path:/mount:Z']  # Malformed! Includes brackets
 Combined with renv's existing volume in config dict:
 ```bash
 # From renv's config dict (malformed):
---volume ['/home/ags/renv/blooop/bencher-main:/workspaces/bencher-main:Z']
+--volume ['/home/user/renv/blooop/bencher-main:/workspaces/bencher-main:Z']
 
 # From build_rocker_arg_injections (correct):
---volume /home/ags/renv/blooop/bencher-main:/workspaces/bencher-main:Z
+--volume /home/user/renv/blooop/bencher-main:/workspaces/bencher-main:Z
 ```
 
 Result: Docker error due to duplicate/malformed volume arguments
