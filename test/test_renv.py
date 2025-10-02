@@ -91,7 +91,7 @@ class TestRockerConfig:
         assert config["name"] == "test_renv-main"
         assert config["hostname"] == "test_renv-main"
         assert isinstance(config["volume"], list)
-        assert any("/workspace/test_renv-main" in vol for vol in config["volume"])
+        assert any("/workspaces/test_renv-main" in vol for vol in config["volume"])
         assert len(config["volume"]) == 1  # only branch copy mounted
         # cwd extension picks up working directory, no explicit config needed
         assert "_renv_target_dir" in config  # Internal marker for target directory

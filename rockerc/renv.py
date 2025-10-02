@@ -445,9 +445,8 @@ def build_rocker_config(
     # Use rockerc's config loading from the branch directory
     config, meta = collect_arguments_with_meta(str(branch_dir))
 
-    # Docker mount point for branch copy
-    safe_branch = repo_spec.branch.replace("/", "-")
-    docker_branch_mount = f"/workspace/{repo_spec.repo}-{safe_branch}"
+    # Docker mount point for branch copy - use /workspaces/{container_name} to match rockerc convention
+    docker_branch_mount = f"/workspaces/{container_name}"
 
     # Add cwd extension if not already present
     if "args" not in config:
