@@ -835,8 +835,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 if ret != 0:
                     return ret
 
-            # Restore working directory before attach operations
-            os.chdir(original_cwd)
+            # Change to branch_dir for docker exec operations (must be in mounted directory)
+            os.chdir(branch_dir)
 
             # Wait for container to be ready
             if not wait_for_container(container_name):
@@ -860,8 +860,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             exists = False
 
         if exists:
-            # Restore cwd before attaching
-            os.chdir(original_cwd)
+            # Change to branch_dir for docker exec operations (must be in mounted directory)
+            os.chdir(branch_dir)
 
             # Container already running, attach to it
             if command:

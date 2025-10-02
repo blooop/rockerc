@@ -1,12 +1,15 @@
-# Fix _renv_target_dir being passed to rocker
+# Fix container breakout detection errors
 
-## Problem
+## Problem 1: _renv_target_dir passed to rocker
 When container corruption is detected, `renv` passes `--_renv_target_dir` to rocker, which doesn't recognize this argument, causing the command to fail with "unrecognized arguments: --_renv_target_dir".
 
-## Root Cause
-In `_handle_container_corruption` (renv.py:742-743), the config dict containing `_renv_target_dir` is passed directly to `run_rocker_command` without removing this internal marker first.
+## Problem 2: docker exec fails with breakout detection
+When attaching to an existing container, `docker exec` fails with "current working directory is outside of container mount namespace root -- possible container breakout detected" because the Python process is in a directory not mounted in the container.
 
-`_renv_target_dir` is an internal configuration value used by renv to track the target directory for `os.chdir()` before launching containers. It should never be passed to rocker.
+## Root Cause
+1. `_renv_target_dir` is an internal configuration marker that gets passed to rocker
+2. After spec 10's fix to restore `original_cwd` before attach operations, the Python process is in a directory (like `/home/user`) that's not mounted in the container, triggering Docker's security check on `docker exec`
 
 ## Solution
-Filter out keys starting with underscore in `run_rocker_command` when building rocker arguments, as these are internal markers not meant for rocker.
+1. Filter out keys starting with underscore in `run_rocker_command` when building rocker arguments
+2. Before calling `docker exec` operations (`interactive_shell`, `attach_to_container`), change to `branch_dir` which is always mounted in the container
