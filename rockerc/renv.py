@@ -437,14 +437,68 @@ def build_rocker_config(
     force: bool = False,  # pylint: disable=unused-argument
     nocache: bool = False,  # pylint: disable=unused-argument
 ) -> Dict[str, Any]:
-    """Build rocker configuration using rockerc's config loading"""
-    from rockerc.rockerc import collect_arguments_with_meta
+    """Build rocker configuration using rockerc's config loading
+
+    This loads:
+    1. Renv global config from ~/renv/rockerc.yaml (creates from template if needed)
+    2. Repo-specific config from the worktree's rockerc.yaml (if it exists)
+    3. Standard global config from ~/.rockerc.yaml (if it exists)
+
+    Precedence (highest to lowest):
+    - Repo-specific config
+    - Renv global config
+    - Standard global config
+    """
+    from rockerc.rockerc import (
+        load_global_config,
+        deduplicate_extensions,
+        _load_and_validate_config,
+    )
 
     container_name = get_container_name(repo_spec)
     branch_dir = get_worktree_dir(repo_spec)
 
-    # Use rockerc's config loading from the branch directory
-    config, meta = collect_arguments_with_meta(str(branch_dir))
+    # Load configs in order of precedence (lowest first)
+    # 1. Standard global config from ~/.rockerc.yaml
+    standard_global_config = load_global_config()
+
+    # 2. Renv global config from ~/renv/rockerc.yaml (creates from template if needed)
+    renv_config = load_renv_rockerc_config()
+
+    # 3. Repo-specific config from worktree (if it exists)
+    repo_config = {}
+    if branch_dir.exists():
+        repo_config_path = branch_dir / "rockerc.yaml"
+        if repo_config_path.exists():
+            repo_config = _load_and_validate_config(repo_config_path)
+
+    # Merge configs: standard_global < renv_global < repo
+    config = standard_global_config.copy()
+    config.update(renv_config)
+    config.update(repo_config)
+
+    # Special handling for args - merge and deduplicate instead of overriding
+    standard_args = standard_global_config.get("args", []) or []
+    renv_args = renv_config.get("args", []) or []
+    repo_args = repo_config.get("args", []) or []
+
+    if standard_args or renv_args or repo_args:
+        config["args"] = deduplicate_extensions(standard_args + renv_args + repo_args)
+
+    # Special handling for extension-blacklist - merge lists
+    standard_bl = standard_global_config.get("extension-blacklist", []) or []
+    renv_bl = renv_config.get("extension-blacklist", []) or []
+    repo_bl = repo_config.get("extension-blacklist", []) or []
+
+    if not isinstance(standard_bl, list):
+        standard_bl = [standard_bl] if standard_bl else []
+    if not isinstance(renv_bl, list):
+        renv_bl = [renv_bl] if renv_bl else []
+    if not isinstance(repo_bl, list):
+        repo_bl = [repo_bl] if repo_bl else []
+
+    if standard_bl or renv_bl or repo_bl:
+        config["extension-blacklist"] = deduplicate_extensions(standard_bl + renv_bl + repo_bl)
 
     # Add cwd extension if not already present
     if "args" not in config:
@@ -464,6 +518,20 @@ def build_rocker_config(
     config["_renv_target_dir"] = (
         str(branch_dir / repo_spec.subfolder) if repo_spec.subfolder else str(branch_dir)
     )
+
+    # Create metadata for extension table rendering (matching collect_arguments_with_meta format)
+    meta = {
+        "original_global_args": standard_args or None,
+        "original_project_args": (renv_args + repo_args) or None,
+        "merged_args_before_blacklist": config.get("args", []),
+        "removed_by_blacklist": [],
+        "blacklist": config.get("extension-blacklist", []),
+        "original_global_blacklist": standard_bl or None,
+        "original_project_blacklist": (renv_bl + repo_bl) or None,
+        "global_config_used": bool(standard_global_config or renv_config),
+        "project_config_used": bool(repo_config),
+        "source_files": [],
+    }
 
     return config, meta
 
