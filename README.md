@@ -36,6 +36,25 @@ pipx install --include-deps . --force
 
 This will ensure that `rockerc` and `rocker` commands are available on your PATH.
 
+## Architecture
+
+rockerc follows a layered architecture designed for maximum code reuse between terminal and VSCode workflows:
+
+### Base Layer
+- **rockerc**: Core container management tool that reads `rockerc.yaml` files and launches containers
+- **rockervsc**: Light wrapper on rockerc with the same interface, adds VSCode integration
+
+### Environment Layer
+- **renv**: Multi-repository environment manager that collects configuration arguments and passes them to rockerc
+- **renvvsc**: Functions the same as renv, but passes arguments to rockervsc instead of rockerc
+
+### Benefits of this Architecture
+- **Maximum code reuse**: Changes in core functionality automatically benefit both terminal and VSCode workflows
+- **Consistent interfaces**: All tools share the same command-line interface and configuration format
+- **Easy maintenance**: Bug fixes and features only need to be implemented once in the base layer
+
+This design ensures that whether you're using terminal-based development or VSCode integration, you get the same robust container management with your preferred interface.
+
 ## Usage
 
 navigate to a directory with a `rockerc.yaml` file and run:
@@ -96,6 +115,23 @@ If you include `create-dockerfile` in args or pass `--create-dockerfile`, a `Doc
 * Using `--rm` in custom extra args is discouraged with `--vsc` since closing the shell would remove the container out from under VS Code.
 * The volume mount path is standardized to `/workspaces/<container>` to match VS Code's remote container expectations.
 * Existing behavior of merging & deduplicating extensions (`args`) and blacklist remains unchanged.
+
+`rockervsc` forwards all arguments to `rockerc`, so you can use any `rockerc` options:
+```
+rockervsc --gemini
+```
+
+The command will:
+1. Run `rockerc` with your arguments plus container configuration for VS Code
+2. Launch VS Code and attach it to the container
+3. If the container already exists, it will just attach VS Code without recreating it
+
+For multi-repository development with git worktrees and VS Code, use `renvsc`:
+```
+renvsc owner/repo@branch
+```
+
+`renvsc` combines the full functionality of `renv` (repository and worktree management) with automatic VS Code integration. See [renv.md](renv.md) for complete documentation.
 
 ## Motivation
 

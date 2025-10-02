@@ -1,0 +1,13 @@
+image: ubuntu:22.04
+args:
+  - pull
+  - persist-image
+  - x11
+  - user
+  - cwd
+  - git
+  - git-clone
+  - ssh
+  - ssh-client
+  - fzf
+  

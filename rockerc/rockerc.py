@@ -421,10 +421,15 @@ def collect_arguments(path: str = ".") -> dict:
     Returns:
         dict: A dictionary of merged rockerc arguments
     """
-    # Load global config first
-    global_config = load_global_config()
+    # Load global configuration from ~/.rockerc.yaml
+    global_config = {}
+    global_config_path = pathlib.Path.home() / ".rockerc.yaml"
+    if global_config_path.exists():
+        print(f"loading {global_config_path}")
+        with open(global_config_path, "r", encoding="utf-8") as f:
+            global_config = yaml.safe_load(f) or {}
 
-    # Load project-specific config
+    # Load project-specific configuration
     search_path = pathlib.Path(path)
     merged_dict = {}
     for p in search_path.glob("rockerc.yaml"):

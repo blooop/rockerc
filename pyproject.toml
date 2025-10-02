@@ -10,6 +10,7 @@ dependencies = [
   "rocker>=0.2.19",
   "deps-rocker>=0.15",
   "pyyaml>=5",
+  "iterfzf>=1.0.0",
 ]
 
 [tool.pixi.pypi-dependencies]
@@ -43,7 +44,7 @@ test = [
   "pytest-cov>=4.1,<=7.0.0",
   "pytest>=7.4,<=8.4.2",
   "hypothesis>=6.104.2,<=6.140.2",
-  "ruff>=0.5.0,<=0.13.2",
+  "ruff>=0.13.2,<=0.13.2",
   "coverage>=7.5.4,<=7.10.7",
   "pre-commit<=4.3.0",
 ]
@@ -63,6 +64,8 @@ include = ["rockerc"]
 
 [project.scripts]
 rockerc = "rockerc.rockerc:run_rockerc"
+renv = "rockerc.renv:main"
+renvvsc = "rockerc.renvsc:main"
 rockervsc = "rockerc.rockervsc:main"
 
 # Environments
