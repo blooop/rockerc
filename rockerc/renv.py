@@ -694,7 +694,7 @@ def _try_attach_with_fallback(
     return attach_to_container(container_name, command)
 
 
-def manage_container(  # pylint: disable=too-many-positional-arguments
+def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-return-statements
     repo_spec: RepoSpec,
     command: Optional[List[str]] = None,
     force: bool = False,
