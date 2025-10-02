@@ -768,10 +768,14 @@ def manage_container(  # pylint: disable=too-many-positional-arguments
                 if ret != 0:
                     return ret
 
-                # Wait for container to be ready
-                if not wait_for_container(container_name):
-                    logging.error(f"Timed out waiting for container '{container_name}'")
-                    return 1
+            # Restore working directory before attach operations
+            # (cwd change only needed for container launch, not for attach)
+            os.chdir(original_cwd)
+
+            # Wait for container to be ready
+            if not wait_for_container(container_name):
+                logging.error(f"Timed out waiting for container '{container_name}'")
+                return 1
 
             # Launch VSCode
             container_hex = container_hex_name(container_name)
