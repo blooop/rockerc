@@ -22,7 +22,7 @@ For the `blooop/test_renv` repository (and any other repos that need to be clone
 3. Title: `rockerc-ci` (or any descriptive name)
 4. Key: Paste the contents of `~/.ssh/rockerc_deploy_key.pub`
 5. **Important**: You do NOT need to check "Allow write access" unless the CI needs to push
-
+6. cat
 ### 3. Add the private key to this repository's secrets
 
 For the `blooop/rockerc` repository:
