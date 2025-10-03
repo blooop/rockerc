@@ -77,8 +77,8 @@ Examples:
             logging.info(f"Worktree set up at: {worktree_dir}")
             return 0
 
-        # Build claude command in agent mode
-        # Just run Claude directly - user will see live output and can interact
+        # Build claude command in interactive mode
+        # Launch Claude interactively with the prompt already sent
         # Escape single quotes in prompt for shell
         escaped_prompt = prompt_text.replace("'", "'\\''")
 
@@ -89,8 +89,9 @@ Examples:
         if repo_spec.subfolder:
             workspace_path = f"{workspace_path}/{repo_spec.subfolder}"
 
-        # Run claude directly in the workspace
-        claude_cmd = ["bash", "-c", f"cd {workspace_path} && claude --agent -p '{escaped_prompt}'"]
+        # Run claude in interactive mode with prompt
+        # Using -p sends the prompt and keeps Claude interactive
+        claude_cmd = ["bash", "-c", f"cd {workspace_path} && claude -p '{escaped_prompt}'"]
 
         # Launch container with claude command
         return manage_container(
