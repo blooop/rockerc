@@ -2,5 +2,3 @@ apt_tools:
   - python3-pip
   - jq #for auto installing extensions in container
 
-pip_language-toolchain:
-  - pre-commit
