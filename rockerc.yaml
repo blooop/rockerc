@@ -9,7 +9,6 @@ image: ubuntu:22.04
 # dockerfile: .devcontainer/Dockerfile
 # dockerfile: Dockerfile
 args:
-  - nvidia
   - x11 
   - user 
   - pull 
