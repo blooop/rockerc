@@ -7,46 +7,15 @@ Usage: aid repo_owner/repo_name <prompt in plain text>
 """
 
 import sys
-import pathlib
 import logging
 import argparse
 from typing import List, Optional
 
 from .renv import (
     RepoSpec,
-    setup_branch_copy,
     manage_container,
+    get_container_name,
 )
-
-# CLAUDE.MD template for the aid workflow
-CLAUDE_MD_TEMPLATE = """This project uses pixi to manage its environment.
-
-look at the pyproject.toml to see the pixi tasks
-
-Workflow:
-    * On first message:
-        - create a new specification according to the pattern specs/01/short-spec-name/spec.md.  Keep it as concise as possible
-        - create a plan in the same folder, you can expand more here
-        - commit the contents of this folder only
-
-    * Every time I ask for a change
-        - update the spec.md with clarifications while keeping it concise. commit if there are changes
-        - implement the change
-        - run `pixi run ci`
-        - fix errors and iterate until ci passes
-        - only if ci passes commit the changes.
-"""
-
-
-def inject_claude_md(worktree_dir: pathlib.Path) -> None:
-    """Inject CLAUDE.MD into the worktree root"""
-    claude_md_path = worktree_dir / "CLAUDE.md"
-
-    # Write CLAUDE.md file
-    with open(claude_md_path, "w", encoding="utf-8") as f:
-        f.write(CLAUDE_MD_TEMPLATE)
-
-    logging.info(f"Injected CLAUDE.md into {worktree_dir}")
 
 
 def run_aid(args: Optional[List[str]] = None) -> int:
@@ -85,7 +54,7 @@ Examples:
     parser.add_argument(
         "--no-container",
         action="store_true",
-        help="Set up worktree and inject CLAUDE.md only, do not launch container",
+        help="Set up worktree only, do not launch container",
     )
 
     parsed_args = parser.parse_args(args)
@@ -99,23 +68,31 @@ Examples:
         prompt_text = " ".join(parsed_args.prompt)
         logging.info(f"Prompt: {prompt_text}")
 
-        # Setup branch copy
-        worktree_dir = setup_branch_copy(repo_spec)
-
-        # Inject CLAUDE.md into worktree
-        inject_claude_md(worktree_dir)
-
-        # If no-container, just setup and exit
+        # If no-container, setup worktree only
         if parsed_args.no_container:
+            from .renv import setup_branch_copy, get_worktree_dir
+
+            setup_branch_copy(repo_spec)
+            worktree_dir = get_worktree_dir(repo_spec)
             logging.info(f"Worktree set up at: {worktree_dir}")
-            logging.info("CLAUDE.md injected. Use --no-container=false to launch container.")
             return 0
 
-        # Build claude-code command
-        # The command will be executed inside the container
-        claude_cmd = ["claude-code", "--prompt", prompt_text]
+        # Build claude command in agent mode
+        # Just run Claude directly - user will see live output and can interact
+        # Escape single quotes in prompt for shell
+        escaped_prompt = prompt_text.replace("'", "'\\''")
 
-        # Launch container with claude-code command
+        # Determine the container workspace path
+        # renv mounts at /workspaces/{container_name}
+        container_name = get_container_name(repo_spec)
+        workspace_path = f"/workspaces/{container_name}"
+        if repo_spec.subfolder:
+            workspace_path = f"{workspace_path}/{repo_spec.subfolder}"
+
+        # Run claude directly in the workspace
+        claude_cmd = ["bash", "-c", f"cd {workspace_path} && claude --agent -p '{escaped_prompt}'"]
+
+        # Launch container with claude command
         return manage_container(
             repo_spec=repo_spec,
             command=claude_cmd,
