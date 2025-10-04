@@ -21,7 +21,9 @@ from rockerc.core import LaunchPlan
 @patch("subprocess.run")
 @patch("sys.stdin.isatty")
 @patch("sys.stdout.isatty")
+@patch("os.chdir")
 def test_docker_exec_interactive_flags(
+    mock_chdir,
     mock_stdout_isatty,
     mock_stdin_isatty,
     mock_subprocess_run,
