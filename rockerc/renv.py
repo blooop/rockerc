@@ -843,6 +843,61 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 logging.error(f"Timed out waiting for container '{container_name}'")
                 return 1
 
+            # Test if container is corrupted (breakout detection) before attaching
+            # This can happen if renv dir was deleted while container was running
+            if not plan.created:  # Only test if we're reusing an existing container
+                test_result = subprocess.run(
+                    ["docker", "exec", container_name, "pwd"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                if (
+                    test_result.returncode != 0
+                    or "container breakout" in test_result.stderr.lower()
+                ):
+                    # Container is corrupted - rebuild it
+                    logging.info(
+                        "Container appears corrupted (possible breakout detection), rebuilding for VSCode"
+                    )
+                    from rockerc.core import stop_and_remove_container as core_stop_and_remove
+
+                    core_stop_and_remove(container_name)
+
+                    # Rebuild container using rocker command without --detach (rocker doesn't support it)
+                    # Build rocker args manually to avoid --detach flag from build_rocker_arg_injections
+                    from rockerc.core import (
+                        ensure_name_args,
+                        add_extension_env,
+                        ensure_volume_binding,
+                    )
+                    from rockerc.rockerc import yaml_dict_to_args
+
+                    injections = ""
+                    injections = ensure_name_args(injections, container_name)
+                    injections = add_extension_env(injections, config.get("args", []))
+                    injections = ensure_volume_binding(injections, container_name, branch_dir)
+
+                    args_copy = dict(config)
+                    rocker_argline = yaml_dict_to_args(args_copy, injections)
+                    rocker_cmd = ["rocker"] + shlex.split(rocker_argline)
+
+                    logging.info(f"Rebuilding container: {' '.join(rocker_cmd)}")
+
+                    # Run rocker in detached mode using subprocess (container runs in background)
+                    result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir)
+                    if result.returncode != 0:
+                        return result.returncode
+
+                    # Give container time to start
+                    time.sleep(2)
+
+                    # Wait for new container to be ready
+                    if not wait_for_container(container_name):
+                        logging.error(f"Timed out waiting for rebuilt container '{container_name}'")
+                        return 1
+
             # Launch VSCode if requested
             if plan.vscode:
                 launch_vscode(plan.container_name, plan.container_hex)

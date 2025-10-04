@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
+
 cd /tmp
 
-echo "Running: renv blooop/test_renv and confirming the working directory is test_renv to match the name of the git repo"
-renv blooop/test_renv git status
+echo "Running: renv blooop/test_renv git status; pwd; ls -l to confirm commands run inside container"
+renv blooop/test_renv -- pwd ; ls -l
