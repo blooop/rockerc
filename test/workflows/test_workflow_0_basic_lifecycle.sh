@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 rm -rf ~/renv
+cd /tmp
 
 echo "=== BASIC CONTAINER LIFECYCLE TEST ==="
 echo "Testing core container state transitions"
