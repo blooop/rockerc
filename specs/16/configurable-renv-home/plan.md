@@ -1,0 +1,5 @@
+- Locate all uses of the hardcoded `~/renv` path across the codebase.
+- Introduce a shared helper (likely in `rockerc/renv.py`) that expands `RENV_DIR` or defaults to `~/renv`.
+- Refactor modules and scripts to depend on the helper.
+- Patch tests to set `RENV_DIR=/tmp/renv`, clean up temporary data between runs if needed.
+- Run `pixi run ci` and address any failures.
