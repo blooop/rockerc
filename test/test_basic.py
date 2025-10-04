@@ -189,7 +189,8 @@ class TestBasicClass(TestCase):
             ],
             "extension-blacklist": ["nvidia"],
         }
-        expected = "--persist-image --x11 --user --pull --git --pixi --cwd --claude --codex --fzf --ssh --ssh-client --spec-kit --extension-blacklist nvidia -- ubuntu:24.04"
+        # extension-blacklist is removed - it's only for internal filtering
+        expected = "--persist-image --x11 --user --pull --git --pixi --cwd --claude --codex --fzf --ssh --ssh-client --spec-kit -- ubuntu:24.04"
         result = yaml_dict_to_args(d)
         assert result == expected
 
@@ -199,19 +200,22 @@ class TestBasicClass(TestCase):
             "args": ["x11", "user"],
             "extension-blacklist": ["nvidia", "cuda", "opencl"],
         }
-        expected = "--x11 --user --extension-blacklist nvidia --extension-blacklist cuda --extension-blacklist opencl -- ubuntu:22.04"
+        # extension-blacklist is removed - it's only for internal filtering
+        expected = "--x11 --user -- ubuntu:22.04"
         result = yaml_dict_to_args(d)
         assert result == expected
 
     def test_extension_blacklist_with_single_string(self):
         d = {"image": "ubuntu:22.04", "args": ["x11", "user"], "extension-blacklist": "nvidia"}
-        expected = "--x11 --user --extension-blacklist nvidia -- ubuntu:22.04"
+        # extension-blacklist is removed - it's only for internal filtering
+        expected = "--x11 --user -- ubuntu:22.04"
         result = yaml_dict_to_args(d)
         assert result == expected
 
     def test_extension_blacklist_with_no_args(self):
         d = {"image": "ubuntu:22.04", "extension-blacklist": ["nvidia"]}
-        expected = "--extension-blacklist nvidia -- ubuntu:22.04"
+        # extension-blacklist is removed - it's only for internal filtering
+        expected = " -- ubuntu:22.04"
         result = yaml_dict_to_args(d)
         assert result == expected
 
