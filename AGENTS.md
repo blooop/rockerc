@@ -4,7 +4,7 @@ look at the pyproject.toml to see the pixi tasks
 
 Workflow:
     * On first message:
-        - create and switch to new branch in the form `feature/consise-branch-name` based on a consise summary of the request.
+        - if the repo is on branch `main` create and switch to new branch in the form `feature/consise-branch-name` based on a consise summary of the request. 
         - create a new specification according to the pattern specs/01/short-spec-name/spec.md.  Keep it as concise as possible
         - create a plan in the same folder, you can expand more here
         - commit the contents of this folder only
