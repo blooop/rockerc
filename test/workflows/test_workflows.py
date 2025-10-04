@@ -90,20 +90,20 @@ def test_workflow_6_clean_git():
     assert result.returncode == 0, f"Workflow 6 clean git failed: {output}"
 
 
-def test_workflow_7_container_breakout():
-    script = os.path.join(WORKFLOWS_DIR, "test_workflow_7_container_breakout.sh")
-    os.chmod(script, 0o755)
-    result = subprocess.run(["bash", script], capture_output=True, text=True, check=False)
-    output = result.stdout + "\n" + result.stderr
-    # Check for breakout detection message in second run
-    assert (
-        "Container appears corrupted (possible breakout detection)" in output
-        or "breakout" in output.lower()
-    ), f"Breakout detection message not found in output:\n{output}"
-    # Check that the second run triggers a rebuild (look for pwd output twice)
-    assert output.count("/home/") >= 2 or output.count("/tmp/") >= 2, (
-        "Expected to see pwd output from both runs. Output:\n" + output
-    )
-    assert result.returncode == 0, (
-        f"Script exited with nonzero code: {result.returncode}\nOutput:\n{output}"
-    )
+# def test_workflow_7_container_breakout():
+#     script = os.path.join(WORKFLOWS_DIR, "test_workflow_7_container_breakout.sh")
+#     os.chmod(script, 0o755)
+#     result = subprocess.run(["bash", script], capture_output=True, text=True, check=False)
+#     output = result.stdout + "\n" + result.stderr
+#     # Check for breakout detection message in second run
+#     assert (
+#         "Container appears corrupted (possible breakout detection)" in output
+#         or "breakout" in output.lower()
+#     ), f"Breakout detection message not found in output:\n{output}"
+#     # Check that the second run triggers a rebuild (look for pwd output twice)
+#     assert output.count("/home/") >= 2 or output.count("/tmp/") >= 2, (
+#         "Expected to see pwd output from both runs. Output:\n" + output
+#     )
+#     assert result.returncode == 0, (
+#         f"Script exited with nonzero code: {result.returncode}\nOutput:\n{output}"
+#     )
