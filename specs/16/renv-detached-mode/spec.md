@@ -19,6 +19,8 @@ Currently, `renv` in terminal mode runs containers in foreground mode, which mea
 
 ## Implementation
 - Update `manage_container()` terminal mode to use detached workflow
-- Leverage existing `core.py` functions: `prepare_launch_plan()`, `execute_plan()`, `wait_for_container()`
-- For command execution, use `docker exec` instead of passing command to rocker
-- Ensure volume mounts and settings are preserved for container reuse
+- Remove `cwd` extension, use explicit `/workspaces/<container_name>` mount and `docker exec -w`
+- Use `prepare_launch_plan()` from core.py for unified container lifecycle
+- Add `tail -f /dev/null` to keep detached containers running
+- Extension change detection automatically rebuilds containers when configuration changes
+- Force rebuild when transitioning from old cwd-based containers

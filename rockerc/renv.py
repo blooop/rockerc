@@ -905,19 +905,16 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
         # Terminal mode: use detached workflow (same as rockerc)
         # Remove cwd extension for detached mode - we'll use docker exec -w instead
-        original_extensions = config.get("args", [])[:]
+        # Extension change detection in prepare_launch_plan will automatically rebuild
+        # if the stored container has different extensions (e.g., had cwd before)
         config["args"] = [ext for ext in config.get("args", []) if ext != "cwd"]
-
-        # Force rebuild if we had cwd in config (transitioning from old mode)
-        # This ensures containers created with cwd extension are rebuilt with new mounts
-        force_rebuild = force or ("cwd" in original_extensions)
 
         plan = prepare_launch_plan(
             args_dict=config,
             extra_cli="",
             container_name=container_name,
             vscode=False,
-            force=force_rebuild,
+            force=force,
             path=branch_dir,
             extensions=config["args"],
         )
@@ -938,6 +935,51 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             logging.error(f"Timed out waiting for container '{container_name}'")
             os.chdir(original_cwd)
             return 1
+
+        # Test for container breakout (if directory was deleted while container running)
+        # Only test if we're reusing an existing container
+        if not plan.created:
+            # Test if we can actually access the working directory
+            # Just checking if it exists isn't enough - we need to try to use it
+            workdir = f"/workspaces/{container_name}"
+            test_result = subprocess.run(
+                ["docker", "exec", "-w", workdir, container_name, "pwd"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if test_result.returncode != 0 or "container breakout" in test_result.stderr.lower():
+                # Container is corrupted - rebuild it
+                logging.info(
+                    "Container appears corrupted (possible breakout detection), rebuilding"
+                )
+                from rockerc.core import stop_and_remove_container as core_stop_and_remove
+
+                core_stop_and_remove(container_name)
+
+                # Rebuild container
+                plan = prepare_launch_plan(
+                    args_dict=config,
+                    extra_cli="",
+                    container_name=container_name,
+                    vscode=False,
+                    force=True,
+                    path=branch_dir,
+                    extensions=config["args"],
+                )
+
+                if plan.rocker_cmd:
+                    plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
+                    ret = launch_rocker(plan.rocker_cmd)
+                    if ret != 0:
+                        os.chdir(original_cwd)
+                        return ret
+
+                if not wait_for_container(container_name):
+                    logging.error(f"Timed out waiting for rebuilt container '{container_name}'")
+                    os.chdir(original_cwd)
+                    return 1
 
         # Execute command or attach interactive shell with working directory set
         workdir = f"/workspaces/{container_name}"
