@@ -29,6 +29,7 @@ import time
 import yaml
 import shutil
 import shlex
+import os
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 
@@ -68,8 +69,13 @@ class RepoSpec:
 
 
 def get_renv_root() -> pathlib.Path:
-    """Get the root directory for renv repositories"""
-    return pathlib.Path.home() / "renv"
+    """Get the root directory for renv repositories.
+
+    Prefers `RENV_DIR` when set, otherwise falls back to `~/renv`.
+    """
+
+    renv_dir = os.environ.get("RENV_DIR", "~/renv")
+    return pathlib.Path(renv_dir).expanduser()
 
 
 def get_available_users() -> List[str]:
@@ -165,7 +171,7 @@ def fuzzy_select_repo() -> Optional[str]:
 
     combinations = get_all_repo_branch_combinations()
     if not combinations:
-        logging.info("No repositories found in ~/renv/. Clone some repos first!")
+        logging.info("No repositories found in %s. Clone some repos first!", get_renv_root())
         return None
 
     print("Select repo@branch (type 'bl tes ma' for blooop/test_renv@main):")
@@ -192,7 +198,7 @@ _renv_completion() {
     
     # Complete repository specifications
     if [[ ${COMP_CWORD} -eq 1 ]]; then
-        local renv_root="$HOME/renv"
+        local renv_root="${RENV_DIR:-$HOME/renv}"
         local cache_root="$renv_root/.cache"
 
         # Check if we're completing branches (after @)
@@ -286,7 +292,7 @@ def load_renv_rockerc_config() -> dict:
     Returns:
         dict: Parsed configuration dictionary, or empty dict if parsing fails.
     """
-    renv_dir = pathlib.Path.home() / "renv"
+    renv_dir = get_renv_root()
     config_path = renv_dir / "rockerc.yaml"
 
     # Create renv directory if it doesn't exist
@@ -804,8 +810,6 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     target_dir = config.pop("_renv_target_dir", str(branch_dir))
 
     # Change to the target directory so cwd extension picks it up
-    import os
-
     original_cwd = os.getcwd()
     os.chdir(target_dir)
 
