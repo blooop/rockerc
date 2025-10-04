@@ -1,25 +1,3 @@
-"""
-renv - Rocker Environment Manager
-
-Architecture Overview:
-This module implements a multi-repository development environment using git worktrees and rocker containers.
-
-The architecture follows a layered approach for maximum code reuse:
-
-1. Base Layer:
-   - rockerc: Core container management, reads rockerc.yaml files and launches containers
-   - rockervsc: Light wrapper on rockerc with same interface, adds VSCode integration
-
-2. Environment Layer:
-   - renv: Collects configuration arguments and passes them to rockerc
-   - renvvsc: Functions the same as renv, but passes arguments to rockervsc instead of rockerc
-
-This design ensures:
-- Maximum code reuse between terminal and VSCode workflows
-- Consistent interfaces across all tools
-- Easy maintenance with changes in one place affecting both workflows
-"""
-
 import sys
 import subprocess
 import pathlib
@@ -868,13 +846,15 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 return attach_to_container(container_name, command)
             return _try_attach_with_fallback(repo_spec, container_name, None)
 
-        # Container doesn't exist - launch it with rocker
-        # For terminal mode, we use rocker directly (NOT detached) so it handles the command/shell
-        # But we need to add volume mount since it's not in config dict anymore
-        from rockerc.core import ensure_name_args, add_extension_env, ensure_volume_binding
+        # Container doesn't exist - launch it detached (like rockerc), then attach interactively
+        from rockerc.core import (
+            ensure_name_args,
+            add_extension_env,
+            ensure_volume_binding,
+            wait_for_container,
+        )
         from rockerc.rockerc import yaml_dict_to_args
 
-        # Build injections manually (without --detach for terminal mode)
         injections = ""
         injections = ensure_name_args(injections, container_name)
         injections = add_extension_env(injections, config.get("args", []))
@@ -884,23 +864,28 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         rocker_argline = yaml_dict_to_args(args_copy, injections)
         rocker_cmd = ["rocker"] + shlex.split(rocker_argline)
 
-        # Add command if provided
-        if command:
-            rocker_cmd.extend(command)
-        else:
-            rocker_cmd.append("bash")
+        # Always ensure --detach is present
+        if "--detach" not in rocker_cmd:
+            rocker_cmd.insert(1, "--detach")
 
-        logging.info(f"Running rocker: {' '.join(rocker_cmd)}")
+        # If no user command, launch with persistent command so container stays alive
+        if not command:
+            rocker_cmd.append("sleep")
+            rocker_cmd.append("infinity")
 
-        # Run rocker (not detached for terminal mode)
-        # Use target_dir as cwd if it exists, otherwise use current dir
+        logging.info(f"Launching rocker detached: {' '.join(rocker_cmd)}")
         run_cwd = target_dir if pathlib.Path(target_dir).exists() else None
-        result = subprocess.run(rocker_cmd, check=False, cwd=run_cwd)
+        subprocess.run(rocker_cmd, check=False, cwd=run_cwd)
+        # Wait for container to be up
+        wait_for_container(container_name)
 
-        # Restore cwd
+        # Restore cwd before attach
         os.chdir(original_cwd)
 
-        return result.returncode
+        # Attach interactively (shell or command)
+        if command:
+            return attach_to_container(container_name, command)
+        return attach_to_container(container_name)
     finally:
         # Restore original working directory
         os.chdir(original_cwd)
