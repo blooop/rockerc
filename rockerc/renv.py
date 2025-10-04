@@ -119,6 +119,26 @@ def branch_exists(repo_spec: RepoSpec, branch_name: str) -> bool:
     return branch_name in available_branches
 
 
+def remote_branch_exists(repo_dir: pathlib.Path, branch_name: str) -> bool:
+    """Check if a remote tracking branch exists in the repository"""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_dir), "branch", "-r"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        remote_branches = []
+        for line in result.stdout.strip().split("\n"):
+            branch = line.strip().lstrip("* ").strip()
+            # Extract branch name from origin/branch format
+            if branch.startswith("origin/") and "HEAD" not in branch:
+                remote_branches.append(branch.replace("origin/", ""))
+        return branch_name in remote_branches
+    except subprocess.CalledProcessError:
+        return False
+
+
 def get_default_branch(repo_spec: RepoSpec) -> str:
     """Get the default branch for a repository (main or master)"""
     available_branches = get_available_branches(repo_spec)
@@ -387,13 +407,16 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
         # Copy entire cache directory to branch directory
         shutil.copytree(cache_dir, branch_dir)
 
-        # Check if the branch exists in cache
-        if not branch_exists(repo_spec, repo_spec.branch):
+        # Check if the branch exists locally or remotely
+        local_exists = branch_exists(repo_spec, repo_spec.branch)
+        remote_exists = remote_branch_exists(branch_dir, repo_spec.branch)
+
+        if not local_exists and not remote_exists:
+            # Branch doesn't exist anywhere - create from default
             default_branch = get_default_branch(repo_spec)
             logging.info(
                 f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default_branch}'"
             )
-            # Create the new branch from the default branch
             subprocess.run(
                 [
                     "git",
@@ -406,16 +429,27 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
                 ],
                 check=True,
             )
+        elif remote_exists and not local_exists:
+            # Branch exists remotely but not locally - checkout from remote
+            logging.info(f"Checking out remote branch: {repo_spec.branch}")
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(branch_dir),
+                    "checkout",
+                    "-b",
+                    repo_spec.branch,
+                    f"origin/{repo_spec.branch}",
+                ],
+                check=True,
+            )
         else:
-            # Checkout the existing branch
+            # Branch exists locally - just checkout
+            logging.info(f"Checking out local branch: {repo_spec.branch}")
             subprocess.run(
                 ["git", "-C", str(branch_dir), "checkout", repo_spec.branch],
                 check=True,
-            )
-            # Pull latest changes
-            subprocess.run(
-                ["git", "-C", str(branch_dir), "pull"],
-                check=False,  # Don't fail if already up to date
             )
     else:
         logging.info(f"Branch copy already exists: {branch_dir}")
