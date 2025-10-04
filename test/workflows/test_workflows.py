@@ -4,7 +4,7 @@ import os
 WORKFLOWS_DIR = os.path.dirname(__file__)
 
 
-def test_fresh_container():
+def test_workflow_0_fresh_container():
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_0_fresh_container.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -13,7 +13,7 @@ def test_fresh_container():
     assert "✓ Fresh container test completed" in output, "Fresh container test did not complete"
 
 
-def test_stop_and_restart():
+def test_workflow_1_stop_and_restart():
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_1_stop_and_restart.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -22,7 +22,7 @@ def test_stop_and_restart():
     assert "✓ Stop and restart test completed" in output, "Stop and restart test did not complete"
 
 
-def test_delete_and_restart():
+def test_workflow_2_delete_and_restart():
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_2_delete_and_restart.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -33,7 +33,7 @@ def test_delete_and_restart():
     )
 
 
-def test_force_rebuild():
+def test_workflow_3_force_rebuild():
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_3_force_rebuild.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -42,7 +42,7 @@ def test_force_rebuild():
     assert "✓ Force rebuild test completed" in output, "Force rebuild test did not complete"
 
 
-def test_container_breakout():
+def test_workflow_4_container_breakout():
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_4_container_breakout.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -53,7 +53,7 @@ def test_container_breakout():
     )
 
 
-def test_workflow_1_pwd():
+def test_workflow_6_pwd():
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_6_pwd.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -70,7 +70,7 @@ def test_workflow_1_pwd():
     )
 
 
-def test_workflow_2_git():
+def test_workflow_7_git():
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_7_git.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -79,7 +79,7 @@ def test_workflow_2_git():
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 2 output"
 
 
-def test_workflow_4_persistent():
+def test_workflow_8_persistent():
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_8_persistent.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -93,7 +93,7 @@ def test_workflow_4_persistent():
     ), "Expected output from 'cat persistent.txt' not found in workflow 4 persistent output"
 
 
-def test_workflow_5_force_rebuild_cache():
+def test_workflow_9_force_rebuild_cache():
     """Test --nocache flag functionality"""
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_9_force_rebuild_cache.sh")
     os.chmod(script, 0o755)
@@ -108,7 +108,7 @@ def test_workflow_5_force_rebuild_cache():
     assert "No-cache rebuild test completed" in output, "No-cache rebuild section not found"
 
 
-def test_workflow_6_clean_git():
+def test_workflow_10_clean_git():
     script = os.path.join(WORKFLOWS_DIR, "test_workflow_10_clean_git.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
