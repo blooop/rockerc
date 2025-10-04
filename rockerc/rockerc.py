@@ -638,6 +638,47 @@ def _parse_extra_flags(argv: List[str]) -> Tuple[bool, bool, bool, List[str]]:
     return vsc, force, verbose, remaining
 
 
+def parse_cli_extensions_and_image(
+    args: List[str],
+) -> Tuple[List[str], Optional[str], List[str]]:
+    """Parse CLI arguments into extensions, image, and command.
+
+    Args:
+        args: List of command-line arguments (after removing --vsc, --force, --verbose)
+
+    Returns:
+        Tuple of (extensions, image, command)
+        - extensions: List of extension names (without -- prefix)
+        - image: Docker image name (first non-flag argument) or None
+        - command: Command arguments (all args after image)
+
+    Examples:
+        ['--claude', 'ubuntu:22.04'] -> (['claude'], 'ubuntu:22.04', [])
+        ['--user', '--git', 'ubuntu:22.04', 'bash'] -> (['user', 'git'], 'ubuntu:22.04', ['bash'])
+        ['ubuntu:22.04'] -> ([], 'ubuntu:22.04', [])
+        ['--user'] -> (['user'], None, [])
+    """
+    extensions: List[str] = []
+    image: Optional[str] = None
+    command: List[str] = []
+
+    image_found = False
+    for arg in args:
+        if arg.startswith("--"):
+            # Extension flag
+            ext_name = arg[2:]  # Remove '--' prefix
+            extensions.append(ext_name)
+        elif not image_found:
+            # First non-flag argument is the image
+            image = arg
+            image_found = True
+        else:
+            # Remaining arguments are command
+            command.append(arg)
+
+    return extensions, image, command
+
+
 def _configure_logging(verbose: bool):  # pragma: no cover - formatting only
     # Remove any existing handlers (avoid duplicate logs when called multiple times)
     root = logging.getLogger()
@@ -744,6 +785,17 @@ def run_rockerc(path: str = "."):
         merged_dict["args"].remove("create-dockerfile")
         create_dockerfile = True
 
+    # Parse CLI arguments to extract extensions, image, and command
+    cli_extensions, cli_image, cli_command = parse_cli_extensions_and_image(filtered_cli)
+
+    # Merge CLI extensions with config extensions
+    if cli_extensions:
+        merged_dict["args"] = deduplicate_extensions(merged_dict.get("args", []) + cli_extensions)
+
+    # Override image if provided via CLI
+    if cli_image:
+        merged_dict["image"] = cli_image
+
     # Detect explicit container name in user filtered args (very naive: look for --name <value>)
     explicit_name = None
     if "--name" in filtered_cli:
@@ -755,8 +807,8 @@ def run_rockerc(path: str = "."):
 
     container_name = derive_container_name(explicit_name)
 
-    # Remaining CLI (space-preserved) for injection pass
-    extra_cli = " ".join(filtered_cli)
+    # Command arguments (space-preserved) for injection pass
+    extra_cli = " ".join(cli_command)
 
     plan = prepare_launch_plan(
         merged_dict,
