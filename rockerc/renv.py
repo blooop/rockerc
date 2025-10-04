@@ -633,6 +633,9 @@ def run_rocker_command(
 
     # Add named parameters (but skip special ones we handle separately)
     for key, value in config.items():
+        # Skip internal markers (keys starting with underscore) and special keys
+        if key.startswith("_"):
+            continue
         if key not in ["image", "args", "volume", "oyr-run-arg"]:
             cmd_parts.extend([f"--{key}", str(value)])
 
@@ -832,8 +835,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 if ret != 0:
                     return ret
 
-            # Restore working directory before attach operations
-            os.chdir(original_cwd)
+            # Change to branch_dir for docker exec operations (must be in mounted directory)
+            os.chdir(branch_dir)
 
             # Wait for container to be ready
             if not wait_for_container(container_name):
@@ -857,8 +860,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             exists = False
 
         if exists:
-            # Restore cwd before attaching
-            os.chdir(original_cwd)
+            # Change to branch_dir for docker exec operations (must be in mounted directory)
+            os.chdir(branch_dir)
 
             # Container already running, attach to it
             if command:
