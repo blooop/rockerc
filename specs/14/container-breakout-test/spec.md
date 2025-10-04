@@ -4,24 +4,23 @@
 When the `~/renv` directory is deleted while a container is running, rockerc needs to detect the "container breakout" condition and automatically rebuild and reattach to a new container. Currently this works, but there's no automated test to ensure it continues working.
 
 ## Solution
+
 Create `test_workflow_7_container_breakout.sh` that:
-1. Creates and attaches to a container
-2. Exits the container
-3. Deletes the `~/renv` directory
-4. Runs `renv` again with the same repo
-5. Verifies that rockerc detects the container breakout and successfully rebuilds/reattaches
+1. Runs `renv blooop/test_renv pwd` (serially)
+2. Deletes the `~/renv` directory
+3. Runs `renv blooop/test_renv pwd` again (serially)
+4. Verifies that rockerc prints about container breakout and renv rebuilds the container
 
 ## Expected behavior
 ```bash
 # First run - creates container
-renv blooop/test_renv
-exit
+renv blooop/test_renv pwd
 
 # Delete renv directory
 rm -rf ~/renv
 
 # Second run - should detect breakout and rebuild
-renv blooop/test_renv
+renv blooop/test_renv pwd
 # Should see: "Container appears corrupted (possible breakout detection), launching new container"
 # Should successfully attach to new container
 ```
