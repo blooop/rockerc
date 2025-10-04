@@ -5,9 +5,23 @@ import os
 def run_workflow_script(script_filename):
     script = os.path.join(WORKFLOWS_DIR, script_filename)
     os.chmod(script, 0o755)
-    result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    output = result.stdout.decode() + result.stderr.decode()
-    return result, output
+    # Run the script and stream output live to the console
+    process = subprocess.Popen([script], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    output = ""
+    for line in iter(process.stdout.readline, b""):
+        if not line:
+            break
+        decoded = line.decode()
+        print(decoded, end="")
+        output += decoded
+    process.stdout.close()
+    returncode = process.wait()
+
+    class Result:
+        def __init__(self, returncode):
+            self.returncode = returncode
+
+    return Result(returncode), output
 
 
 WORKFLOWS_DIR = os.path.dirname(__file__)
