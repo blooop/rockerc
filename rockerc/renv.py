@@ -452,7 +452,11 @@ def build_rocker_config(
         _load_and_validate_config,
     )
 
+    import re
+
     container_name = get_container_name(repo_spec)
+    # Sanitize container_name to allow only alphanumeric, dash, underscore
+    container_name = re.sub(r"[^a-zA-Z0-9_-]", "_", container_name)
     branch_dir = get_worktree_dir(repo_spec)
 
     # Load configs in order of precedence (lowest first)
@@ -949,7 +953,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 check=False,
             )
 
-            if test_result.returncode != 0 or "container breakout" in test_result.stderr.lower():
+            stderr_val = test_result.stderr or ""
+            if test_result.returncode != 0 or "container breakout" in stderr_val.lower():
                 # Container is corrupted - rebuild it
                 logging.info(
                     "Container appears corrupted (possible breakout detection), rebuilding"
@@ -985,6 +990,9 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         workdir = f"/workspaces/{container_name}"
 
         if command:
+            # Ensure command is a list of strings
+            if not (isinstance(command, list) and all(isinstance(x, str) for x in command)):
+                raise ValueError("command must be a list of strings")
             # Execute command via docker exec with working directory
             exec_cmd = ["docker", "exec", "-w", workdir, container_name] + command
             logging.info(f"Executing command: {' '.join(exec_cmd)}")
