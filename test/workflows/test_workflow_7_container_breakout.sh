@@ -15,4 +15,3 @@ echo "✓ ~/renv deleted"
 
 echo "Step 3: Run renv blooop/test_renv pwd again (should detect breakout and rebuild)"
 renv blooop/test_renv pwd
-
