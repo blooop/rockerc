@@ -36,7 +36,7 @@ def test_docker_exec_interactive_flags(
     stdout_tty,
     expected_flags,
 ):
-    # pylint: disable=too-many-positional-arguments
+    # pylint: disable=too-many-positional-arguments,unused-argument
     mock_stdin_isatty.return_value = stdin_tty
     mock_stdout_isatty.return_value = stdout_tty
     mock_subprocess_run.return_value.returncode = 0
