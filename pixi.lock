@@ -50,7 +50,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e5/48/1549795ba7742c948d2ad169c1c8cdbae65bc450d6cd753d124b17c8cd32/certifi-2025.8.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7e/95/42aa2156235cbc8fa61208aded06ef46111c4d3f0de233107b3f38631803/charset_normalizer-3.4.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a2/77/8c6d22bf61921a59bce5471c2f1f7ac30cd4ac50aadde72b8c48d5727902/coverage-7.10.7-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/f9/09/5a50728a4ed64a66454c14bd95d53a6050d4ad579f8bda61d25d9329fdff/deps_rocker-0.16.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a2/95/78eab349913fe845dc24146f642777e729d39cf95004465eb823fdddcb28/deps_rocker-0.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/50/3d/9373ad9c56321fdab5b41197068e1d8c25883b3fea29dd361f9b55116869/dill-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -129,7 +129,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e5/48/1549795ba7742c948d2ad169c1c8cdbae65bc450d6cd753d124b17c8cd32/certifi-2025.8.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/65/1a/7425c952944a6521a9cfa7e675343f83fd82085b8af2b1373a2409c683dc/charset_normalizer-3.4.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/19/20/d0384ac06a6f908783d9b6aa6135e41b093971499ec488e47279f5b846e6/coverage-7.10.7-cp310-cp310-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/f9/09/5a50728a4ed64a66454c14bd95d53a6050d4ad579f8bda61d25d9329fdff/deps_rocker-0.16.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a2/95/78eab349913fe845dc24146f642777e729d39cf95004465eb823fdddcb28/deps_rocker-0.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/50/3d/9373ad9c56321fdab5b41197068e1d8c25883b3fea29dd361f9b55116869/dill-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -210,7 +210,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e5/48/1549795ba7742c948d2ad169c1c8cdbae65bc450d6cd753d124b17c8cd32/certifi-2025.8.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/87/df/b7737ff046c974b183ea9aa111b74185ac8c3a326c6262d413bd5a1b8c69/charset_normalizer-3.4.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/b0/ef/bd8e719c2f7417ba03239052e099b76ea1130ac0cbb183ee1fcaa58aaff3/coverage-7.10.7-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/f9/09/5a50728a4ed64a66454c14bd95d53a6050d4ad579f8bda61d25d9329fdff/deps_rocker-0.16.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a2/95/78eab349913fe845dc24146f642777e729d39cf95004465eb823fdddcb28/deps_rocker-0.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/50/3d/9373ad9c56321fdab5b41197068e1d8c25883b3fea29dd361f9b55116869/dill-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -289,7 +289,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e5/48/1549795ba7742c948d2ad169c1c8cdbae65bc450d6cd753d124b17c8cd32/certifi-2025.8.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/16/ab/0233c3231af734f5dfcf0844aa9582d5a1466c985bbed6cedab85af9bfe3/charset_normalizer-3.4.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a6/90/a64aaacab3b37a17aaedd83e8000142561a29eb262cede42d94a67f7556b/coverage-7.10.7-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/f9/09/5a50728a4ed64a66454c14bd95d53a6050d4ad579f8bda61d25d9329fdff/deps_rocker-0.16.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a2/95/78eab349913fe845dc24146f642777e729d39cf95004465eb823fdddcb28/deps_rocker-0.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/50/3d/9373ad9c56321fdab5b41197068e1d8c25883b3fea29dd361f9b55116869/dill-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -366,7 +366,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e5/48/1549795ba7742c948d2ad169c1c8cdbae65bc450d6cd753d124b17c8cd32/certifi-2025.8.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7e/95/42aa2156235cbc8fa61208aded06ef46111c4d3f0de233107b3f38631803/charset_normalizer-3.4.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a2/77/8c6d22bf61921a59bce5471c2f1f7ac30cd4ac50aadde72b8c48d5727902/coverage-7.10.7-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/f9/09/5a50728a4ed64a66454c14bd95d53a6050d4ad579f8bda61d25d9329fdff/deps_rocker-0.16.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/a2/95/78eab349913fe845dc24146f642777e729d39cf95004465eb823fdddcb28/deps_rocker-0.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/50/3d/9373ad9c56321fdab5b41197068e1d8c25883b3fea29dd361f9b55116869/dill-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/0a/c500fc4c8f48cac08b76b8987070b178f0549534584ac1f414066700a3f9/empy-4.2.tar.gz
@@ -616,10 +616,10 @@ packages:
   requires_dist:
   - tomli ; python_full_version <= '3.11' and extra == 'toml'
   requires_python: '>=3.9'
-- pypi: https://files.pythonhosted.org/packages/f9/09/5a50728a4ed64a66454c14bd95d53a6050d4ad579f8bda61d25d9329fdff/deps_rocker-0.16.0-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/a2/95/78eab349913fe845dc24146f642777e729d39cf95004465eb823fdddcb28/deps_rocker-0.17.0-py3-none-any.whl
   name: deps-rocker
-  version: 0.16.0
-  sha256: dfe9acac206bd3dc8475f0f81fd9a25616e19f0e51bfcf4726c10822188c997d
+  version: 0.17.0
+  sha256: 063ec4e7ab6b8c30027344c5d58ed94679988d25a83392502c0db77a0344db11
   requires_dist:
   - off-your-rocker>=0.1.0
   - pyyaml>=5.0

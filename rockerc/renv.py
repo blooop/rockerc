@@ -113,10 +113,18 @@ def get_available_branches(repo_spec: RepoSpec) -> List[str]:
         return []
 
 
-def branch_exists(repo_spec: RepoSpec, branch_name: str) -> bool:
-    """Check if a branch exists in the repository"""
-    available_branches = get_available_branches(repo_spec)
-    return branch_name in available_branches
+# --- Review: Replace branch_exists/remote_branch_exists with git_ref_exists ---
+def git_ref_exists(repo_dir: pathlib.Path, ref: str) -> bool:
+    """Return True if <ref> (branch or origin/branch) is known to git."""
+    return (
+        subprocess.run(
+            ["git", "-C", str(repo_dir), "rev-parse", "--verify", ref],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode
+        == 0
+    )
 
 
 def get_default_branch(repo_spec: RepoSpec) -> str:
@@ -387,36 +395,26 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
         # Copy entire cache directory to branch directory
         shutil.copytree(cache_dir, branch_dir)
 
-        # Check if the branch exists in cache
-        if not branch_exists(repo_spec, repo_spec.branch):
-            default_branch = get_default_branch(repo_spec)
-            logging.info(
-                f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default_branch}'"
-            )
-            # Create the new branch from the default branch
-            subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    str(branch_dir),
-                    "checkout",
-                    "-b",
-                    repo_spec.branch,
-                    f"origin/{default_branch}",
-                ],
-                check=True,
-            )
+        # Use git_ref_exists to check for local and remote branch
+        local = git_ref_exists(branch_dir, repo_spec.branch)
+        remote = git_ref_exists(branch_dir, f"origin/{repo_spec.branch}")
+        default = get_default_branch(repo_spec)
+
+        cmd = ["git", "-C", str(branch_dir), "checkout"]
+        if local:
+            cmd.append(repo_spec.branch)
+            logging.info(f"Checking out local branch: {repo_spec.branch}")
+        elif remote:
+            cmd += ["-b", repo_spec.branch, f"origin/{repo_spec.branch}"]
+            logging.info(f"Checking out remote branch: {repo_spec.branch}")
         else:
-            # Checkout the existing branch
-            subprocess.run(
-                ["git", "-C", str(branch_dir), "checkout", repo_spec.branch],
-                check=True,
-            )
-            # Pull latest changes
-            subprocess.run(
-                ["git", "-C", str(branch_dir), "pull"],
-                check=False,  # Don't fail if already up to date
-            )
+            cmd += ["-b", repo_spec.branch, f"origin/{default}"]
+            logging.info(f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default}'")
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Failed to checkout branch '{repo_spec.branch}'. Error: {e}")
+            raise
     else:
         logging.info(f"Branch copy already exists: {branch_dir}")
         # Fetch and pull latest changes
@@ -454,7 +452,11 @@ def build_rocker_config(
         _load_and_validate_config,
     )
 
+    import re
+
     container_name = get_container_name(repo_spec)
+    # Sanitize container_name to allow only alphanumeric, dash, underscore
+    container_name = re.sub(r"[^a-zA-Z0-9_-]", "_", container_name)
     branch_dir = get_worktree_dir(repo_spec)
 
     # Load configs in order of precedence (lowest first)
@@ -633,6 +635,9 @@ def run_rocker_command(
 
     # Add named parameters (but skip special ones we handle separately)
     for key, value in config.items():
+        # Skip internal markers (keys starting with underscore) and special keys
+        if key.startswith("_"):
+            continue
         if key not in ["image", "args", "volume", "oyr-run-arg"]:
             cmd_parts.extend([f"--{key}", str(value)])
 
@@ -832,13 +837,68 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 if ret != 0:
                     return ret
 
-            # Restore working directory before attach operations
-            os.chdir(original_cwd)
+            # Change to branch_dir for docker exec operations (must be in mounted directory)
+            os.chdir(branch_dir)
 
             # Wait for container to be ready
             if not wait_for_container(container_name):
                 logging.error(f"Timed out waiting for container '{container_name}'")
                 return 1
+
+            # Test if container is corrupted (breakout detection) before attaching
+            # This can happen if renv dir was deleted while container was running
+            if not plan.created:  # Only test if we're reusing an existing container
+                test_result = subprocess.run(
+                    ["docker", "exec", container_name, "pwd"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                if (
+                    test_result.returncode != 0
+                    or "container breakout" in test_result.stderr.lower()
+                ):
+                    # Container is corrupted - rebuild it
+                    logging.info(
+                        "Container appears corrupted (possible breakout detection), rebuilding for VSCode"
+                    )
+                    from rockerc.core import stop_and_remove_container as core_stop_and_remove
+
+                    core_stop_and_remove(container_name)
+
+                    # Rebuild container using rocker command without --detach (rocker doesn't support it)
+                    # Build rocker args manually to avoid --detach flag from build_rocker_arg_injections
+                    from rockerc.core import (
+                        ensure_name_args,
+                        add_extension_env,
+                        ensure_volume_binding,
+                    )
+                    from rockerc.rockerc import yaml_dict_to_args
+
+                    injections = ""
+                    injections = ensure_name_args(injections, container_name)
+                    injections = add_extension_env(injections, config.get("args", []))
+                    injections = ensure_volume_binding(injections, container_name, branch_dir)
+
+                    args_copy = dict(config)
+                    rocker_argline = yaml_dict_to_args(args_copy, injections)
+                    rocker_cmd = ["rocker"] + shlex.split(rocker_argline)
+
+                    logging.info(f"Rebuilding container: {' '.join(rocker_cmd)}")
+
+                    # Run rocker in detached mode using subprocess (container runs in background)
+                    result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir)
+                    if result.returncode != 0:
+                        return result.returncode
+
+                    # Give container time to start
+                    time.sleep(2)
+
+                    # Wait for new container to be ready
+                    if not wait_for_container(container_name):
+                        logging.error(f"Timed out waiting for rebuilt container '{container_name}'")
+                        return 1
 
             # Launch VSCode if requested
             if plan.vscode:
@@ -847,56 +907,111 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             # Attach interactive shell
             return interactive_shell(container_name)
 
-        # Terminal mode: check if container already running and reuse it
-        from rockerc.core import stop_and_remove_container as core_stop_and_remove
+        # Terminal mode: use detached workflow (same as rockerc)
+        # Remove cwd extension for detached mode - we'll use docker exec -w instead
+        # Extension change detection in prepare_launch_plan will automatically rebuild
+        # if the stored container has different extensions (e.g., had cwd before)
+        config["args"] = [ext for ext in config.get("args", []) if ext != "cwd"]
 
-        exists = container_running(container_name)
+        plan = prepare_launch_plan(
+            args_dict=config,
+            extra_cli="",
+            container_name=container_name,
+            vscode=False,
+            force=force,
+            path=branch_dir,
+            extensions=config["args"],
+        )
 
-        if force and exists:
-            core_stop_and_remove(container_name)
-            exists = False
+        # Add keep-alive command to rocker_cmd so detached container stays running
+        if plan.rocker_cmd:
+            plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
 
-        if exists:
-            # Restore cwd before attaching
+        # If we need to launch a new container, do it
+        if plan.rocker_cmd:
+            ret = launch_rocker(plan.rocker_cmd)
+            if ret != 0:
+                os.chdir(original_cwd)
+                return ret
+
+        # Wait for container to be ready
+        if not wait_for_container(container_name):
+            logging.error(f"Timed out waiting for container '{container_name}'")
             os.chdir(original_cwd)
+            return 1
 
-            # Container already running, attach to it
-            if command:
-                return attach_to_container(container_name, command)
-            return _try_attach_with_fallback(repo_spec, container_name, None)
+        # Test for container breakout (if directory was deleted while container running)
+        # Only test if we're reusing an existing container
+        if not plan.created:
+            # Test if we can actually access the working directory
+            # Just checking if it exists isn't enough - we need to try to use it
+            workdir = f"/workspaces/{container_name}"
+            test_result = subprocess.run(
+                ["docker", "exec", "-w", workdir, container_name, "pwd"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
 
-        # Container doesn't exist - launch it with rocker
-        # For terminal mode, we use rocker directly (NOT detached) so it handles the command/shell
-        # But we need to add volume mount since it's not in config dict anymore
-        from rockerc.core import ensure_name_args, add_extension_env, ensure_volume_binding
-        from rockerc.rockerc import yaml_dict_to_args
+            stderr_val = test_result.stderr or ""
+            if test_result.returncode != 0 or "container breakout" in stderr_val.lower():
+                # Container is corrupted - rebuild it
+                logging.info(
+                    "Container appears corrupted (possible breakout detection), rebuilding"
+                )
+                from rockerc.core import stop_and_remove_container as core_stop_and_remove
 
-        # Build injections manually (without --detach for terminal mode)
-        injections = ""
-        injections = ensure_name_args(injections, container_name)
-        injections = add_extension_env(injections, config.get("args", []))
-        injections = ensure_volume_binding(injections, container_name, branch_dir)
+                core_stop_and_remove(container_name)
 
-        args_copy = dict(config)
-        rocker_argline = yaml_dict_to_args(args_copy, injections)
-        rocker_cmd = ["rocker"] + shlex.split(rocker_argline)
+                # Rebuild container
+                plan = prepare_launch_plan(
+                    args_dict=config,
+                    extra_cli="",
+                    container_name=container_name,
+                    vscode=False,
+                    force=True,
+                    path=branch_dir,
+                    extensions=config["args"],
+                )
 
-        # Add command if provided
+                if plan.rocker_cmd:
+                    plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
+                    ret = launch_rocker(plan.rocker_cmd)
+                    if ret != 0:
+                        os.chdir(original_cwd)
+                        return ret
+
+                if not wait_for_container(container_name):
+                    logging.error(f"Timed out waiting for rebuilt container '{container_name}'")
+                    os.chdir(original_cwd)
+                    return 1
+
+        # Execute command or attach interactive shell with working directory set
+        workdir = f"/workspaces/{container_name}"
+
         if command:
-            rocker_cmd.extend(command)
+            # Ensure command is a list of strings
+            if not (isinstance(command, list) and all(isinstance(x, str) for x in command)):
+                raise ValueError("command must be a list of strings")
+            # Execute command via docker exec with working directory
+            exec_cmd = ["docker", "exec", "-w", workdir, container_name] + command
+            logging.info(f"Executing command: {' '.join(exec_cmd)}")
+            result = subprocess.run(exec_cmd, check=False)
+            os.chdir(original_cwd)
+            return result.returncode
+
+        # Attach interactive shell - need to set working directory via env or wrapper
+        # Since core.py's interactive_shell doesn't support -w flag, we need to use our own exec
+        # Check if we have a TTY to use -it flags
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"]
         else:
-            rocker_cmd.append("bash")
+            # No TTY, run without -it
+            exec_cmd = ["docker", "exec", "-w", workdir, container_name, "/bin/bash"]
 
-        logging.info(f"Running rocker: {' '.join(rocker_cmd)}")
-
-        # Run rocker (not detached for terminal mode)
-        # Use target_dir as cwd if it exists, otherwise use current dir
-        run_cwd = target_dir if pathlib.Path(target_dir).exists() else None
-        result = subprocess.run(rocker_cmd, check=False, cwd=run_cwd)
-
-        # Restore cwd
+        logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
+        result = subprocess.run(exec_cmd, check=False)
         os.chdir(original_cwd)
-
         return result.returncode
     finally:
         # Restore original working directory
