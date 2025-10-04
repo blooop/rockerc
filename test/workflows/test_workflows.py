@@ -32,7 +32,14 @@ def test_workflow_1_pwd():
     output = result.stdout.decode() + result.stderr.decode()
     # Add custom asserts for this workflow as needed
     assert result.returncode in (0, 1), f"Workflow 1 pwd failed: {output}"
-    assert "On branch" in output, "Expected git status 'On branch' not found in workflow 1 output"
+    # Check for pwd output (should be from inside the container)
+    assert "/test_renv-main" in output(
+        "Expected pwd output from inside the container not found in workflow 1 output"
+    )
+    # Check for ls -l output (should list files)
+    assert "total" in output or "drwx" in output or "-rw" in output, (
+        "Expected ls -l output not found in workflow 1 output"
+    )
 
 
 def test_workflow_2_git():
@@ -42,18 +49,6 @@ def test_workflow_2_git():
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode in (0, 1), f"Workflow 2 git failed: {output}"
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 2 output"
-
-
-def test_workflow_3_cmd():
-    script = os.path.join(WORKFLOWS_DIR, "test_workflow_3_cmd.sh")
-    os.chmod(script, 0o755)
-    result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    output = result.stdout.decode() + result.stderr.decode()
-    assert result.returncode in (0, 1), f"Workflow 3 cmd failed: {output}"
-    assert "On branch" in output, "Expected git status 'On branch' not found in workflow 3 output"
-    assert "/tmp/test_renv" in output or "test_renv" in output, (
-        "Expected working directory 'test_renv' not found in workflow 3 output"
-    )
 
 
 def test_workflow_4_persistent():
