@@ -5,7 +5,7 @@ WORKFLOWS_DIR = os.path.dirname(__file__)
 
 
 def test_fresh_container():
-    script = os.path.join(WORKFLOWS_DIR, "basic_lifecycle/test_fresh_container.sh")
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_0_fresh_container.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
@@ -14,7 +14,7 @@ def test_fresh_container():
 
 
 def test_stop_and_restart():
-    script = os.path.join(WORKFLOWS_DIR, "basic_lifecycle/test_stop_and_restart.sh")
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_1_stop_and_restart.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
@@ -23,7 +23,7 @@ def test_stop_and_restart():
 
 
 def test_delete_and_restart():
-    script = os.path.join(WORKFLOWS_DIR, "basic_lifecycle/test_delete_and_restart.sh")
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_2_delete_and_restart.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
@@ -34,7 +34,7 @@ def test_delete_and_restart():
 
 
 def test_force_rebuild():
-    script = os.path.join(WORKFLOWS_DIR, "basic_lifecycle/test_force_rebuild.sh")
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_3_force_rebuild.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
@@ -43,7 +43,7 @@ def test_force_rebuild():
 
 
 def test_container_breakout():
-    script = os.path.join(WORKFLOWS_DIR, "basic_lifecycle/test_container_breakout.sh")
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_4_container_breakout.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
@@ -54,7 +54,7 @@ def test_container_breakout():
 
 
 def test_workflow_1_pwd():
-    script = os.path.join(WORKFLOWS_DIR, "test_workflow_1_pwd.sh")
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_6_pwd.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
@@ -71,7 +71,7 @@ def test_workflow_1_pwd():
 
 
 def test_workflow_2_git():
-    script = os.path.join(WORKFLOWS_DIR, "test_workflow_2_git.sh")
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_7_git.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
@@ -80,7 +80,7 @@ def test_workflow_2_git():
 
 
 def test_workflow_4_persistent():
-    script = os.path.join(WORKFLOWS_DIR, "test_workflow_4_persistent.sh")
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_8_persistent.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
@@ -95,7 +95,7 @@ def test_workflow_4_persistent():
 
 def test_workflow_5_force_rebuild_cache():
     """Test --nocache flag functionality"""
-    script = os.path.join(WORKFLOWS_DIR, "test_workflow_5_force_rebuild_cache.sh")
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_9_force_rebuild_cache.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
@@ -109,7 +109,7 @@ def test_workflow_5_force_rebuild_cache():
 
 
 def test_workflow_6_clean_git():
-    script = os.path.join(WORKFLOWS_DIR, "test_workflow_6_clean_git.sh")
+    script = os.path.join(WORKFLOWS_DIR, "test_workflow_10_clean_git.sh")
     os.chmod(script, 0o755)
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
