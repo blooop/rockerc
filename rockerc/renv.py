@@ -723,12 +723,14 @@ def run_rocker_command(
                 break
 
     # Enable Docker BuildKit for improved build performance
-    env = {**os.environ, 'DOCKER_BUILDKIT': '1'}
-    
+    env = {**os.environ, "DOCKER_BUILDKIT": "1"}
+
     if detached:
         # Run in background and return immediately
         # pylint: disable=consider-using-with
-        subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd, env=env)
+        subprocess.Popen(
+            cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd, env=env
+        )
         # Give it a moment to start
         time.sleep(2)
         return 0
@@ -891,7 +893,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
                     # Run rocker in detached mode using subprocess (container runs in background)
                     # Enable Docker BuildKit for improved build performance
-                    env = {**os.environ, 'DOCKER_BUILDKIT': '1'}
+                    env = {**os.environ, "DOCKER_BUILDKIT": "1"}
                     result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir, env=env)
                     if result.returncode != 0:
                         return result.returncode

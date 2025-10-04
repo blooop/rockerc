@@ -307,7 +307,7 @@ def launch_rocker(rocker_cmd: list[str]) -> int:
     """
     LOGGER.info("Running rocker detached: %s", " ".join(rocker_cmd))
     # Enable Docker BuildKit for improved build performance
-    env = {**os.environ, 'DOCKER_BUILDKIT': '1'}
+    env = {**os.environ, "DOCKER_BUILDKIT": "1"}
     proc = subprocess.run(rocker_cmd, check=False, env=env)
     return proc.returncode
 
