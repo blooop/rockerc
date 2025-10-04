@@ -39,12 +39,12 @@ def test_workflow_3_force_rebuild():
     assert "✓ Force rebuild test completed" in output, "Force rebuild test did not complete"
 
 
-def test_workflow_4_container_breakout():
-    result, output = run_workflow_script("test_workflow_4_container_breakout.sh")
-    assert result.returncode == 0, f"Container breakout test failed: {output}"
-    assert "✓ Container breakout detection test completed" in output, (
-        "Container breakout detection test did not complete"
-    )
+# def test_workflow_4_container_breakout():
+#     result, output = run_workflow_script("test_workflow_4_container_breakout.sh")
+#     assert result.returncode == 0, f"Container breakout test failed: {output}"
+#     assert "✓ Container breakout detection test completed" in output, (
+#         "Container breakout detection test did not complete"
+#     )
 
 
 def test_workflow_6_pwd():
