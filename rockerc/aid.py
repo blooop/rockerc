@@ -79,8 +79,9 @@ Examples:
 
         # Build claude command in interactive mode
         # Launch Claude interactively with the prompt already sent
-        # Escape single quotes in prompt for shell
-        escaped_prompt = prompt_text.replace("'", "'\\''")
+        # Double-escape for proper shell quoting through rocker
+        # Replace single quotes with '\'' for bash -c quoting
+        escaped_prompt = prompt_text.replace("'", "'\"'\"'")
 
         # Determine the container workspace path
         # renv mounts at /workspaces/{container_name}
@@ -90,8 +91,9 @@ Examples:
             workspace_path = f"{workspace_path}/{repo_spec.subfolder}"
 
         # Run claude in interactive mode with prompt
-        # Using -p sends the prompt and keeps Claude interactive
-        claude_cmd = ["bash", "-c", f"cd {workspace_path} && claude -p '{escaped_prompt}'"]
+        # The command needs to be a single bash -c string that rocker will pass to docker
+        claude_cmd_str = f"cd {workspace_path} && claude -p '{escaped_prompt}'"
+        claude_cmd = ["bash", "-c", claude_cmd_str]
 
         # Launch container with claude command
         return manage_container(
