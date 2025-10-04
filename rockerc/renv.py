@@ -919,11 +919,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             return interactive_shell(container_name)
 
         # Terminal mode: use detached workflow (same as rockerc)
-        # Remove cwd extension for detached mode - we'll use docker exec -w instead
-        # Extension change detection in prepare_launch_plan will automatically rebuild
-        # if the stored container has different extensions (e.g., had cwd before)
-        config["args"] = [ext for ext in config.get("args", []) if ext != "cwd"]
-
+        # Keep cwd extension - it sets WORKDIR and we can still override with docker exec -w
         plan = prepare_launch_plan(
             args_dict=config,
             extra_cli="",
