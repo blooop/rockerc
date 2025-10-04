@@ -29,6 +29,7 @@ import time
 import yaml
 import shutil
 import shlex
+import os
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 
@@ -721,14 +722,17 @@ def run_rocker_command(
                 logging.info(f"Using worktree directory as cwd: {cwd}")
                 break
 
+    # Enable Docker BuildKit for improved build performance
+    env = {**os.environ, 'DOCKER_BUILDKIT': '1'}
+    
     if detached:
         # Run in background and return immediately
         # pylint: disable=consider-using-with
-        subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd)
+        subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd, env=env)
         # Give it a moment to start
         time.sleep(2)
         return 0
-    return subprocess.run(cmd_parts, check=False, cwd=cwd).returncode
+    return subprocess.run(cmd_parts, check=False, cwd=cwd, env=env).returncode
 
 
 def _handle_container_corruption(
@@ -804,8 +808,6 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     target_dir = config.pop("_renv_target_dir", str(branch_dir))
 
     # Change to the target directory so cwd extension picks it up
-    import os
-
     original_cwd = os.getcwd()
     os.chdir(target_dir)
 
@@ -888,7 +890,9 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     logging.info(f"Rebuilding container: {' '.join(rocker_cmd)}")
 
                     # Run rocker in detached mode using subprocess (container runs in background)
-                    result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir)
+                    # Enable Docker BuildKit for improved build performance
+                    env = {**os.environ, 'DOCKER_BUILDKIT': '1'}
+                    result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir, env=env)
                     if result.returncode != 0:
                         return result.returncode
 
