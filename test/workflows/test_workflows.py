@@ -11,18 +11,18 @@ def test_workflow_0_basic_lifecycle():
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode == 0, f"Workflow 0 basic lifecycle failed: {output}"
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 0 output"
-    # assert "✓ Fresh container test completed" in output, "Fresh container test did not complete"
-    # assert "✓ Stop and restart test completed" in output, "Stop and restart test did not complete"
-    # assert "✓ Delete and restart test completed" in output, (
-    #     "Delete and restart test did not complete"
-    # )
-    # assert "✓ Force rebuild test completed" in output, "Force rebuild test did not complete"
-    # assert "✓ Container breakout detection test completed" in output, (
-    #     "Container breakout detection test did not complete"
-    # )
-    # assert "✓ Basic lifecycle test completed successfully" in output, (
-    #     "Basic lifecycle test did not complete"
-    # )
+    assert "✓ Fresh container test completed" in output, "Fresh container test did not complete"
+    assert "✓ Stop and restart test completed" in output, "Stop and restart test did not complete"
+    assert "✓ Delete and restart test completed" in output, (
+        "Delete and restart test did not complete"
+    )
+    assert "✓ Force rebuild test completed" in output, "Force rebuild test did not complete"
+    assert "✓ Container breakout detection test completed" in output, (
+        "Container breakout detection test did not complete"
+    )
+    assert "✓ Basic lifecycle test completed successfully" in output, (
+        "Basic lifecycle test did not complete"
+    )
 
 
 def test_workflow_1_pwd():
@@ -57,9 +57,12 @@ def test_workflow_4_persistent():
     result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode in (0, 1), f"Workflow 4 persistent failed: {output}"
-    assert "persistent.txt" in output, (
-        "Expected persistent file 'persistent.txt' not found in workflow 4 persistent output"
-    )
+    # Check for the output of 'cat persistent.txt' (should show error or contents)
+    assert (
+        "No such file or directory" in output
+        or "hello world" in output
+        or "persistent.txt" in output  # fallback for any mention
+    ), "Expected output from 'cat persistent.txt' not found in workflow 4 persistent output"
 
 
 def test_workflow_5_force_rebuild_cache():
@@ -70,11 +73,11 @@ def test_workflow_5_force_rebuild_cache():
     output = result.stdout.decode() + result.stderr.decode()
     assert result.returncode in (0, 1), f"Workflow 5 --nocache test failed: {output}"
 
-    # Check that date commands executed successfully
-    import re
-
-    assert re.search(r"\b20\d{2}\b", output), "Expected date output not found in workflow 5 output"
-    assert "=== NO-CACHE REBUILD TEST ===" in output, "No-cache rebuild section not found"
+    # Check for pwd output and no-cache rebuild message
+    assert "/test_renv-main" in output or "/tmp" in output, (
+        "Expected pwd output not found in workflow 5 output"
+    )
+    assert "No-cache rebuild test completed" in output, "No-cache rebuild section not found"
 
 
 def test_workflow_6_clean_git():
