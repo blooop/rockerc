@@ -9,6 +9,8 @@ Create `aid` (AI Develop) command that:
 - Reuses renv machinery for containerized environment setup
 - Launches Claude CLI interactively with the prompt pre-sent
 - User sees live Claude output and can continue the conversation
+- When delegating to renv, insert the `--` separator before the claude command so container options are parsed correctly
+- Support model selection flags provided before the repo spec (`--claude`, `--codex`, `--gemini`), defaulting to Claude
 
 ## Implementation
 1. Create new script `rockerc/aid.py` following renv pattern
