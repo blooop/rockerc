@@ -8,3 +8,4 @@
 - Keep git metadata functional so commits, pulls, and pushes still work inside the container.
 - Preserve existing behaviour when no subfolder is specified.
 - Ensure repeated runs reuse caches/containers without reintroducing parent folders.
+- When creating a fresh branch copy, update from remote refs first and avoid wiring new branches to track the template/default branch unless it actually exists upstream.
