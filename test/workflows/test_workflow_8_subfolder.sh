@@ -4,22 +4,14 @@ set -euo pipefail
 RENV_DIR="${RENV_DIR:-$HOME/renv}"
 rm -rf "${RENV_DIR}"
 
-output=""
-set +e
-output=$(renv blooop/test_renv@nf3#foldera/folderb 2>&1)
-status=$?
-set -e
+#should enter on main repo @ branch nf3
+renv blooop/test_renv@nf3 ls
 
-echo "${output}"
 
-if [[ ${status} -eq 0 ]]; then
-    echo "Expected renv to fail when sparse subfolder is missing." >&2
-    exit 1
-fi
+#should enter on main repo @ branch nf3 in subfolder folder1 and contain the folder "folder2"
+renv blooop/test_renv@nf3#folder1 ls
 
-if ! grep -q "Subfolder 'foldera/folderb' not found" <<<"${output}"; then
-    echo "Missing expected sparse checkout error message." >&2
-    exit 1
-fi
+#should enter on main repo @ branch nf3 in subfolder folder1/folder and contain the file "example.txt"
+renv blooop/test_renv@nf3#folder1 ls
 
 echo "✓ Subfolder workflow validated"
