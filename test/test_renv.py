@@ -4,6 +4,7 @@ from rockerc.renv import (
     RepoSpec,
     get_repo_dir,
     get_worktree_dir,
+    get_legacy_worktree_dir,
     build_rocker_config,
     container_exists,
     container_running,
@@ -49,8 +50,13 @@ class TestRepoSpec:
 
 
 class TestPathHelpers:
-    def dummy(self):
-        pass
+    def test_get_worktree_dir_nested_structure(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("RENV_DIR", str(tmp_path))
+        spec = RepoSpec("blooop", "test_renv", "feature/foo")
+        expected_new = tmp_path / "blooop" / "test_renv" / "test_renv-feature-foo"
+        expected_legacy = tmp_path / "blooop" / "test_renv-feature-foo"
+        assert get_worktree_dir(spec) == expected_new
+        assert get_legacy_worktree_dir(spec) == expected_legacy
 
 
 class TestRockerConfig:
@@ -198,6 +204,10 @@ class TestGitOperations:
         # Check that copytree was called to copy cache to branch directory
         mock_copytree.assert_called_once()
 
+        # The branch copy should fetch to ensure remote refs are current
+        fetch_calls = [call for call in mock_run.call_args_list if "fetch" in call[0][0]]
+        assert fetch_calls, "Expected a git fetch call when creating branch copy"
+
         # Check git checkout was called
         checkout_call = None
         for call in mock_run.call_args_list:
@@ -208,6 +218,28 @@ class TestGitOperations:
         assert checkout_call is not None
         assert "git" in checkout_call[0][0]
         assert "checkout" in checkout_call[0][0]
+
+    def test_setup_branch_copy_migrates_legacy_layout(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("RENV_DIR", str(tmp_path))
+        spec = RepoSpec("blooop", "test_renv", "main")
+
+        legacy_dir = get_legacy_worktree_dir(spec)
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        repo_cache = get_repo_dir(spec)
+        repo_cache.mkdir(parents=True, exist_ok=True)
+
+        with (
+            patch("rockerc.renv.setup_cache_repo") as mock_setup_cache,
+            patch("subprocess.run", return_value=Mock(returncode=0)) as mock_run,
+        ):
+            branch_dir = setup_branch_copy(spec)
+
+        mock_setup_cache.assert_called_once_with(spec)
+        assert branch_dir == get_worktree_dir(spec)
+        assert branch_dir.exists()
+        assert not legacy_dir.exists()
+        fetch_calls = [args for args in mock_run.call_args_list if "fetch" in args[0][0]]
+        assert fetch_calls
 
 
 class TestMainFunction:

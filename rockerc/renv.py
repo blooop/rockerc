@@ -22,6 +22,7 @@ This design ensures:
 
 import sys
 import subprocess
+import importlib.metadata
 import pathlib
 import logging
 import argparse
@@ -31,7 +32,7 @@ import shutil
 import shlex
 import os
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 from .rockerc import deduplicate_extensions
 
@@ -91,7 +92,19 @@ def get_available_repos(user: str) -> List[str]:
     user_dir = get_renv_root() / user
     if not user_dir.exists():
         return []
-    return [d.name for d in user_dir.iterdir() if d.is_dir()]
+    repos: set[str] = set()
+    for entry in user_dir.iterdir():
+        if not entry.is_dir():
+            continue
+        if entry.name.startswith("."):
+            continue
+        if (entry / ".git").exists():
+            # Legacy layout repo-branch directories (e.g., repo-main)
+            name = entry.name.split("-", 1)[0]
+            repos.add(name)
+        else:
+            repos.add(entry.name)
+    return sorted(repos)
 
 
 def get_available_branches(repo_spec: RepoSpec) -> List[str]:
@@ -214,7 +227,7 @@ _renv_completion() {
             # Try to find the branch directory in renv
             local renv_root="${RENV_DIR:-$HOME/renv}"
             local safe_branch="${branch_part//\//-}"
-            local branch_dir="$renv_root/$owner/${repo}-${safe_branch}"
+            local branch_dir="$renv_root/$owner/$repo/${repo}-${safe_branch}"
 
             if [[ -d "$branch_dir" ]]; then
                 # List directories in the branch (exclude .git)
@@ -299,13 +312,36 @@ def get_repo_dir(repo_spec: RepoSpec) -> pathlib.Path:
     return get_renv_root() / ".cache" / repo_spec.owner / repo_spec.repo
 
 
-def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Get the branch copy directory path for a repository and branch
+def _get_repo_workspace_root(repo_spec: RepoSpec) -> pathlib.Path:
+    """Return the workspace directory dedicated to a repo."""
+    return get_renv_root() / repo_spec.owner / repo_spec.repo
 
-    Returns: ~/renv/{owner}/{repo}-{branch}
-    """
+
+def get_legacy_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
+    """Return the legacy branch directory path (pre repo-folder layout)."""
     safe_branch = repo_spec.branch.replace("/", "-")
     return get_renv_root() / repo_spec.owner / f"{repo_spec.repo}-{safe_branch}"
+
+
+def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
+    """Get the branch copy directory path for a repository and branch.
+
+    Returns: ~/renv/{owner}/{repo}/{repo}-{branch}
+    """
+    safe_branch = repo_spec.branch.replace("/", "-")
+    return _get_repo_workspace_root(repo_spec) / f"{repo_spec.repo}-{safe_branch}"
+
+
+def _ensure_subfolder_path(branch_dir: pathlib.Path, subfolder: str) -> pathlib.Path:
+    """Ensure the sparse-checkout subfolder exists so it can be mounted."""
+    subfolder_path = branch_dir / subfolder
+    if not subfolder_path.exists():
+        logging.info(
+            "Subfolder '%s' not present after sparse checkout; creating directory skeleton.",
+            subfolder,
+        )
+        subfolder_path.mkdir(parents=True, exist_ok=True)
+    return subfolder_path
 
 
 def load_renv_rockerc_config() -> dict:
@@ -419,6 +455,13 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
     """
     cache_dir = get_repo_dir(repo_spec)
     branch_dir = get_worktree_dir(repo_spec)
+    repo_workspace = _get_repo_workspace_root(repo_spec)
+    repo_workspace.mkdir(parents=True, exist_ok=True)
+
+    legacy_dir = get_legacy_worktree_dir(repo_spec)
+    if not branch_dir.exists() and legacy_dir.exists():
+        logging.info(f"Migrating legacy workspace layout for {repo_spec.repo}@{repo_spec.branch}")
+        shutil.move(str(legacy_dir), str(branch_dir))
 
     # Ensure cache repo exists and is updated
     setup_cache_repo(repo_spec)
@@ -428,27 +471,64 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
 
         # Copy entire cache directory to branch directory
         shutil.copytree(cache_dir, branch_dir)
+        # Ensure remote references are up to date in the new working tree
+        subprocess.run(
+            ["git", "-C", str(branch_dir), "fetch", "--all"],
+            check=True,
+        )
 
         # Use git_ref_exists to check for local and remote branch
         local = git_ref_exists(branch_dir, repo_spec.branch)
         remote = git_ref_exists(branch_dir, f"origin/{repo_spec.branch}")
         default = get_default_branch(repo_spec)
 
-        cmd = ["git", "-C", str(branch_dir), "checkout"]
-        if local:
-            cmd.append(repo_spec.branch)
-            logging.info(f"Checking out local branch: {repo_spec.branch}")
-        elif remote:
-            cmd += ["-b", repo_spec.branch, f"origin/{repo_spec.branch}"]
-            logging.info(f"Checking out remote branch: {repo_spec.branch}")
-        else:
-            cmd += ["-b", repo_spec.branch, f"origin/{default}"]
-            logging.info(f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default}'")
         try:
-            subprocess.run(cmd, check=True)
+            if local:
+                logging.info(f"Checking out local branch: {repo_spec.branch}")
+                subprocess.run(
+                    ["git", "-C", str(branch_dir), "checkout", repo_spec.branch],
+                    check=True,
+                )
+            elif remote:
+                logging.info(f"Checking out remote branch: {repo_spec.branch}")
+                subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(branch_dir),
+                        "checkout",
+                        "-b",
+                        repo_spec.branch,
+                        f"origin/{repo_spec.branch}",
+                    ],
+                    check=True,
+                )
+            else:
+                logging.info(
+                    f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default}'"
+                )
+                subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(branch_dir),
+                        "checkout",
+                        "--no-track",
+                        "-b",
+                        repo_spec.branch,
+                        f"origin/{default}",
+                    ],
+                    check=True,
+                )
         except subprocess.CalledProcessError as e:
             logging.error(f"Failed to checkout branch '{repo_spec.branch}'. Error: {e}")
             raise
+        if not remote:
+            # Newly created branches should not track the default branch automatically
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "branch", "--unset-upstream"],
+                check=False,
+            )
 
         # Enable sparse checkout if subfolder specified
         if repo_spec.subfolder:
@@ -464,6 +544,7 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
                 check=True,
             )
             logging.info(f"Sparse-checkout configured for: {repo_spec.subfolder}")
+            _ensure_subfolder_path(branch_dir, repo_spec.subfolder)
     else:
         logging.info(f"Branch copy already exists: {branch_dir}")
         # Fetch and pull latest changes
@@ -491,8 +572,46 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
                 ["git", "-C", str(branch_dir), "sparse-checkout", "set", repo_spec.subfolder],
                 check=True,
             )
+            _ensure_subfolder_path(branch_dir, repo_spec.subfolder)
 
     return branch_dir
+
+
+AVAILABLE_ROCKER_EXTENSIONS: Optional[set[str]] = None
+ESSENTIAL_CORE_ARGS = {"pull", "persist-image"}
+
+
+def _get_available_rocker_extensions() -> set[str]:
+    """Discover rocker extension names available in the current environment."""
+    global AVAILABLE_ROCKER_EXTENSIONS  # pylint: disable=global-statement
+    if AVAILABLE_ROCKER_EXTENSIONS is not None:
+        return AVAILABLE_ROCKER_EXTENSIONS
+
+    try:
+        entry_points = importlib.metadata.entry_points()
+        group = entry_points.select(group="rocker.extensions")
+        AVAILABLE_ROCKER_EXTENSIONS = {ep.name.replace("_", "-") for ep in group}
+    except Exception as exc:  # pragma: no cover - defensive, shouldn't happen
+        logging.warning("Failed to discover rocker extensions: %s", exc)
+        AVAILABLE_ROCKER_EXTENSIONS = set()
+    return AVAILABLE_ROCKER_EXTENSIONS
+
+
+def _filter_unavailable_extensions(args: list[str]) -> Tuple[list[str], list[str]]:
+    """Filter out extensions that are not installed in the current environment."""
+    if not args:
+        return [], []
+
+    available = _get_available_rocker_extensions()
+    kept = []
+    removed = []
+    for arg in args:
+        normalized = arg.replace("_", "-")
+        if normalized in ESSENTIAL_CORE_ARGS or normalized in available:
+            kept.append(arg)
+        else:
+            removed.append(arg)
+    return kept, removed
 
 
 def build_rocker_config(
@@ -571,6 +690,15 @@ def build_rocker_config(
         config["args"] = []
     if "cwd" not in config["args"]:
         config["args"].append("cwd")
+
+    # Drop extensions that are unavailable in the current environment to avoid rocker errors
+    filtered_args, removed_args = _filter_unavailable_extensions(config.get("args", []))
+    if removed_args:
+        logging.warning(
+            "Removing unavailable rocker extensions: %s",
+            ", ".join(sorted(removed_args)),
+        )
+    config["args"] = filtered_args
 
     # Set renv-specific parameters
     config["name"] = container_name
