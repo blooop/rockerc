@@ -332,16 +332,23 @@ def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
     return _get_repo_workspace_root(repo_spec) / f"{repo_spec.repo}-{safe_branch}"
 
 
-def _ensure_subfolder_path(branch_dir: pathlib.Path, subfolder: str) -> pathlib.Path:
-    """Ensure the sparse-checkout subfolder exists so it can be mounted."""
-    subfolder_path = branch_dir / subfolder
-    if not subfolder_path.exists():
-        logging.info(
-            "Subfolder '%s' not present after sparse checkout; creating directory skeleton.",
-            subfolder,
-        )
-        subfolder_path.mkdir(parents=True, exist_ok=True)
-    return subfolder_path
+def _verify_sparse_checkout_path(branch_dir: pathlib.Path, subfolder: str, branch: str) -> None:
+    """Ensure the sparse-checkout subfolder exists in the repository history."""
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(branch_dir),
+            "rev-parse",
+            "--verify",
+            f"HEAD:{subfolder}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise FileNotFoundError(f"Subfolder '{subfolder}' not found in branch '{branch}'.")
 
 
 def _has_upstream(branch_dir: pathlib.Path) -> bool:
@@ -563,7 +570,7 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
                 check=True,
             )
             logging.info(f"Sparse-checkout configured for: {repo_spec.subfolder}")
-            _ensure_subfolder_path(branch_dir, repo_spec.subfolder)
+            _verify_sparse_checkout_path(branch_dir, repo_spec.subfolder, repo_spec.branch)
     else:
         logging.info(f"Branch copy already exists: {branch_dir}")
         # Fetch and pull latest changes
@@ -594,7 +601,7 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
                 ["git", "-C", str(branch_dir), "sparse-checkout", "set", repo_spec.subfolder],
                 check=True,
             )
-            _ensure_subfolder_path(branch_dir, repo_spec.subfolder)
+            _verify_sparse_checkout_path(branch_dir, repo_spec.subfolder, repo_spec.branch)
 
     return branch_dir
 

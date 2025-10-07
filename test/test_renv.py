@@ -1,5 +1,7 @@
 import pathlib
 from unittest.mock import Mock, patch
+
+import pytest
 from rockerc.renv import (
     RepoSpec,
     get_repo_dir,
@@ -12,6 +14,7 @@ from rockerc.renv import (
     setup_branch_copy,
     manage_container,
     run_renv,
+    _verify_sparse_checkout_path,
 )
 
 
@@ -185,11 +188,21 @@ class TestGitOperations:
         assert "fetch" in fetch_call[0][0]
         assert "--all" in fetch_call[0][0]
 
+    @patch("rockerc.renv._verify_sparse_checkout_path")
+    @patch("rockerc.renv._has_upstream", return_value=False)
     @patch("rockerc.renv.setup_cache_repo")
     @patch("shutil.copytree")
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
-    def test_setup_branch_copy_create(self, mock_exists, mock_run, mock_copytree, mock_setup_cache):
+    def test_setup_branch_copy_create(
+        self,
+        mock_exists,
+        mock_run,
+        mock_copytree,
+        mock_setup_cache,
+        _mock_has_upstream,
+        _mock_verify_subfolder,
+    ):
         # Mock branch_dir.exists() to return False
         mock_exists.return_value = False
         spec = RepoSpec("blooop", "test_renv", "main")
@@ -219,7 +232,15 @@ class TestGitOperations:
         assert "git" in checkout_call[0][0]
         assert "checkout" in checkout_call[0][0]
 
-    def test_setup_branch_copy_migrates_legacy_layout(self, tmp_path, monkeypatch):
+    @patch("rockerc.renv._verify_sparse_checkout_path")
+    @patch("rockerc.renv._has_upstream", return_value=False)
+    def test_setup_branch_copy_migrates_legacy_layout(
+        self,
+        _mock_has_upstream,
+        mock_verify_subfolder,
+        tmp_path,
+        monkeypatch,
+    ):
         monkeypatch.setenv("RENV_DIR", str(tmp_path))
         spec = RepoSpec("blooop", "test_renv", "main")
 
@@ -239,9 +260,18 @@ class TestGitOperations:
         assert branch_dir.exists()
         assert not legacy_dir.exists()
         fetch_calls = [args for args in mock_run.call_args_list if "fetch" in args[0][0]]
+        mock_verify_subfolder.assert_not_called()
         assert fetch_calls
 
-    def test_setup_branch_copy_skips_pull_without_upstream(self, tmp_path, monkeypatch):
+    @patch("rockerc.renv._verify_sparse_checkout_path")
+    @patch("rockerc.renv._has_upstream", return_value=False)
+    def test_setup_branch_copy_skips_pull_without_upstream(
+        self,
+        _mock_has_upstream,
+        mock_verify_subfolder,
+        tmp_path,
+        monkeypatch,
+    ):
         monkeypatch.setenv("RENV_DIR", str(tmp_path))
         spec = RepoSpec("blooop", "test_renv", "main")
 
@@ -252,19 +282,9 @@ class TestGitOperations:
         repo_cache = get_repo_dir(spec)
         repo_cache.mkdir(parents=True, exist_ok=True)
 
-        def run_side_effect(cmd, *_args, **_kwargs):
-            if cmd[:3] == ["git", "-C", str(branch_dir)]:
-                if cmd[3] == "fetch":
-                    return Mock(returncode=0)
-                if cmd[3] == "rev-parse":
-                    return Mock(returncode=1)
-                if cmd[3] == "pull":
-                    raise AssertionError("git pull should be skipped when no upstream")
-            return Mock(returncode=0)
-
         with (
             patch("rockerc.renv.setup_cache_repo") as mock_setup_cache,
-            patch("subprocess.run", side_effect=run_side_effect) as mock_run,
+            patch("subprocess.run", return_value=Mock(returncode=0)) as mock_run,
         ):
             setup_branch_copy(spec)
 
@@ -273,6 +293,17 @@ class TestGitOperations:
             args for args in mock_run.call_args_list if len(args[0]) > 3 and args[0][3] == "pull"
         ]
         assert not pull_calls
+        mock_verify_subfolder.assert_not_called()
+
+    @patch("subprocess.run")
+    def test_verify_sparse_checkout_path_missing(self, mock_run):
+        mock_run.return_value = Mock(returncode=1)
+        branch_dir = pathlib.Path("/tmp/repo")
+
+        with pytest.raises(FileNotFoundError):
+            _verify_sparse_checkout_path(branch_dir, "missing/path", "main")
+
+        mock_run.assert_called_once()
 
 
 class TestMainFunction:

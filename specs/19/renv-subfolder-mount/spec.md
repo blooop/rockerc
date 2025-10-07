@@ -9,3 +9,4 @@
 - Preserve existing behaviour when no subfolder is specified.
 - Ensure repeated runs reuse caches/containers without reintroducing parent folders.
 - When creating a fresh branch copy, update from remote refs first and avoid wiring new branches to track the template/default branch unless it actually exists upstream.
+- Fail fast with a clear error if the requested subfolder does not exist in the repository.
