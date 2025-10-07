@@ -1,7 +1,7 @@
 """
 aid - AI Develop command
 
-A tool that combines renv's containerization with Claude Code CLI for automated development.
+A tool that combines renv's containerization with interactive AI CLIs for automated development.
 
 Usage: aid repo_owner/repo_name <prompt in plain text>
 """
@@ -9,13 +9,32 @@ Usage: aid repo_owner/repo_name <prompt in plain text>
 import sys
 import logging
 import argparse
+import shlex
 from typing import List, Optional
 
 from .renv import (
     RepoSpec,
-    manage_container,
     get_container_name,
+    run_renv,
 )
+
+MODEL_SELECTION = {
+    "claude": {
+        "binary": "claude",
+        "prompt_args": ["-p"],
+        "description": "Use Claude CLI (default)",
+    },
+    "codex": {
+        "binary": "codex",
+        "prompt_args": ["-p"],
+        "description": "Use Codex CLI",
+    },
+    "gemini": {
+        "binary": "gemini",
+        "prompt_args": ["-p"],
+        "description": "Use Gemini CLI",
+    },
+}
 
 
 def run_aid(args: Optional[List[str]] = None) -> int:
@@ -31,9 +50,20 @@ def run_aid(args: Optional[List[str]] = None) -> int:
         epilog="""
 Examples:
   aid blooop/test_renv "add feature to parse yaml files"
-  aid owner/repo@branch "fix bug in parser"
-  aid owner/repo --force "refactor main module"
+  aid --codex owner/repo@branch "fix bug in parser"
+  aid --gemini owner/repo --force "refactor main module"
         """,
+    )
+
+    model_group = parser.add_mutually_exclusive_group()
+    model_group.add_argument(
+        "--claude", action="store_true", help=MODEL_SELECTION["claude"]["description"]
+    )
+    model_group.add_argument(
+        "--codex", action="store_true", help=MODEL_SELECTION["codex"]["description"]
+    )
+    model_group.add_argument(
+        "--gemini", action="store_true", help=MODEL_SELECTION["gemini"]["description"]
     )
 
     parser.add_argument(
@@ -42,9 +72,7 @@ Examples:
     )
 
     parser.add_argument(
-        "prompt",
-        nargs="+",
-        help="Prompt for Claude Code (plain text, will be joined with spaces)",
+        "prompt", nargs="+", help="Prompt for the selected model (joined with spaces)"
     )
 
     parser.add_argument("--force", "-f", action="store_true", help="Force rebuild container")
@@ -68,20 +96,26 @@ Examples:
         prompt_text = " ".join(parsed_args.prompt)
         logging.info(f"Prompt: {prompt_text}")
 
+        model_key = "claude"
+        if parsed_args.codex:
+            model_key = "codex"
+        elif parsed_args.gemini:
+            model_key = "gemini"
+        elif parsed_args.claude:
+            model_key = "claude"
+
+        model_config = MODEL_SELECTION[model_key]
+
         # If no-container, setup worktree only
         if parsed_args.no_container:
-            from .renv import setup_branch_copy, get_worktree_dir
-
-            setup_branch_copy(repo_spec)
-            worktree_dir = get_worktree_dir(repo_spec)
-            logging.info(f"Worktree set up at: {worktree_dir}")
-            return 0
-
-        # Build claude command in interactive mode
-        # Launch Claude interactively with the prompt already sent
-        # Double-escape for proper shell quoting through rocker
-        # Replace single quotes with '\'' for bash -c quoting
-        escaped_prompt = prompt_text.replace("'", "'\"'\"'")
+            renv_args: List[str] = []
+            if parsed_args.force:
+                renv_args.append("--force")
+            if parsed_args.nocache:
+                renv_args.append("--nocache")
+            renv_args.append("--no-container")
+            renv_args.append(parsed_args.repo_spec)
+            return run_renv(renv_args)
 
         # Determine the container workspace path
         # renv mounts at /workspaces/{container_name}
@@ -92,18 +126,20 @@ Examples:
 
         # Run claude in interactive mode with prompt
         # The command needs to be a single bash -c string that rocker will pass to docker
-        claude_cmd_str = f"cd {workspace_path} && claude -p '{escaped_prompt}'"
-        claude_cmd = ["bash", "-c", claude_cmd_str]
+        model_cmd_parts = [model_config["binary"], *model_config["prompt_args"], prompt_text]
+        model_cmd_str = shlex.join(model_cmd_parts)
+        claude_cmd_str = f"cd {shlex.quote(workspace_path)} && {model_cmd_str}"
+        claude_cmd = ["bash", "-lc", claude_cmd_str]
 
-        # Launch container with claude command
-        return manage_container(
-            repo_spec=repo_spec,
-            command=claude_cmd,
-            force=parsed_args.force,
-            nocache=parsed_args.nocache,
-            no_container=False,
-            vsc=False,
-        )
+        renv_args: List[str] = []
+        if parsed_args.force:
+            renv_args.append("--force")
+        if parsed_args.nocache:
+            renv_args.append("--nocache")
+        renv_args.append(parsed_args.repo_spec)
+        renv_args.extend(["--", *claude_cmd])
+
+        return run_renv(renv_args)
 
     except ValueError as e:
         logging.error(f"Invalid repository specification: {e}")
