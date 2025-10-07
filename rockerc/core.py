@@ -25,7 +25,7 @@ import time
 import logging
 import binascii
 import os
-from typing import List
+from typing import List, Sequence, Tuple
 
 # NOTE: Avoid importing from rockerc at module import time to prevent circular imports.
 # We will lazily import yaml_dict_to_args inside functions that need it.
@@ -280,16 +280,27 @@ def ensure_volume_binding(base_args: str, container_name: str, path: pathlib.Pat
     return f"{base_args} --volume {path}:{target}:Z".strip()
 
 
+def append_volume_binding(base_args: str, host_path: pathlib.Path, target: str) -> str:
+    """Append an additional volume mount if it's not already present."""
+    volume_arg = f"--volume {host_path}:{target}:Z"
+    if f":{target}:Z" in base_args:
+        return base_args
+    return f"{base_args} {volume_arg}".strip()
+
+
 def build_rocker_arg_injections(
     extra_cli: str,
     container_name: str,
     path: pathlib.Path,
     extensions: list[str],
+    *,
     always_mount: bool = True,
+    extra_volumes: Sequence[Tuple[pathlib.Path, str]] | None = None,
 ) -> str:
     """Inject required arguments into the user-specified (or config) rocker args string.
 
     We always detach and ensure the container is named so we can later docker exec and VS Code attach.
+    Additional host→container volume bindings can be supplied via extra_volumes.
     """
     argline = extra_cli or ""
     argline = ensure_detached_args(argline)
@@ -297,6 +308,9 @@ def build_rocker_arg_injections(
     argline = add_extension_env(argline, extensions)
     if always_mount:
         argline = ensure_volume_binding(argline, container_name, path)
+    if extra_volumes:
+        for host_path, target in extra_volumes:
+            argline = append_volume_binding(argline, host_path, target)
     return argline
 
 
@@ -364,6 +378,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     force: bool,
     path: pathlib.Path,
     extensions: list[str] | None = None,
+    extra_volumes: Sequence[Tuple[pathlib.Path, str]] | None = None,
 ) -> LaunchPlan:
     """Prepare rocker command & stop/remove existing container if forced.
 
@@ -375,6 +390,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         force: Whether to force rebuild
         path: Working directory path
         extensions: Optional explicit extension list; if None, extracted from args_dict["args"]
+        extra_volumes: Additional host→container volume bindings (host path, target path)
 
     Returns:
         LaunchPlan with container configuration and rocker command
@@ -412,7 +428,13 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         stop_and_remove_container(container_name)
         exists = False  # treat as not existing for creation phase
 
-    injections = build_rocker_arg_injections(extra_cli, container_name, path, current_extensions)
+    injections = build_rocker_arg_injections(
+        extra_cli,
+        container_name,
+        path,
+        current_extensions,
+        extra_volumes=extra_volumes,
+    )
     # Build base rocker args from config dictionary (copy because yaml_dict_to_args mutates)
     from .rockerc import yaml_dict_to_args  # type: ignore
 

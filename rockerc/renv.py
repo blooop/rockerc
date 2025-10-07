@@ -854,10 +854,18 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     branch_dir = setup_branch_copy(repo_spec)
     container_name = get_container_name(repo_spec)
 
-    # Always mount the full branch_dir (which includes .git directory)
-    # Sparse-checkout ensures only the subfolder is present in the working tree
-    # The working directory will be set to the subfolder inside the container
+    # Determine workspace mount path and any additional volumes
+    # When a subfolder is requested we mount only that directory and provide a .git bind mount
     mount_path = branch_dir
+    extra_volumes = []
+    if repo_spec.subfolder:
+        mount_path = branch_dir / repo_spec.subfolder
+        extra_volumes.append(
+            (
+                branch_dir / ".git",
+                f"/workspaces/{container_name}/.git",
+            )
+        )
 
     # Build rocker configuration and get metadata
     config, meta = build_rocker_config(repo_spec, force=force, nocache=nocache)
@@ -902,6 +910,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 force=force,
                 path=mount_path,
                 extensions=config.get("args", []),
+                extra_volumes=extra_volumes,
             )
 
             # If we need to launch a new container, do it with correct cwd
@@ -946,6 +955,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                         ensure_name_args,
                         add_extension_env,
                         ensure_volume_binding,
+                        append_volume_binding,
                     )
                     from rockerc.rockerc import yaml_dict_to_args
 
@@ -953,6 +963,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     injections = ensure_name_args(injections, container_name)
                     injections = add_extension_env(injections, config.get("args", []))
                     injections = ensure_volume_binding(injections, container_name, mount_path)
+                    for host_path, target in extra_volumes:
+                        injections = append_volume_binding(injections, host_path, target)
 
                     args_copy = dict(config)
                     rocker_argline = yaml_dict_to_args(args_copy, injections)
@@ -992,6 +1004,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             force=force,
             path=mount_path,
             extensions=config["args"],
+            extra_volumes=extra_volumes,
         )
 
         # Add keep-alive command to rocker_cmd so detached container stays running
@@ -1043,6 +1056,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     force=True,
                     path=mount_path,
                     extensions=config["args"],
+                    extra_volumes=extra_volumes,
                 )
 
                 if plan.rocker_cmd:

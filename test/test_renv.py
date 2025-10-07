@@ -418,6 +418,56 @@ class TestManageContainer:
             "status",
         ]
 
+    @patch("subprocess.run")
+    @patch("rockerc.core.wait_for_container")
+    @patch("rockerc.core.launch_rocker")
+    @patch("rockerc.core.prepare_launch_plan")
+    @patch("os.chdir")
+    @patch("rockerc.renv.build_rocker_config")
+    @patch("rockerc.renv.setup_branch_copy")
+    def test_manage_container_with_subfolder_mounts_git_volume(self, *mocks):
+        (
+            mock_setup_branch_copy,
+            mock_build_config,
+            mock_chdir,  # pylint: disable=unused-variable
+            mock_prepare_plan,
+            mock_launch_rocker,
+            mock_wait_container,
+            mock_subprocess,
+        ) = mocks
+
+        mock_setup_branch_copy.return_value = pathlib.Path("/test/branch")
+        mock_build_config.return_value = (
+            {"args": [], "image": "ubuntu:22.04", "_renv_target_dir": "/test/branch/src"},
+            {},
+        )
+
+        from rockerc.core import LaunchPlan
+
+        mock_plan = LaunchPlan(
+            container_name="test_renv-main",
+            container_hex="746573745f72656e762d6d61696e",
+            rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
+            created=True,
+            vscode=False,
+        )
+        mock_prepare_plan.return_value = mock_plan
+        mock_launch_rocker.return_value = 0
+        mock_wait_container.return_value = True
+        mock_subprocess.return_value.returncode = 0
+
+        spec = RepoSpec("blooop", "test_renv", "main", "src")
+
+        result = manage_container(spec)
+
+        assert result == 0
+        assert mock_prepare_plan.call_count == 1
+        _args, kwargs = mock_prepare_plan.call_args
+        assert kwargs["path"] == pathlib.Path("/test/branch/src")
+        assert kwargs["extra_volumes"] == [
+            (pathlib.Path("/test/branch/.git"), "/workspaces/test_renv-main/.git")
+        ]
+
 
 class TestRockerCommandWorkingDirectory:
     @patch("subprocess.run")
