@@ -534,7 +534,9 @@ def build_docker(dockerfile_path: str = ".") -> str:
 
     tag = f"{pathlib.Path().absolute().name.lower()}:latest"
     dockerfile_dir = pathlib.Path(dockerfile_path).absolute().parent
-    subprocess.call(["docker", "build", "-t", tag, str(dockerfile_dir)])
+    # Enable Docker BuildKit for improved build performance
+    env = {**os.environ, "DOCKER_BUILDKIT": "1"}
+    subprocess.call(["docker", "build", "-t", tag, str(dockerfile_dir)], env=env)
     return tag
 
 

@@ -29,6 +29,7 @@ import time
 import yaml
 import shutil
 import shlex
+import os
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 
@@ -68,8 +69,13 @@ class RepoSpec:
 
 
 def get_renv_root() -> pathlib.Path:
-    """Get the root directory for renv repositories"""
-    return pathlib.Path.home() / "renv"
+    """Get the root directory for renv repositories.
+
+    Prefers `RENV_DIR` when set, otherwise falls back to `~/renv`.
+    """
+
+    renv_dir = os.environ.get("RENV_DIR", "~/renv")
+    return pathlib.Path(renv_dir).expanduser()
 
 
 def get_available_users() -> List[str]:
@@ -165,7 +171,7 @@ def fuzzy_select_repo() -> Optional[str]:
 
     combinations = get_all_repo_branch_combinations()
     if not combinations:
-        logging.info("No repositories found in ~/renv/. Clone some repos first!")
+        logging.info("No repositories found in %s. Clone some repos first!", get_renv_root())
         return None
 
     print("Select repo@branch (type 'bl tes ma' for blooop/test_renv@main):")
@@ -192,7 +198,7 @@ _renv_completion() {
     
     # Complete repository specifications
     if [[ ${COMP_CWORD} -eq 1 ]]; then
-        local renv_root="$HOME/renv"
+        local renv_root="${RENV_DIR:-$HOME/renv}"
         local cache_root="$renv_root/.cache"
 
         # Check if we're completing branches (after @)
@@ -286,7 +292,7 @@ def load_renv_rockerc_config() -> dict:
     Returns:
         dict: Parsed configuration dictionary, or empty dict if parsing fails.
     """
-    renv_dir = pathlib.Path.home() / "renv"
+    renv_dir = get_renv_root()
     config_path = renv_dir / "rockerc.yaml"
 
     # Create renv directory if it doesn't exist
@@ -721,14 +727,19 @@ def run_rocker_command(
                 logging.info(f"Using worktree directory as cwd: {cwd}")
                 break
 
+    # Enable Docker BuildKit for improved build performance
+    env = {**os.environ, "DOCKER_BUILDKIT": "1"}
+
     if detached:
         # Run in background and return immediately
         # pylint: disable=consider-using-with
-        subprocess.Popen(cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd)
+        subprocess.Popen(
+            cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd, env=env
+        )
         # Give it a moment to start
         time.sleep(2)
         return 0
-    return subprocess.run(cmd_parts, check=False, cwd=cwd).returncode
+    return subprocess.run(cmd_parts, check=False, cwd=cwd, env=env).returncode
 
 
 def _handle_container_corruption(
@@ -804,8 +815,6 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     target_dir = config.pop("_renv_target_dir", str(branch_dir))
 
     # Change to the target directory so cwd extension picks it up
-    import os
-
     original_cwd = os.getcwd()
     os.chdir(target_dir)
 
@@ -888,7 +897,9 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     logging.info(f"Rebuilding container: {' '.join(rocker_cmd)}")
 
                     # Run rocker in detached mode using subprocess (container runs in background)
-                    result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir)
+                    # Enable Docker BuildKit for improved build performance
+                    env = {**os.environ, "DOCKER_BUILDKIT": "1"}
+                    result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir, env=env)
                     if result.returncode != 0:
                         return result.returncode
 
@@ -908,11 +919,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             return interactive_shell(container_name)
 
         # Terminal mode: use detached workflow (same as rockerc)
-        # Remove cwd extension for detached mode - we'll use docker exec -w instead
-        # Extension change detection in prepare_launch_plan will automatically rebuild
-        # if the stored container has different extensions (e.g., had cwd before)
-        config["args"] = [ext for ext in config.get("args", []) if ext != "cwd"]
-
+        # Keep cwd extension - it sets WORKDIR and we can still override with docker exec -w
         plan = prepare_launch_plan(
             args_dict=config,
             extra_cli="",
