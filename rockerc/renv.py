@@ -344,6 +344,25 @@ def _ensure_subfolder_path(branch_dir: pathlib.Path, subfolder: str) -> pathlib.
     return subfolder_path
 
 
+def _has_upstream(branch_dir: pathlib.Path) -> bool:
+    """Return True if the current branch has an upstream configured."""
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(branch_dir),
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            "@{u}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def load_renv_rockerc_config() -> dict:
     """Load global renv rockerc configuration from ~/renv/rockerc.yaml
 
@@ -523,7 +542,7 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
         except subprocess.CalledProcessError as e:
             logging.error(f"Failed to checkout branch '{repo_spec.branch}'. Error: {e}")
             raise
-        if not remote:
+        if not remote and _has_upstream(branch_dir):
             # Newly created branches should not track the default branch automatically
             subprocess.run(
                 ["git", "-C", str(branch_dir), "branch", "--unset-upstream"],
@@ -552,10 +571,13 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
             ["git", "-C", str(branch_dir), "fetch", "--all"],
             check=True,
         )
-        subprocess.run(
-            ["git", "-C", str(branch_dir), "pull"],
-            check=False,  # Don't fail if already up to date
-        )
+        if _has_upstream(branch_dir):
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "pull"],
+                check=False,  # Don't fail if already up to date
+            )
+        else:
+            logging.info("Skipping git pull for %s (no upstream configured)", branch_dir)
 
         # Update sparse checkout if subfolder specified and not already configured
         if repo_spec.subfolder:

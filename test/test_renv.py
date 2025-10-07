@@ -241,6 +241,39 @@ class TestGitOperations:
         fetch_calls = [args for args in mock_run.call_args_list if "fetch" in args[0][0]]
         assert fetch_calls
 
+    def test_setup_branch_copy_skips_pull_without_upstream(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("RENV_DIR", str(tmp_path))
+        spec = RepoSpec("blooop", "test_renv", "main")
+
+        branch_dir = get_worktree_dir(spec)
+        branch_dir.mkdir(parents=True, exist_ok=True)
+        (branch_dir / ".git" / "info").mkdir(parents=True, exist_ok=True)
+
+        repo_cache = get_repo_dir(spec)
+        repo_cache.mkdir(parents=True, exist_ok=True)
+
+        def run_side_effect(cmd, *_args, **_kwargs):
+            if cmd[:3] == ["git", "-C", str(branch_dir)]:
+                if cmd[3] == "fetch":
+                    return Mock(returncode=0)
+                if cmd[3] == "rev-parse":
+                    return Mock(returncode=1)
+                if cmd[3] == "pull":
+                    raise AssertionError("git pull should be skipped when no upstream")
+            return Mock(returncode=0)
+
+        with (
+            patch("rockerc.renv.setup_cache_repo") as mock_setup_cache,
+            patch("subprocess.run", side_effect=run_side_effect) as mock_run,
+        ):
+            setup_branch_copy(spec)
+
+        mock_setup_cache.assert_called_once_with(spec)
+        pull_calls = [
+            args for args in mock_run.call_args_list if len(args[0]) > 3 and args[0][3] == "pull"
+        ]
+        assert not pull_calls
+
 
 class TestMainFunction:
     @patch("rockerc.renv.manage_container")
