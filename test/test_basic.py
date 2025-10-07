@@ -492,39 +492,54 @@ class TestBasicClass(TestCase):
     def test_parse_extra_flags_filters_force_flags(self):
         """Test that --force and -f flags are filtered out from CLI arguments."""
         argv = ["--some-arg", "-f", "--another-arg", "value", "--force"]
-        vsc, force, verbose, remaining = _parse_extra_flags(argv)
+        vsc, force, verbose, show_dockerfile, remaining = _parse_extra_flags(argv)
 
         assert force is True
         assert vsc is False
         assert verbose is False
+        assert show_dockerfile is False
         assert remaining == ["--some-arg", "--another-arg", "value"]
 
     def test_parse_extra_flags_filters_verbose_flags(self):
         """Test that --verbose and -v flags are filtered out from CLI arguments."""
         argv = ["--arg1", "-v", "--arg2", "--verbose"]
-        vsc, force, verbose, remaining = _parse_extra_flags(argv)
+        vsc, force, verbose, show_dockerfile, remaining = _parse_extra_flags(argv)
 
         assert force is False
         assert vsc is False
         assert verbose is True
+        assert show_dockerfile is False
         assert remaining == ["--arg1", "--arg2"]
 
     def test_parse_extra_flags_filters_vsc_flag(self):
         """Test that --vsc flag is filtered out from CLI arguments."""
         argv = ["--arg1", "--vsc", "--arg2"]
-        vsc, force, verbose, remaining = _parse_extra_flags(argv)
+        vsc, force, verbose, show_dockerfile, remaining = _parse_extra_flags(argv)
 
         assert force is False
         assert vsc is True
         assert verbose is False
+        assert show_dockerfile is False
         assert remaining == ["--arg1", "--arg2"]
 
     def test_parse_extra_flags_no_special_flags(self):
         """Test that when no special flags are present, all args remain."""
         argv = ["--arg1", "value1", "--arg2", "value2"]
-        vsc, force, verbose, remaining = _parse_extra_flags(argv)
+        vsc, force, verbose, show_dockerfile, remaining = _parse_extra_flags(argv)
 
         assert force is False
         assert vsc is False
         assert verbose is False
+        assert show_dockerfile is False
         assert remaining == ["--arg1", "value1", "--arg2", "value2"]
+
+    def test_parse_extra_flags_filters_show_dockerfile_flag(self):
+        """Test that --show-dockerfile flag is filtered out from CLI arguments."""
+        argv = ["--arg1", "--show-dockerfile", "--arg2"]
+        vsc, force, verbose, show_dockerfile, remaining = _parse_extra_flags(argv)
+
+        assert force is False
+        assert vsc is False
+        assert verbose is False
+        assert show_dockerfile is True
+        assert remaining == ["--arg1", "--arg2"]
