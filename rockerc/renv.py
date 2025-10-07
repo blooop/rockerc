@@ -181,7 +181,7 @@ def fuzzy_select_repo() -> Optional[str]:
 
 def install_shell_completion() -> int:
     """Install shell autocompletion for renv"""
-    bash_completion = """# renv completion
+    bash_completion = r"""# renv completion
 _renv_completion() {
     local cur prev opts
     COMPREPLY=()
@@ -201,8 +201,32 @@ _renv_completion() {
         local renv_root="${RENV_DIR:-$HOME/renv}"
         local cache_root="$renv_root/.cache"
 
+        # Check if we're completing subfolders (after #)
+        if [[ "$cur" == *"#"* ]]; then
+            # Extract owner/repo@branch from before #
+            local spec_part="${cur%%#*}"
+            local subfolder_part="${cur##*#}"
+            local repo_part="${spec_part%%@*}"
+            local branch_part="${spec_part##*@}"
+            local owner="${repo_part%%/*}"
+            local repo="${repo_part##*/}"
+
+            # Try to find the branch directory in renv
+            local renv_root="${RENV_DIR:-$HOME/renv}"
+            local safe_branch="${branch_part//\//-}"
+            local branch_dir="$renv_root/$owner/${repo}-${safe_branch}"
+
+            if [[ -d "$branch_dir" ]]; then
+                # List directories in the branch (exclude .git)
+                local folders=$(find "$branch_dir" -type d -not -path "*/.git/*" -not -name ".git" | sed "s|$branch_dir/||" | grep -v "^$" | xargs)
+                local completions=""
+                for folder in $folders; do
+                    completions="$completions $spec_part#$folder"
+                done
+                COMPREPLY=( $(compgen -W "${completions}" -- ${cur}) )
+            fi
         # Check if we're completing branches (after @)
-        if [[ "$cur" == *"@"* ]]; then
+        elif [[ "$cur" == *"@"* ]]; then
             # Extract owner/repo from before @
             local repo_part="${cur%%@*}"
             local branch_part="${cur##*@}"
@@ -388,7 +412,11 @@ def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
 
 
 def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
-    """Set up branch copy by copying from cache and checking out branch"""
+    """Set up branch copy by copying from cache and checking out branch
+
+    If repo_spec.subfolder is specified, enables sparse-checkout to only
+    check out that subfolder in the working tree.
+    """
     cache_dir = get_repo_dir(repo_spec)
     branch_dir = get_worktree_dir(repo_spec)
 
@@ -421,6 +449,21 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
         except subprocess.CalledProcessError as e:
             logging.error(f"Failed to checkout branch '{repo_spec.branch}'. Error: {e}")
             raise
+
+        # Enable sparse checkout if subfolder specified
+        if repo_spec.subfolder:
+            logging.info(f"Enabling sparse-checkout for subfolder: {repo_spec.subfolder}")
+            # Initialize sparse-checkout in cone mode
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "sparse-checkout", "init", "--cone"],
+                check=True,
+            )
+            # Set the subfolder pattern
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "sparse-checkout", "set", repo_spec.subfolder],
+                check=True,
+            )
+            logging.info(f"Sparse-checkout configured for: {repo_spec.subfolder}")
     else:
         logging.info(f"Branch copy already exists: {branch_dir}")
         # Fetch and pull latest changes
@@ -432,6 +475,22 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
             ["git", "-C", str(branch_dir), "pull"],
             check=False,  # Don't fail if already up to date
         )
+
+        # Update sparse checkout if subfolder specified and not already configured
+        if repo_spec.subfolder:
+            # Check if sparse-checkout is already enabled
+            sparse_checkout_file = branch_dir / ".git" / "info" / "sparse-checkout"
+            if not sparse_checkout_file.exists():
+                logging.info(f"Enabling sparse-checkout for subfolder: {repo_spec.subfolder}")
+                subprocess.run(
+                    ["git", "-C", str(branch_dir), "sparse-checkout", "init", "--cone"],
+                    check=True,
+                )
+            # Update the subfolder pattern
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "sparse-checkout", "set", repo_spec.subfolder],
+                check=True,
+            )
 
     return branch_dir
 
@@ -791,9 +850,14 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         logging.info(f"Branch copy set up at: {get_worktree_dir(repo_spec)}")
         return 0
 
-    # Set up branch copy
+    # Set up branch copy (with sparse-checkout if subfolder specified)
     branch_dir = setup_branch_copy(repo_spec)
     container_name = get_container_name(repo_spec)
+
+    # Always mount the full branch_dir (which includes .git directory)
+    # Sparse-checkout ensures only the subfolder is present in the working tree
+    # The working directory will be set to the subfolder inside the container
+    mount_path = branch_dir
 
     # Build rocker configuration and get metadata
     config, meta = build_rocker_config(repo_spec, force=force, nocache=nocache)
@@ -836,7 +900,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 container_name=container_name,
                 vscode=True,
                 force=force,
-                path=branch_dir,
+                path=mount_path,
                 extensions=config.get("args", []),
             )
 
@@ -888,7 +952,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     injections = ""
                     injections = ensure_name_args(injections, container_name)
                     injections = add_extension_env(injections, config.get("args", []))
-                    injections = ensure_volume_binding(injections, container_name, branch_dir)
+                    injections = ensure_volume_binding(injections, container_name, mount_path)
 
                     args_copy = dict(config)
                     rocker_argline = yaml_dict_to_args(args_copy, injections)
@@ -926,7 +990,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             container_name=container_name,
             vscode=False,
             force=force,
-            path=branch_dir,
+            path=mount_path,
             extensions=config["args"],
         )
 
@@ -977,7 +1041,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     container_name=container_name,
                     vscode=False,
                     force=True,
-                    path=branch_dir,
+                    path=mount_path,
                     extensions=config["args"],
                 )
 
