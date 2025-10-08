@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RENV_DIR="${RENV_DIR:-$HOME/renv}"
-rm -rf "${RENV_DIR}"
+
 
 
 #test with no branch on main first
