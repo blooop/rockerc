@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# cd to a safe directory before cleaning RENV_DIR
-cd /tmp
-
 RENV_DIR="${RENV_DIR:-$HOME/renv}"
 rm -rf "${RENV_DIR}"
 
