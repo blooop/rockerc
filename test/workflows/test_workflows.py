@@ -64,6 +64,41 @@ def test_workflow_7_git():
     assert "On branch" in output, "Expected git status 'On branch' not found in workflow 2 output"
 
 
+def test_workflow_8_subfolder():
+    result, output = run_workflow_script("test_workflow_8_subfolder.sh")
+    assert result.returncode == 0, f"Subfolder workflow failed: {output}"
+
+    # Split output into sections based on "expected output:" markers
+    sections = output.split("expected output:")
+
+    # First command: main branch @ folder1/folder2 should show example.txt
+    assert len(sections) >= 2, "Missing first expected output section"
+    assert "example.txt" in sections[1].split('\n')[0], "First command should expect example.txt"
+    assert "example.txt" in sections[1], "First command output should contain example.txt"
+
+    # Second command: test_branch1 @ root should show README.md and folder1
+    assert len(sections) >= 3, "Missing second expected output section"
+    assert "README.md folder1" in sections[2].split('\n')[0], "Second command should expect README.md folder1"
+    assert "README.md" in sections[2] and "folder1" in sections[2], "Second command output should contain README.md and folder1"
+
+    # Third command: test_branch1 @ folder1 should show folder2
+    assert len(sections) >= 4, "Missing third expected output section"
+    assert "folder2" in sections[3].split('\n')[0], "Third command should expect folder2"
+    assert "folder2" in sections[3], "Third command output should contain folder2"
+
+    # Fourth command: test_branch1 @ folder1/folder2 should show example.txt
+    assert len(sections) >= 5, "Missing fourth expected output section"
+    assert "example.txt" in sections[4].split('\n')[0], "Fourth command should expect example.txt"
+    assert "example.txt" in sections[4], "Fourth command output should contain example.txt"
+
+    # Fifth command: test_branch2 @ folder1/folder2 should show example.txt
+    assert len(sections) >= 6, "Missing fifth expected output section"
+    assert "example.txt" in sections[5].split('\n')[0], "Fifth command should expect example.txt"
+    assert "example.txt" in sections[5], "Fifth command output should contain example.txt"
+
+    assert "✓ Subfolder workflow validated" in output, "Subfolder workflow did not complete"
+
+
 def test_workflow_8_persistent():
     result, output = run_workflow_script("test_workflow_8_persistent.sh")
     assert result.returncode in (0, 1), f"Workflow 4 persistent failed: {output}"
