@@ -77,8 +77,8 @@ class TestRockerConfig:
         assert "ssh" in config["args"]  # Updated to match new default config
         assert "nocleanup" not in config["args"]  # Removed to let rocker manage security properly
         assert "cwd" in config["args"]  # cwd extension should be added automatically
-        assert config["name"] == "test_renv-main"
-        assert config["hostname"] == "test_renv-main"
+        assert config["name"] == "test_renv-b-main"
+        assert config["hostname"] == "test_renv-b-main"
         # Volume is NOT in config - it's added by prepare_launch_plan via build_rocker_arg_injections
         assert "volume" not in config
         # cwd extension picks up working directory, no explicit config needed
@@ -427,7 +427,7 @@ class TestManageContainer:
         from rockerc.core import LaunchPlan
 
         mock_plan = LaunchPlan(
-            container_name="test_renv-main",
+            container_name="test_renv-b-main",
             container_hex="746573745f72656e762d6d61696e",
             rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
             created=True,
@@ -481,7 +481,7 @@ class TestManageContainer:
         from rockerc.core import LaunchPlan
 
         mock_plan = LaunchPlan(
-            container_name="test_renv-main",
+            container_name="test_renv-b-main",
             container_hex="746573745f72656e762d6d61696e",
             rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
             created=True,
@@ -508,8 +508,8 @@ class TestManageContainer:
             "docker",
             "exec",
             "-w",
-            "/workspaces/test_renv-main",
-            "test_renv-main",
+            "/workspaces/test_renv-b-main",
+            "test_renv-b-main",
             "git",
             "status",
         ]
@@ -541,7 +541,7 @@ class TestManageContainer:
         from rockerc.core import LaunchPlan
 
         mock_plan = LaunchPlan(
-            container_name="test_renv-main-src",
+            container_name="test_renv-b-main-sub-src",
             container_hex="746573745f72656e762d6d61696e2d737263",
             rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
             created=True,
@@ -561,7 +561,7 @@ class TestManageContainer:
         _args, kwargs = mock_prepare_plan.call_args
         assert kwargs["path"] == pathlib.Path("/test/branch/src")
         assert kwargs["extra_volumes"] == [
-            (pathlib.Path("/test/branch/.git"), "/workspaces/test_renv-main-src/.git")
+            (pathlib.Path("/test/branch/.git"), "/workspaces/test_renv-b-main-sub-src/.git")
         ]
 
 

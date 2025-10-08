@@ -31,6 +31,7 @@ import yaml
 import shutil
 import shlex
 import os
+import re
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Tuple
 
@@ -452,13 +453,22 @@ def combine_rockerc_configs(renv_config: dict, repo_config: dict) -> dict:
 
 
 def get_container_name(repo_spec: RepoSpec) -> str:
-    """Generate container name from repo specification"""
+    """Generate container name from repo specification
+
+    Uses 'b-' prefix for branch and 'sub-' prefix for subfolder to prevent
+    naming conflicts between branch names and subfolder paths.
+    """
     safe_branch = repo_spec.branch.replace("/", "-")
-    base_name = f"{repo_spec.repo}-{safe_branch}"
+    # Use 'b-' prefix to clearly mark this as a branch name
+    base_name = f"{repo_spec.repo}-b-{safe_branch}"
     if repo_spec.subfolder:
+        # Use 'sub-' prefix and sanitize subfolder path
         safe_subfolder = repo_spec.subfolder.replace("/", "-")
-        return f"{base_name}-{safe_subfolder}"
-    return base_name
+        result = f"{base_name}-sub-{safe_subfolder}"
+    else:
+        result = base_name
+    # Sanitize to allow only alphanumeric, dash, underscore
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", result)
 
 
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
@@ -669,11 +679,7 @@ def build_rocker_config(
         _load_and_validate_config,
     )
 
-    import re
-
     container_name = get_container_name(repo_spec)
-    # Sanitize container_name to allow only alphanumeric, dash, underscore
-    container_name = re.sub(r"[^a-zA-Z0-9_-]", "_", container_name)
     branch_dir = get_worktree_dir(repo_spec)
 
     # Load configs in order of precedence (lowest first)
@@ -1013,6 +1019,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
     # Set up branch copy (with sparse-checkout if subfolder specified)
     branch_dir = setup_branch_copy(repo_spec)
+
     container_name = get_container_name(repo_spec)
 
     # Determine workspace mount path and any additional volumes
