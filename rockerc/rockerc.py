@@ -617,14 +617,15 @@ def save_rocker_cmd(split_cmd: List[str]) -> str | None:
     return None
 
 
-def _parse_extra_flags(argv: List[str]) -> Tuple[bool, bool, bool, List[str]]:
-    """Parse ad-hoc flags for --vsc, --force and --verbose.
+def _parse_extra_flags(argv: List[str]) -> Tuple[bool, bool, bool, bool, List[str]]:
+    """Parse ad-hoc flags for --vsc, --force, --verbose and --show-dockerfile.
 
-    Returns: (vsc, force, verbose, remaining_args)
+    Returns: (vsc, force, verbose, show_dockerfile, remaining_args)
     """
     vsc = False
     force = False
     verbose = False
+    show_dockerfile = False
     remaining: List[str] = []
     for a in argv:
         if a == "--vsc":
@@ -636,8 +637,11 @@ def _parse_extra_flags(argv: List[str]) -> Tuple[bool, bool, bool, List[str]]:
         if a in ("--verbose", "-v"):
             verbose = True
             continue
+        if a == "--show-dockerfile":
+            show_dockerfile = True
+            continue
         remaining.append(a)
-    return vsc, force, verbose, remaining
+    return vsc, force, verbose, show_dockerfile, remaining
 
 
 def parse_cli_extensions_and_image(
@@ -752,7 +756,7 @@ def run_rockerc(path: str = "."):
 
     # Raw arguments after script name
     cli_args = sys.argv[1:]
-    vsc, force, verbose, filtered_cli = _parse_extra_flags(cli_args)
+    vsc, force, verbose, show_dockerfile, filtered_cli = _parse_extra_flags(cli_args)
 
     _configure_logging(verbose)
 
@@ -838,7 +842,7 @@ def run_rockerc(path: str = "."):
 
     if create_dockerfile and plan.rocker_cmd:
         dockerfile_content = save_rocker_cmd(plan.rocker_cmd)
-        if verbose and dockerfile_content:
+        if show_dockerfile and dockerfile_content:
             print(_header("Generated Dockerfile (Dockerfile.rocker):"))
             print(_c(dockerfile_content, _Colors.DIM))
             print(_c("(End Dockerfile)", _Colors.DIM))
