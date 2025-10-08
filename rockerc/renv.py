@@ -454,7 +454,11 @@ def combine_rockerc_configs(renv_config: dict, repo_config: dict) -> dict:
 def get_container_name(repo_spec: RepoSpec) -> str:
     """Generate container name from repo specification"""
     safe_branch = repo_spec.branch.replace("/", "-")
-    return f"{repo_spec.repo}-{safe_branch}"
+    base_name = f"{repo_spec.repo}-{safe_branch}"
+    if repo_spec.subfolder:
+        safe_subfolder = repo_spec.subfolder.replace("/", "-")
+        return f"{base_name}-{safe_subfolder}"
+    return base_name
 
 
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:

@@ -541,8 +541,8 @@ class TestManageContainer:
         from rockerc.core import LaunchPlan
 
         mock_plan = LaunchPlan(
-            container_name="test_renv-main",
-            container_hex="746573745f72656e762d6d61696e",
+            container_name="test_renv-main-src",
+            container_hex="746573745f72656e762d6d61696e2d737263",
             rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
             created=True,
             vscode=False,
@@ -561,7 +561,7 @@ class TestManageContainer:
         _args, kwargs = mock_prepare_plan.call_args
         assert kwargs["path"] == pathlib.Path("/test/branch/src")
         assert kwargs["extra_volumes"] == [
-            (pathlib.Path("/test/branch/.git"), "/workspaces/test_renv-main/.git")
+            (pathlib.Path("/test/branch/.git"), "/workspaces/test_renv-main-src/.git")
         ]
 
 
