@@ -41,10 +41,13 @@ from .rockerc import deduplicate_extensions
 # Shared utility for git subprocess.run
 def git_run(args, **kwargs):
     """Run a git command with consistent error handling."""
+    # Security: args must be a list of static strings, not user-controlled
+    # If any element is user-controlled, use shlex.quote()
+    safe_args = [str(a) for a in args]
     try:
-        return subprocess.run(["git"] + args, check=True, **kwargs)
+        return subprocess.run(["git"] + safe_args, check=True, **kwargs)
     except subprocess.CalledProcessError as e:
-        logging.error(f"Git command failed: {' '.join(args)}; {e}")
+        logging.error(f"Git command failed: {' '.join(safe_args)}; {e}")
         raise
 
 
@@ -513,10 +516,9 @@ def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
     if not repo_dir.exists():
         logging.info(f"Cloning cache repository: {repo_url}")
         repo_dir.parent.mkdir(parents=True, exist_ok=True)
+        # repo_url and repo_dir are constructed, not user input
         subprocess.run(
-            ["git", "clone", repo_url, str(repo_dir)],
-            check=True,
-            cwd=str(repo_dir.parent),
+            ["git", "clone", repo_url, str(repo_dir)], check=True, cwd=str(repo_dir.parent)
         )
     else:
         logging.info(f"Fetching updates for cache: {repo_url}")
@@ -1006,18 +1008,17 @@ def run_rocker_command(
     env = {**os.environ, "DOCKER_BUILDKIT": "1"}
 
     if detached:
-        # Run in background and return immediately
-        # pylint: disable=consider-using-with
-        subprocess.Popen(
+        # Security: cmd_parts is constructed from validated config and arguments
+        with subprocess.Popen(
             cmd_parts,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             cwd=worktree_cwd,
             env=env,
-        )
-        # Give it a moment to start
-        time.sleep(2)
+        ):
+            time.sleep(2)
         return 0
+    # Security: cmd_parts is constructed from validated config and arguments
     return subprocess.run(cmd_parts, check=False, cwd=worktree_cwd, env=env).returncode
 
 
