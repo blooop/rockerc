@@ -69,15 +69,15 @@ def test_workflow_8_subfolder():
     assert result.returncode == 0, f"Subfolder workflow failed: {output}"
 
     # Verify unique containers are created for each branch+folder combination
-    # New naming scheme uses 'b-' prefix for branches and 'sub-' prefix for subfolders
+    # New naming scheme uses '.' separator for branches and 'sub-' prefix for subfolders
     expected_containers = [
-        "test_renv-b-main-sub-folder1-folder2",  # blooop/test_renv#folder1/folder2
-        "test_renv-b-test_branch1",  # blooop/test_renv@test_branch1
-        "test_renv-b-test_branch1-sub-folder1",  # blooop/test_renv@test_branch1#folder1
-        "test_renv-b-test_branch1-sub-folder1-folder2",  # blooop/test_renv@test_branch1#folder1/folder2
-        "test_renv-b-test_branch2-sub-folder1-folder2",  # blooop/test_renv@test_branch2#folder1/folder2
-        "test_renv-b-main-sub-folder1",  # blooop/test_renv#folder1 (naming disambiguation test)
-        "test_renv-b-folder1",  # blooop/test_renv@folder1 (naming disambiguation test)
+        "test_renv.main-sub-folder1-folder2",  # blooop/test_renv#folder1/folder2
+        "test_renv.test_branch1",  # blooop/test_renv@test_branch1
+        "test_renv.test_branch1-sub-folder1",  # blooop/test_renv@test_branch1#folder1
+        "test_renv.test_branch1-sub-folder1-folder2",  # blooop/test_renv@test_branch1#folder1/folder2
+        "test_renv.test_branch2-sub-folder1-folder2",  # blooop/test_renv@test_branch2#folder1/folder2
+        "test_renv.main-sub-folder1",  # blooop/test_renv#folder1 (naming disambiguation test)
+        "test_renv.folder1",  # blooop/test_renv@folder1 (naming disambiguation test)
     ]
 
     for container in expected_containers:

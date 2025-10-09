@@ -492,20 +492,29 @@ def combine_rockerc_configs(renv_config: dict, repo_config: dict) -> dict:
 def get_container_name(repo_spec: RepoSpec) -> str:
     """Generate container name from repo specification
 
-    Uses 'b-' prefix for branch and 'sub-' prefix for subfolder to prevent
-    naming conflicts between branch names and subfolder paths.
+    Uses '.' separator between repo and branch, and 'sub-' prefix for subfolder
+    to prevent naming conflicts between branch names and subfolder paths.
     """
     safe_branch = repo_spec.branch.replace("/", "-")
-    # Use 'b-' prefix to clearly mark this as a branch name
-    base_name = f"{repo_spec.repo}-b-{safe_branch}"
+    # Use '.' separator between repo and branch
+    base_name = f"{repo_spec.repo}.{safe_branch}"
     if repo_spec.subfolder:
         # Use 'sub-' prefix and sanitize subfolder path
         safe_subfolder = repo_spec.subfolder.replace("/", "-")
         result = f"{base_name}-sub-{safe_subfolder}"
     else:
         result = base_name
+    # Sanitize to allow only alphanumeric, dash, underscore, dot
+    return re.sub(r"[^a-zA-Z0-9_.-]", "_", result)
+
+
+def get_hostname(repo_spec: RepoSpec) -> str:
+    """Generate hostname from repo specification
+
+    Returns just the repo name as hostname, without branch information.
+    """
     # Sanitize to allow only alphanumeric, dash, underscore
-    return re.sub(r"[^a-zA-Z0-9_-]", "_", result)
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_spec.repo)
 
 
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
@@ -796,7 +805,7 @@ def build_rocker_config(
 
     # Set renv-specific parameters
     config["name"] = container_name
-    config["hostname"] = container_name
+    config["hostname"] = get_hostname(repo_spec)
     config["_renv_target_dir"] = (
         str(branch_dir / repo_spec.subfolder) if repo_spec.subfolder else str(branch_dir)
     )
