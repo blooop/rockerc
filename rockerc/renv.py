@@ -34,8 +34,39 @@ import os
 import re
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Tuple
-
+from contextlib import contextmanager
 from .rockerc import deduplicate_extensions
+
+
+# Shared utility for git subprocess.run
+def git_run(args, **kwargs):
+    """Run a git command with consistent error handling."""
+    try:
+        return subprocess.run(["git"] + args, check=True, **kwargs)
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Git command failed: {' '.join(args)}; {e}")
+        raise
+
+
+# Context manager for changing cwd
+@contextmanager
+def cwd(path: str):
+    prev = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(prev)
+
+
+# Helper for sparse-checkout setup/update
+def _apply_sparse_checkout(branch_dir: pathlib.Path, subfolder: str, reapply: bool = False):
+    base = ["-C", str(branch_dir), "sparse-checkout"]
+    git_run(base + ["init", "--cone"])
+    git_run(base + ["set", subfolder])
+    if reapply:
+        git_run(base + ["reapply"])
+    _verify_sparse_checkout_path(branch_dir, subfolder, branch_dir.name)
 
 
 @dataclass
@@ -100,8 +131,11 @@ def get_available_repos(user: str) -> List[str]:
         if entry.name.startswith("."):
             continue
         if (entry / ".git").exists():
-            # Legacy layout repo-branch directories (e.g., repo-main)
-            name = entry.name.split("-", 1)[0]
+            # Legacy layout repo-branch directories (e.g., repo-main, repo-with-dashes-main)
+            if "-" in entry.name:
+                name = entry.name.rsplit("-", 1)[0]
+            else:
+                name = entry.name
             repos.add(name)
         else:
             repos.add(entry.name)
@@ -504,6 +538,14 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
 
     legacy_dir = get_legacy_worktree_dir(repo_spec)
     if not branch_dir.exists() and legacy_dir.exists():
+        # Check for existing files in both dirs to avoid overwriting
+        legacy_files = set(p.name for p in legacy_dir.iterdir()) if legacy_dir.exists() else set()
+        branch_files = set(p.name for p in branch_dir.iterdir()) if branch_dir.exists() else set()
+        overlap = legacy_files & branch_files
+        if overlap:
+            logging.warning(
+                f"Migration risk: overlapping files {overlap} between legacy and new workspace for {repo_spec.repo}@{repo_spec.branch}"
+            )
         logging.info(f"Migrating legacy workspace layout for {repo_spec.repo}@{repo_spec.branch}")
         shutil.move(str(legacy_dir), str(branch_dir))
 
@@ -955,14 +997,14 @@ def run_rocker_command(
     logging.info(f"Running rocker: {cmd_str}")
 
     # Always use worktree directory as working directory for renv
-    cwd = None
+    worktree_cwd = None
     # Extract worktree directory from volume mounts
     for volume in volumes:
         if "/workspace/" in volume and not volume.endswith(".git"):
             host_path = volume.split(":")[0]
             if pathlib.Path(host_path).exists():
-                cwd = host_path
-                logging.info(f"Using worktree directory as cwd: {cwd}")
+                worktree_cwd = host_path
+                logging.info(f"Using worktree directory as cwd: {worktree_cwd}")
                 break
 
     # Enable Docker BuildKit for improved build performance
@@ -972,12 +1014,16 @@ def run_rocker_command(
         # Run in background and return immediately
         # pylint: disable=consider-using-with
         subprocess.Popen(
-            cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd, env=env
+            cmd_parts,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=worktree_cwd,
+            env=env,
         )
         # Give it a moment to start
         time.sleep(2)
         return 0
-    return subprocess.run(cmd_parts, check=False, cwd=cwd, env=env).returncode
+    return subprocess.run(cmd_parts, check=False, cwd=worktree_cwd, env=env).returncode
 
 
 def _handle_container_corruption(
@@ -1067,32 +1113,46 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     target_dir = config.pop("_renv_target_dir", str(branch_dir))
 
     # Change to the target directory so cwd extension picks it up
-    try:
-        original_cwd = os.getcwd()
-    except FileNotFoundError:
-        logging.warning(
-            "Current working directory missing; defaulting subsequent operations to %s",
-            branch_dir,
-        )
-        original_cwd = None
-    try:
-        os.chdir(target_dir)
-    except FileNotFoundError as exc:
-        target_path = pathlib.Path(target_dir)
-        logging.error(
-            "Target directory missing after setup: %s (branch dir: %s)",
-            target_path,
-            branch_dir,
-        )
-        raise FileNotFoundError(f"Target directory not found: {target_path}") from exc
-
-    def _restore_cwd() -> None:
+    @contextmanager
+    def _restore_cwd_context():
+        try:
+            original_cwd = os.getcwd()
+        except FileNotFoundError:
+            logging.warning(
+                "Current working directory missing; defaulting subsequent operations to %s",
+                branch_dir,
+            )
+            original_cwd = None
         target = (
             original_cwd
             if original_cwd and pathlib.Path(original_cwd).exists()
             else str(branch_dir)
         )
-        os.chdir(target)
+        try:
+            os.chdir(target_dir)
+        except FileNotFoundError as exc:
+            target_path = pathlib.Path(target_dir)
+            logging.error(
+                "Target directory missing after setup: %s (branch dir: %s)",
+                target_path,
+                branch_dir,
+            )
+            raise FileNotFoundError(f"Target directory not found: {target_path}") from exc
+        try:
+            yield
+        finally:
+            try:
+                os.chdir(target)
+            except FileNotFoundError as exc:
+                logging.error(
+                    "Failed to restore cwd: target directory missing (%s). original_cwd: %s, branch_dir: %s",
+                    target,
+                    original_cwd,
+                    branch_dir,
+                )
+                raise FileNotFoundError(
+                    f"Could not restore cwd, target directory not found: {target} (original_cwd: {original_cwd}, branch_dir: {branch_dir})"
+                ) from exc
 
     try:
         from rockerc.core import (
@@ -1103,102 +1163,91 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             interactive_shell,
         )
 
-        # Handle VSCode mode using unified backend (same as rockervsc)
-        if vsc:
-            # Prepare launch plan - this handles container existence, force rebuild, etc.
-            plan = prepare_launch_plan(
-                args_dict=config,
-                extra_cli="",
-                container_name=container_name,
-                vscode=True,
-                force=force,
-                path=mount_path,
-                extensions=config.get("args", []),
-                extra_volumes=extra_volumes,
-            )
-
-            # If we need to launch a new container, do it with correct cwd
-            if plan.rocker_cmd:
-                ret = launch_rocker(plan.rocker_cmd)
-                if ret != 0:
-                    return ret
-
-            # Change to branch_dir for docker exec operations (must be in mounted directory)
-            os.chdir(branch_dir)
-
-            # Wait for container to be ready
-            if not wait_for_container(container_name):
-                logging.error(f"Timed out waiting for container '{container_name}'")
-                return 1
-
-            # Test if container is corrupted (breakout detection) before attaching
-            # This can happen if renv dir was deleted while container was running
-            if not plan.created:  # Only test if we're reusing an existing container
-                test_result = subprocess.run(
-                    ["docker", "exec", container_name, "pwd"],
-                    capture_output=True,
-                    text=True,
-                    check=False,
+        with _restore_cwd_context():
+            # Handle VSCode mode using unified backend (same as rockervsc)
+            if vsc:
+                plan = prepare_launch_plan(
+                    args_dict=config,
+                    extra_cli="",
+                    container_name=container_name,
+                    vscode=True,
+                    force=force,
+                    path=mount_path,
+                    extensions=config.get("args", []),
+                    extra_volumes=extra_volumes,
                 )
 
-                if (
-                    test_result.returncode != 0
-                    or "container breakout" in test_result.stderr.lower()
-                ):
-                    # Container is corrupted - rebuild it
-                    logging.info(
-                        "Container appears corrupted (possible breakout detection), rebuilding for VSCode"
+                if plan.rocker_cmd:
+                    ret = launch_rocker(plan.rocker_cmd)
+                    if ret != 0:
+                        return ret
+
+                # Change to branch_dir for docker exec operations (must be in mounted directory)
+                os.chdir(branch_dir)
+
+                if not wait_for_container(container_name):
+                    logging.error(f"Timed out waiting for container '{container_name}'")
+                    return 1
+
+                if not plan.created:
+                    test_result = subprocess.run(
+                        ["docker", "exec", container_name, "pwd"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
                     )
-                    from rockerc.core import stop_and_remove_container as core_stop_and_remove
 
-                    core_stop_and_remove(container_name)
+                    if (
+                        test_result.returncode != 0
+                        or "container breakout" in test_result.stderr.lower()
+                    ):
+                        logging.info(
+                            "Container appears corrupted (possible breakout detection), rebuilding for VSCode"
+                        )
+                        from rockerc.core import stop_and_remove_container as core_stop_and_remove
 
-                    # Rebuild container using rocker command without --detach (rocker doesn't support it)
-                    # Build rocker args manually to avoid --detach flag from build_rocker_arg_injections
-                    from rockerc.core import (
-                        ensure_name_args,
-                        add_extension_env,
-                        ensure_volume_binding,
-                        append_volume_binding,
-                    )
-                    from rockerc.rockerc import yaml_dict_to_args
+                        core_stop_and_remove(container_name)
 
-                    injections = ""
-                    injections = ensure_name_args(injections, container_name)
-                    injections = add_extension_env(injections, config.get("args", []))
-                    injections = ensure_volume_binding(injections, container_name, mount_path)
-                    for host_path, target in extra_volumes:
-                        injections = append_volume_binding(injections, host_path, target)
+                        from rockerc.core import (
+                            ensure_name_args,
+                            add_extension_env,
+                            ensure_volume_binding,
+                            append_volume_binding,
+                        )
+                        from rockerc.rockerc import yaml_dict_to_args
 
-                    args_copy = dict(config)
-                    rocker_argline = yaml_dict_to_args(args_copy, injections)
-                    rocker_cmd = ["rocker"] + shlex.split(rocker_argline)
+                        injections = ""
+                        injections = ensure_name_args(injections, container_name)
+                        injections = add_extension_env(injections, config.get("args", []))
+                        injections = ensure_volume_binding(injections, container_name, mount_path)
+                        for host_path, target in extra_volumes:
+                            injections = append_volume_binding(injections, host_path, target)
 
-                    logging.info(f"Rebuilding container: {' '.join(rocker_cmd)}")
+                        args_copy = dict(config)
+                        rocker_argline = yaml_dict_to_args(args_copy, injections)
+                        rocker_cmd = ["rocker"] + shlex.split(rocker_argline)
 
-                    # Run rocker in detached mode using subprocess (container runs in background)
-                    # Enable Docker BuildKit for improved build performance
-                    env = {**os.environ, "DOCKER_BUILDKIT": "1"}
-                    result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir, env=env)
-                    if result.returncode != 0:
-                        return result.returncode
+                        logging.info(f"Rebuilding container: {' '.join(rocker_cmd)}")
 
-                    # Give container time to start
-                    time.sleep(2)
+                        env = {**os.environ, "DOCKER_BUILDKIT": "1"}
+                        result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir, env=env)
+                        if result.returncode != 0:
+                            return result.returncode
 
-                    # Wait for new container to be ready
-                    if not wait_for_container(container_name):
-                        logging.error(f"Timed out waiting for rebuilt container '{container_name}'")
-                        return 1
+                        time.sleep(2)
 
-            # Launch VSCode if requested
-            if plan.vscode:
-                launch_vscode(plan.container_name, plan.container_hex)
+                        if not wait_for_container(container_name):
+                            logging.error(
+                                f"Timed out waiting for rebuilt container '{container_name}'"
+                            )
+                            return 1
 
-            # Attach interactive shell
-            return interactive_shell(container_name)
+                if plan.vscode:
+                    launch_vscode(plan.container_name, plan.container_hex)
 
-        # Terminal mode: use detached workflow (same as rockerc)
+                return interactive_shell(container_name)
+
+            # Terminal mode: use detached workflow (same as rockerc)
         # Keep cwd extension - it sets WORKDIR and we can still override with docker exec -w
         plan = prepare_launch_plan(
             args_dict=config,
@@ -1219,13 +1268,16 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         if plan.rocker_cmd:
             ret = launch_rocker(plan.rocker_cmd)
             if ret != 0:
-                _restore_cwd()
+                # Restore cwd using context manager
+                with _restore_cwd_context():
+                    pass
                 return ret
 
         # Wait for container to be ready
         if not wait_for_container(container_name):
             logging.error(f"Timed out waiting for container '{container_name}'")
-            _restore_cwd()
+            with _restore_cwd_context():
+                pass
             return 1
 
         # Test for container breakout (if directory was deleted while container running)
@@ -1267,12 +1319,14 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
                     ret = launch_rocker(plan.rocker_cmd)
                     if ret != 0:
-                        _restore_cwd()
+                        with _restore_cwd_context():
+                            pass
                         return ret
 
                 if not wait_for_container(container_name):
                     logging.error(f"Timed out waiting for rebuilt container '{container_name}'")
-                    _restore_cwd()
+                    with _restore_cwd_context():
+                        pass
                     return 1
 
         # Execute command or attach interactive shell with working directory set
@@ -1286,7 +1340,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             exec_cmd = ["docker", "exec", "-w", workdir, container_name] + command
             logging.info(f"Executing command: {' '.join(exec_cmd)}")
             result = subprocess.run(exec_cmd, check=False)
-            _restore_cwd()
+            with _restore_cwd_context():
+                pass
             return result.returncode
 
         # Attach interactive shell - need to set working directory via env or wrapper
@@ -1300,11 +1355,13 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
         logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
         result = subprocess.run(exec_cmd, check=False)
-        _restore_cwd()
+        with _restore_cwd_context():
+            pass
         return result.returncode
     finally:
         # Restore original working directory
-        _restore_cwd()
+        with _restore_cwd_context():
+            pass
 
 
 def run_renv(args: Optional[List[str]] = None) -> int:
