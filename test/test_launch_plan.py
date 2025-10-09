@@ -51,6 +51,25 @@ def test_prepare_launch_plan_injects_required_flags():
     assert f"/workspaces/{name}" in joined
 
 
+def test_prepare_launch_plan_adds_extra_volumes():
+    name = derive_container_name("example")
+    extra_host = pathlib.Path("/repo/.git")
+    extra_target = f"/workspaces/{name}/.git"
+    with patch("rockerc.core.container_exists", return_value=False):
+        plan = prepare_launch_plan(
+            _base_args(),
+            "",
+            name,
+            vscode=False,
+            force=False,
+            path=pathlib.Path("/repo/src"),
+            extra_volumes=[(extra_host, extra_target)],
+        )
+    joined = " ".join(plan.rocker_cmd)
+    assert f"--volume /repo/src:/workspaces/{name}:Z" in joined
+    assert f"--volume {extra_host}:{extra_target}:Z" in joined
+
+
 def test_prepare_launch_plan_rebuild_on_extension_change():
     """Test that prepare_launch_plan triggers rebuild when extensions have changed."""
     name = derive_container_name("example")

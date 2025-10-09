@@ -46,7 +46,7 @@ def test_docker_exec_interactive_flags(
         {},
     )
     mock_plan = LaunchPlan(
-        container_name="test_renv-main",
+        container_name="test_renv-b-main",
         container_hex="746573745f72656e762d6d61696e",
         rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
         created=True,
@@ -65,8 +65,8 @@ def test_docker_exec_interactive_flags(
         + expected_flags
         + [
             "-w",
-            "/workspaces/test_renv-main",
-            "test_renv-main",
+            "/workspaces/test_renv-b-main",
+            "test_renv-b-main",
             "/bin/bash",
         ]
     )
