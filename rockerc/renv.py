@@ -517,6 +517,23 @@ def get_hostname(repo_spec: RepoSpec) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_spec.repo)
 
 
+def get_container_mount_target(repo_spec: RepoSpec) -> str:
+    """Generate container mount target path for renv
+
+    Returns /home/{user}/{repo} for mounting inside the container.
+    This provides a cleaner path without branch suffixes.
+    """
+    import getpass
+
+    try:
+        username = getpass.getuser()
+    except Exception:  # pragma: no cover
+        # Fallback to USER env var if getpass fails
+        username = os.getenv("USER", "user")
+
+    return f"/home/{username}/{repo_spec.repo}"
+
+
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
     """Clone or update cache repository (full clone, not bare)"""
     repo_dir = get_repo_dir(repo_spec)
@@ -790,9 +807,10 @@ def build_rocker_config(
         repo.get("extension-blacklist", []),
     )
 
-    # Ensure cwd extension is present
-    if "cwd" not in config["args"]:
-        config["args"].append("cwd")
+    # Remove cwd extension for renv - we use custom mounting logic
+    # that doesn't rely on the cwd extension's automatic directory detection
+    if "cwd" in config["args"]:
+        config["args"].remove("cwd")
 
     # Filter unavailable extensions
     filtered_args, removed_args = _filter_unavailable_extensions(config.get("args", []))
@@ -1084,6 +1102,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     branch_dir = setup_branch_copy(repo_spec)
 
     container_name = get_container_name(repo_spec)
+    mount_target = get_container_mount_target(repo_spec)
 
     # Determine workspace mount path and any additional volumes
     # When a subfolder is requested we mount only that directory and provide a .git bind mount
@@ -1094,7 +1113,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         extra_volumes.append(
             (
                 branch_dir / ".git",
-                f"/workspaces/{container_name}/.git",
+                f"{mount_target}/.git",
             )
         )
 
@@ -1180,6 +1199,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     path=mount_path,
                     extensions=config.get("args", []),
                     extra_volumes=extra_volumes,
+                    custom_mount_target=mount_target,
                 )
 
                 if plan.rocker_cmd:
@@ -1224,7 +1244,9 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                         injections = ""
                         injections = ensure_name_args(injections, container_name)
                         injections = add_extension_env(injections, config.get("args", []))
-                        injections = ensure_volume_binding(injections, container_name, mount_path)
+                        injections = ensure_volume_binding(
+                            injections, container_name, mount_path, mount_target
+                        )
                         for host_path, target in extra_volumes:
                             injections = append_volume_binding(injections, host_path, target)
 
@@ -1248,12 +1270,11 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                             return 1
 
                 if plan.vscode:
-                    launch_vscode(plan.container_name, plan.container_hex)
+                    launch_vscode(plan.container_name, plan.container_hex, plan.mount_target)
 
                 return interactive_shell(container_name)
 
             # Terminal mode: use detached workflow (same as rockerc)
-        # Keep cwd extension - it sets WORKDIR and we can still override with docker exec -w
         plan = prepare_launch_plan(
             args_dict=config,
             extra_cli="",
@@ -1263,6 +1284,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             path=mount_path,
             extensions=config["args"],
             extra_volumes=extra_volumes,
+            custom_mount_target=mount_target,
         )
 
         # Add keep-alive command to rocker_cmd so detached container stays running
@@ -1290,9 +1312,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         if not plan.created:
             # Test if we can actually access the working directory
             # Just checking if it exists isn't enough - we need to try to use it
-            workdir = f"/workspaces/{container_name}"
             test_result = subprocess.run(
-                ["docker", "exec", "-w", workdir, container_name, "pwd"],
+                ["docker", "exec", "-w", mount_target, container_name, "pwd"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1318,6 +1339,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     path=mount_path,
                     extensions=config["args"],
                     extra_volumes=extra_volumes,
+                    custom_mount_target=mount_target,
                 )
 
                 if plan.rocker_cmd:
@@ -1335,14 +1357,12 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     return 1
 
         # Execute command or attach interactive shell with working directory set
-        workdir = f"/workspaces/{container_name}"
-
         if command:
             # Ensure command is a list of strings
             if not (isinstance(command, list) and all(isinstance(x, str) for x in command)):
                 raise ValueError("command must be a list of strings")
             # Execute command via docker exec with working directory
-            exec_cmd = ["docker", "exec", "-w", workdir, container_name] + command
+            exec_cmd = ["docker", "exec", "-w", mount_target, container_name] + command
             logging.info(f"Executing command: {' '.join(exec_cmd)}")
             result = subprocess.run(exec_cmd, check=False)
             with _restore_cwd_context():
@@ -1353,10 +1373,10 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         # Since core.py's interactive_shell doesn't support -w flag, we need to use our own exec
         # Check if we have a TTY to use -it flags
         if sys.stdin.isatty() and sys.stdout.isatty():
-            exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"]
+            exec_cmd = ["docker", "exec", "-it", "-w", mount_target, container_name, "/bin/bash"]
         else:
             # No TTY, run without -it
-            exec_cmd = ["docker", "exec", "-w", workdir, container_name, "/bin/bash"]
+            exec_cmd = ["docker", "exec", "-w", mount_target, container_name, "/bin/bash"]
 
         logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
         result = subprocess.run(exec_cmd, check=False)

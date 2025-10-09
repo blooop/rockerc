@@ -76,7 +76,7 @@ class TestRockerConfig:
         assert "x11" in config["args"]  # Updated to match new default config
         assert "ssh" in config["args"]  # Updated to match new default config
         assert "nocleanup" not in config["args"]  # Removed to let rocker manage security properly
-        assert "cwd" in config["args"]  # cwd extension should be added automatically
+        assert "cwd" not in config["args"]  # cwd extension disabled for renv (uses custom mounting)
         assert config["name"] == "test_renv.main"
         assert config["hostname"] == "test_renv"
         # Volume is NOT in config - it's added by prepare_launch_plan via build_rocker_arg_injections
@@ -89,7 +89,7 @@ class TestRockerConfig:
         config, _ = build_rocker_config(spec)
         # Target directory should include subfolder
         assert "src" in config["_renv_target_dir"]
-        assert "cwd" in config["args"]  # cwd extension should be present
+        assert "cwd" not in config["args"]  # cwd extension disabled for renv (uses custom mounting)
 
     def test_build_rocker_config_with_force(self):
         # Force rebuild is handled by container removal, not rocker extensions
@@ -432,6 +432,7 @@ class TestManageContainer:
             rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
             created=True,
             vscode=False,
+            mount_target="/workspaces/test_renv.main",
         )
         mock_prepare_plan.return_value = mock_plan
         mock_launch_rocker.return_value = 0
@@ -486,6 +487,7 @@ class TestManageContainer:
             rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
             created=True,
             vscode=False,
+            mount_target="/workspaces/test_renv.main",
         )
         mock_prepare_plan.return_value = mock_plan
         mock_launch_rocker.return_value = 0
@@ -502,13 +504,17 @@ class TestManageContainer:
         mock_wait_container.assert_called_once()
 
         # Verify docker exec was called with git status and working directory
+        # The mount target uses /home/{user}/repo format
+        import getpass
+
+        username = getpass.getuser()
         mock_subprocess.assert_called_once()
         call_args = mock_subprocess.call_args[0][0]
         assert call_args == [
             "docker",
             "exec",
             "-w",
-            "/workspaces/test_renv.main",
+            f"/home/{username}/test_renv",
             "test_renv.main",
             "git",
             "status",
@@ -546,6 +552,7 @@ class TestManageContainer:
             rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
             created=True,
             vscode=False,
+            mount_target="/workspaces/test_renv.main-sub-src",
         )
         mock_prepare_plan.return_value = mock_plan
         mock_launch_rocker.return_value = 0
@@ -559,9 +566,13 @@ class TestManageContainer:
         assert result == 0
         assert mock_prepare_plan.call_count == 1
         _args, kwargs = mock_prepare_plan.call_args
+        # The mount target uses /home/{user}/repo format
+        import getpass
+
+        username = getpass.getuser()
         assert kwargs["path"] == pathlib.Path("/test/branch/src")
         assert kwargs["extra_volumes"] == [
-            (pathlib.Path("/test/branch/.git"), "/workspaces/test_renv.main-sub-src/.git")
+            (pathlib.Path("/test/branch/.git"), f"/home/{username}/test_renv/.git")
         ]
 
 
