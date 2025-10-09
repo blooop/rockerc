@@ -282,7 +282,8 @@ def ensure_volume_binding(base_args: str, container_name: str, path: pathlib.Pat
 
 def append_volume_binding(base_args: str, host_path: pathlib.Path, target: str) -> str:
     """Append an additional volume mount if it's not already present."""
-    import shlex
+    # shlex is already imported at the module level
+
     volume_arg = f"--volume {host_path}:{target}:Z"
 
     # Parse base_args into tokens
@@ -296,7 +297,7 @@ def append_volume_binding(base_args: str, host_path: pathlib.Path, target: str) 
             if len(parts) >= 2:
                 existing_targets.add(parts[1])
         elif token.startswith("--volume="):
-            volume_spec = token[len("--volume="):]
+            volume_spec = token[len("--volume=") :]
             parts = volume_spec.split(":")
             if len(parts) >= 2:
                 existing_targets.add(parts[1])
