@@ -702,3 +702,105 @@ class TestRockerCommandWorkingDirectory:
         bash_index = cmd_parts.index("bash")
         assert cmd_parts[bash_index + 1] == "-c"
         assert cmd_parts[bash_index + 2] == '"git reset --hard HEAD; git clean -fd"'
+
+
+class TestContainerAndHostnameSanitization:
+    def test_container_and_hostname_sanitization(self):
+        from rockerc.renv import get_container_name, get_hostname
+
+        # Edge cases for repo and branch names
+        # Container names allow: alphanumeric, dash, underscore, dot
+        # Hostnames allow: alphanumeric, dash, underscore (no dots)
+        cases = [
+            # (repo, branch, expected_container_name, expected_hostname)
+            ("my-repo", "feature/awesome", "my-repo.feature-awesome", "my-repo"),
+            (
+                "repo.with.dots",
+                "branch.with.dots",
+                "repo.with.dots.branch.with.dots",  # dots allowed in container names
+                "repo_with_dots",  # dots replaced with underscore in hostnames
+            ),
+            (
+                "repo_with_underscores",
+                "branch_with_underscores",
+                "repo_with_underscores.branch_with_underscores",
+                "repo_with_underscores",
+            ),
+            (
+                "repo-with-dashes",
+                "branch-with-dashes",
+                "repo-with-dashes.branch-with-dashes",
+                "repo-with-dashes",
+            ),
+            (
+                "repo$special!chars",
+                "branch@weird#chars",
+                "repo_special_chars.branch_weird_chars",
+                "repo_special_chars",
+            ),
+            (
+                "repo.mixed-_.chars",
+                "branch.mixed-_.chars",
+                "repo.mixed-_.chars.branch.mixed-_.chars",  # dots allowed in container names
+                "repo_mixed-__chars",  # dots replaced with underscore in hostnames
+            ),
+        ]
+
+        for repo, branch, expected_container, expected_host in cases:
+            repo_spec = RepoSpec("owner", repo, branch)
+            container_name = get_container_name(repo_spec)
+            hostname = get_hostname(repo_spec)
+            assert container_name == expected_container, (
+                f"Container name for {repo}, {branch} was {container_name}, expected {expected_container}"
+            )
+            assert hostname == expected_host, (
+                f"Hostname for {repo} was {hostname}, expected {expected_host}"
+            )
+
+    def test_get_hostname_empty_repo(self):
+        from rockerc.renv import get_hostname
+
+        repo_spec = RepoSpec("owner", "", "main")
+        # Empty repo name should still work (returns empty string after sanitization)
+        hostname = get_hostname(repo_spec)
+        assert hostname == ""
+
+    def test_get_hostname_special_characters(self):
+        from rockerc.renv import get_hostname
+
+        repo_spec = RepoSpec("owner", "test!@#repo", "main")
+        # Should sanitize special characters
+        hostname = get_hostname(repo_spec)
+        assert all(c.isalnum() or c in ["-", "_"] for c in hostname), (
+            f"Hostname '{hostname}' contains invalid characters"
+        )
+        assert hostname == "test___repo", f"Expected 'test___repo', got '{hostname}'"
+
+    def test_get_hostname_excessively_long_name(self):
+        from rockerc.renv import get_hostname
+
+        long_repo_name = "a" * 300
+        repo_spec = RepoSpec("owner", long_repo_name, "main")
+        hostname = get_hostname(repo_spec)
+        # Hostname length should be at most 255 characters (DNS limit)
+        # However, current implementation doesn't enforce this, so it returns the full sanitized name
+        # This test documents the current behavior
+        assert len(hostname) == 300, (
+            f"Hostname length is {len(hostname)}, current implementation doesn't truncate"
+        )
+
+    def test_container_name_with_subfolder(self):
+        from rockerc.renv import get_container_name
+
+        repo_spec = RepoSpec("owner", "repo", "main", "src/core")
+        container_name = get_container_name(repo_spec)
+        # Should include subfolder with sub- prefix
+        assert container_name == "repo.main-sub-src-core"
+
+    def test_container_name_special_chars_in_subfolder(self):
+        from rockerc.renv import get_container_name
+
+        repo_spec = RepoSpec("owner", "repo", "main", "src/core@v2")
+        container_name = get_container_name(repo_spec)
+        # Special characters in subfolder should be sanitized
+        assert container_name == "repo.main-sub-src-core_v2"
