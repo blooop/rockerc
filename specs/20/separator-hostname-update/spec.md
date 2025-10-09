@@ -16,6 +16,8 @@ Update the separator between repo name and branch from `-b-` to `.` and modify h
 ### Test Updates
 - Update all test expectations to use new separator format
 - Update hostname test expectations
+- Add edge case tests for special characters, dots, dashes, and underscores in repo and branch names
+- Add error condition tests for empty strings, special characters, and excessively long names
 
 ## Expected Behavior
 - Container name: `repo.branch` instead of `repo-b-branch`
