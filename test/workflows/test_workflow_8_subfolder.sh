@@ -2,7 +2,6 @@
 set -euo pipefail
 
 # Clean up containers from previous tests (but keep the renv directory)
-docker ps -a --format "{{.Names}}" | grep "test_renv" | xargs -r docker rm -f 2>/dev/null || true
 
 #test with no branch on main first
 renv blooop/test_renv#folder1/folder2 -- bash -c "echo expected output: example.txt; ls"

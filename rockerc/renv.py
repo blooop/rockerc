@@ -479,7 +479,11 @@ def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
     if not repo_dir.exists():
         logging.info(f"Cloning cache repository: {repo_url}")
         repo_dir.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["git", "clone", repo_url, str(repo_dir)], check=True)
+        subprocess.run(
+            ["git", "clone", repo_url, str(repo_dir)],
+            check=True,
+            cwd=str(repo_dir.parent),
+        )
     else:
         logging.info(f"Fetching updates for cache: {repo_url}")
         subprocess.run(["git", "-C", str(repo_dir), "fetch", "--all"], check=True)
@@ -583,6 +587,10 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
                 ["git", "-C", str(branch_dir), "sparse-checkout", "set", repo_spec.subfolder],
                 check=True,
             )
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "sparse-checkout", "reapply"],
+                check=True,
+            )
             logging.info(f"Sparse-checkout configured for: {repo_spec.subfolder}")
             _verify_sparse_checkout_path(branch_dir, repo_spec.subfolder, repo_spec.branch)
     else:
@@ -613,6 +621,10 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
             # Update the subfolder pattern
             subprocess.run(
                 ["git", "-C", str(branch_dir), "sparse-checkout", "set", repo_spec.subfolder],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "sparse-checkout", "reapply"],
                 check=True,
             )
             _verify_sparse_checkout_path(branch_dir, repo_spec.subfolder, repo_spec.branch)
@@ -1055,8 +1067,32 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     target_dir = config.pop("_renv_target_dir", str(branch_dir))
 
     # Change to the target directory so cwd extension picks it up
-    original_cwd = os.getcwd()
-    os.chdir(target_dir)
+    try:
+        original_cwd = os.getcwd()
+    except FileNotFoundError:
+        logging.warning(
+            "Current working directory missing; defaulting subsequent operations to %s",
+            branch_dir,
+        )
+        original_cwd = None
+    try:
+        os.chdir(target_dir)
+    except FileNotFoundError as exc:
+        target_path = pathlib.Path(target_dir)
+        logging.error(
+            "Target directory missing after setup: %s (branch dir: %s)",
+            target_path,
+            branch_dir,
+        )
+        raise FileNotFoundError(f"Target directory not found: {target_path}") from exc
+
+    def _restore_cwd() -> None:
+        target = (
+            original_cwd
+            if original_cwd and pathlib.Path(original_cwd).exists()
+            else str(branch_dir)
+        )
+        os.chdir(target)
 
     try:
         from rockerc.core import (
@@ -1183,13 +1219,13 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         if plan.rocker_cmd:
             ret = launch_rocker(plan.rocker_cmd)
             if ret != 0:
-                os.chdir(original_cwd)
+                _restore_cwd()
                 return ret
 
         # Wait for container to be ready
         if not wait_for_container(container_name):
             logging.error(f"Timed out waiting for container '{container_name}'")
-            os.chdir(original_cwd)
+            _restore_cwd()
             return 1
 
         # Test for container breakout (if directory was deleted while container running)
@@ -1231,12 +1267,12 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
                     ret = launch_rocker(plan.rocker_cmd)
                     if ret != 0:
-                        os.chdir(original_cwd)
+                        _restore_cwd()
                         return ret
 
                 if not wait_for_container(container_name):
                     logging.error(f"Timed out waiting for rebuilt container '{container_name}'")
-                    os.chdir(original_cwd)
+                    _restore_cwd()
                     return 1
 
         # Execute command or attach interactive shell with working directory set
@@ -1250,7 +1286,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             exec_cmd = ["docker", "exec", "-w", workdir, container_name] + command
             logging.info(f"Executing command: {' '.join(exec_cmd)}")
             result = subprocess.run(exec_cmd, check=False)
-            os.chdir(original_cwd)
+            _restore_cwd()
             return result.returncode
 
         # Attach interactive shell - need to set working directory via env or wrapper
@@ -1264,11 +1300,11 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
         logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
         result = subprocess.run(exec_cmd, check=False)
-        os.chdir(original_cwd)
+        _restore_cwd()
         return result.returncode
     finally:
         # Restore original working directory
-        os.chdir(original_cwd)
+        _restore_cwd()
 
 
 def run_renv(args: Optional[List[str]] = None) -> int:
