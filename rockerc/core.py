@@ -359,16 +359,23 @@ def wait_for_container(
     return False
 
 
-def launch_vscode(container_name: str, container_hex: str) -> bool:
+def launch_vscode(container_name: str, container_hex: str, folder_path: str | None = None) -> bool:
     """Attempt to launch VS Code attached to a running container.
+
+    Args:
+        container_name: Name of the container
+        container_hex: Hex-encoded container name for VSCode URI
+        folder_path: Optional container path to open (default: /workspaces/{container_name})
 
     Returns True on success, False on failure.
     """
-    vscode_uri = f"vscode-remote://attached-container+{container_hex}/workspaces/{container_name}"
+    if folder_path is None:
+        folder_path = f"/workspaces/{container_name}"
+    vscode_uri = f"vscode-remote://attached-container+{container_hex}{folder_path}"
     cmd = ["code", "--folder-uri", vscode_uri]
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
-        LOGGER.info("Launched VS Code on container '%s'", container_name)
+        LOGGER.info("Launched VS Code on container '%s' at '%s'", container_name, folder_path)
         return True
     except FileNotFoundError:
         LOGGER.warning("VS Code 'code' command not found in PATH; skipping attach.")

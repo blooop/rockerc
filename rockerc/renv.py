@@ -824,8 +824,10 @@ def build_rocker_config(
     # Set renv-specific parameters
     config["name"] = container_name
     config["hostname"] = get_hostname(repo_spec)
+    # For subfolders: cd to subfolder directly
+    # For full repo: cd to parent dir so cwd extension mounts parent, keeping folder name as {repo}
     config["_renv_target_dir"] = (
-        str(branch_dir / repo_spec.subfolder) if repo_spec.subfolder else str(branch_dir)
+        str(branch_dir / repo_spec.subfolder) if repo_spec.subfolder else str(branch_dir.parent)
     )
 
     meta = {
@@ -1104,8 +1106,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     container_name = get_container_name(repo_spec)
 
     # Determine workspace mount path and any additional volumes
-    # When a subfolder is requested we mount only that directory and provide a .git bind mount
-    mount_path = branch_dir
+    # For subfolders: mount only that directory and provide a .git bind mount
+    # For full repo: mount parent directory so folder name in container is {repo}
     extra_volumes = []
     if repo_spec.subfolder:
         mount_path = branch_dir / repo_spec.subfolder
@@ -1115,6 +1117,9 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 f"/workspaces/{container_name}/.git",
             )
         )
+    else:
+        # Mount parent directory so container has /workspaces/{container_name}/{repo}/
+        mount_path = pathlib.Path(branch_dir).parent
 
     # Build rocker configuration and get metadata
     config, meta = build_rocker_config(repo_spec, force=force, nocache=nocache)
@@ -1266,7 +1271,14 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                             return 1
 
                 if plan.vscode:
-                    launch_vscode(plan.container_name, plan.container_hex)
+                    # For non-subfolder: open /workspaces/{container_name}/{repo}
+                    # For subfolder: open /workspaces/{container_name} (subfolder is mounted directly)
+                    vsc_folder = (
+                        f"/workspaces/{container_name}"
+                        if repo_spec.subfolder
+                        else f"/workspaces/{container_name}/{repo_spec.repo}"
+                    )
+                    launch_vscode(plan.container_name, plan.container_hex, vsc_folder)
 
                 return interactive_shell(container_name)
 
@@ -1305,10 +1317,16 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
         # Test for container breakout (if directory was deleted while container running)
         # Only test if we're reusing an existing container
+        # Determine working directory: for subfolders use container root, otherwise use {repo} subfolder
+        workdir = (
+            f"/workspaces/{container_name}"
+            if repo_spec.subfolder
+            else f"/workspaces/{container_name}/{repo_spec.repo}"
+        )
+
         if not plan.created:
             # Test if we can actually access the working directory
             # Just checking if it exists isn't enough - we need to try to use it
-            workdir = f"/workspaces/{container_name}"
             test_result = subprocess.run(
                 ["docker", "exec", "-w", workdir, container_name, "pwd"],
                 capture_output=True,
@@ -1353,7 +1371,6 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     return 1
 
         # Execute command or attach interactive shell with working directory set
-        workdir = f"/workspaces/{container_name}"
 
         if command:
             # Ensure command is a list of strings

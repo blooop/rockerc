@@ -510,11 +510,12 @@ class TestManageContainer:
         # Verify docker exec was called with git status and working directory
         mock_subprocess.assert_called_once()
         call_args = mock_subprocess.call_args[0][0]
+        # Workdir should include repo name for non-subfolder cases
         assert call_args == [
             "docker",
             "exec",
             "-w",
-            "/workspaces/test_renv.main",
+            "/workspaces/test_renv.main/test_renv",
             "test_renv.main",
             "git",
             "status",
