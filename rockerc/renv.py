@@ -527,8 +527,8 @@ def get_container_mount_target(repo_spec: RepoSpec) -> str:
 
     try:
         username = getpass.getuser()
-    except Exception:  # pragma: no cover
-        # Fallback to USER env var if getpass fails
+    except (OSError, ImportError, KeyError):  # pragma: no cover - documented failure modes
+        # Fallback to USER env var if getpass cannot resolve a username
         username = os.getenv("USER", "user")
 
     return f"/home/{username}/{repo_spec.repo}"
@@ -1091,6 +1091,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     nocache: bool = False,
     no_container: bool = False,
     vsc: bool = False,
+    custom_mount_target: Optional[str] = None,
 ) -> int:
     """Manage container lifecycle and execution using core.py's unified flow"""
     if no_container:
@@ -1102,7 +1103,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     branch_dir = setup_branch_copy(repo_spec)
 
     container_name = get_container_name(repo_spec)
-    mount_target = get_container_mount_target(repo_spec)
+    mount_target = custom_mount_target or get_container_mount_target(repo_spec)
 
     # Determine workspace mount path and any additional volumes
     # When a subfolder is requested we mount only that directory and provide a .git bind mount

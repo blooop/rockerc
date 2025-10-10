@@ -46,9 +46,8 @@ class LaunchPlan:
     rocker_cmd: List[str]
     created: bool  # whether we launched a new container this run
     vscode: bool  # whether to attempt VS Code attach
-    mount_target: (
-        str  # container mount path (e.g., /workspaces/{container_name} or /home/user/repo)
-    )
+    # container mount path (e.g., /workspaces/{container_name} or /home/user/repo)
+    mount_target: str
 
 
 def derive_container_name(explicit: str | None = None) -> str:
@@ -286,7 +285,7 @@ def ensure_volume_binding(
         path: Host path to mount
         custom_target: Optional custom mount target path (default: /workspaces/{container_name})
     """
-    target = custom_target if custom_target else f"/workspaces/{container_name}"
+    target = custom_target or f"/workspaces/{container_name}"
     if target in base_args:
         return base_args
     return f"{base_args} --volume {path}:{target}:Z".strip()
@@ -500,7 +499,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         LOGGER.info("Container '%s' already exists; reusing.", container_name)
 
     # Determine the mount target for the plan
-    mount_target = custom_mount_target if custom_mount_target else f"/workspaces/{container_name}"
+    mount_target = custom_mount_target or f"/workspaces/{container_name}"
 
     return LaunchPlan(
         container_name=container_name,
