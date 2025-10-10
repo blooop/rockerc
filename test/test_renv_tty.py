@@ -51,7 +51,6 @@ def test_docker_exec_interactive_flags(
         rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
         created=True,
         vscode=False,
-        mount_target="/workspaces/test_renv.main",
     )
     mock_prepare_plan.return_value = mock_plan
     mock_launch_rocker.return_value = 0
@@ -61,16 +60,12 @@ def test_docker_exec_interactive_flags(
     result = manage_container(spec)
     assert result == 0
 
-    # The mount target uses /home/{user}/repo format
-    import getpass
-
-    username = getpass.getuser()
     expected_command = (
         ["docker", "exec"]
         + expected_flags
         + [
             "-w",
-            f"/home/{username}/test_renv",
+            "/workspaces/test_renv.main",
             "test_renv.main",
             "/bin/bash",
         ]
