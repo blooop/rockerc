@@ -56,10 +56,16 @@ class TestPathHelpers:
     def test_get_worktree_dir_nested_structure(self, tmp_path, monkeypatch):
         monkeypatch.setenv("RENV_DIR", str(tmp_path))
         spec = RepoSpec("blooop", "test_renv", "feature/foo")
-        expected_new = tmp_path / "blooop" / "test_renv" / "test_renv-feature-foo"
+        expected_new = tmp_path / "blooop" / "test_renv" / "feature-foo" / "test_renv"
+        expected_previous = tmp_path / "blooop" / "test_renv" / "test_renv-feature-foo"
         expected_legacy = tmp_path / "blooop" / "test_renv-feature-foo"
         assert get_worktree_dir(spec) == expected_new
         assert get_legacy_worktree_dir(spec) == expected_legacy
+
+        # Import get_previous_worktree_dir to test it too
+        from rockerc.renv import get_previous_worktree_dir
+
+        assert get_previous_worktree_dir(spec) == expected_previous
 
 
 class TestRockerConfig:

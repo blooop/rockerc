@@ -265,7 +265,7 @@ _renv_completion() {
             # Try to find the branch directory in renv
             local renv_root="${RENV_DIR:-$HOME/renv}"
             local safe_branch="${branch_part//\//-}"
-            local branch_dir="$renv_root/$owner/$repo/${repo}-${safe_branch}"
+            local branch_dir="$renv_root/$owner/$repo/$safe_branch/$repo"
 
             if [[ -d "$branch_dir" ]]; then
                 # List directories in the branch (exclude .git)
@@ -356,18 +356,30 @@ def _get_repo_workspace_root(repo_spec: RepoSpec) -> pathlib.Path:
 
 
 def get_legacy_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Return the legacy branch directory path (pre repo-folder layout)."""
+    """Return the legacy branch directory path (pre repo-folder layout).
+
+    Returns: ~/renv/{owner}/{repo}-{branch}
+    """
     safe_branch = repo_spec.branch.replace("/", "-")
     return get_renv_root() / repo_spec.owner / f"{repo_spec.repo}-{safe_branch}"
 
 
-def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Get the branch copy directory path for a repository and branch.
+def get_previous_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
+    """Return the previous branch directory path (before cwd-based layout).
 
     Returns: ~/renv/{owner}/{repo}/{repo}-{branch}
     """
     safe_branch = repo_spec.branch.replace("/", "-")
     return _get_repo_workspace_root(repo_spec) / f"{repo_spec.repo}-{safe_branch}"
+
+
+def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
+    """Get the branch copy directory path for a repository and branch.
+
+    Returns: ~/renv/{owner}/{repo}/{branch}/{repo}
+    """
+    safe_branch = repo_spec.branch.replace("/", "-")
+    return _get_repo_workspace_root(repo_spec) / safe_branch / repo_spec.repo
 
 
 def _verify_sparse_checkout_path(branch_dir: pathlib.Path, subfolder: str, branch: str) -> None:
@@ -547,18 +559,24 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
     repo_workspace = _get_repo_workspace_root(repo_spec)
     repo_workspace.mkdir(parents=True, exist_ok=True)
 
+    # Handle migrations from old layouts
+    # Priority: previous layout > legacy layout (migrate from newest to oldest)
+    previous_dir = get_previous_worktree_dir(repo_spec)
     legacy_dir = get_legacy_worktree_dir(repo_spec)
-    if not branch_dir.exists() and legacy_dir.exists():
-        # Check for existing files in both dirs to avoid overwriting
-        legacy_files = set(p.name for p in legacy_dir.iterdir()) if legacy_dir.exists() else set()
-        branch_files = set(p.name for p in branch_dir.iterdir()) if branch_dir.exists() else set()
-        overlap = legacy_files & branch_files
-        if overlap:
-            logging.warning(
-                f"Migration risk: overlapping files {overlap} between legacy and new workspace for {repo_spec.repo}@{repo_spec.branch}"
-            )
-        logging.info(f"Migrating legacy workspace layout for {repo_spec.repo}@{repo_spec.branch}")
-        shutil.move(str(legacy_dir), str(branch_dir))
+
+    if not branch_dir.exists():
+        # Try to migrate from previous layout first
+        if previous_dir.exists():
+            logging.info(f"Migrating from previous layout for {repo_spec.repo}@{repo_spec.branch}")
+            # Create parent branch directory
+            branch_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(previous_dir), str(branch_dir))
+        # Otherwise try legacy layout
+        elif legacy_dir.exists():
+            logging.info(f"Migrating from legacy layout for {repo_spec.repo}@{repo_spec.branch}")
+            # Create parent branch directory
+            branch_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(legacy_dir), str(branch_dir))
 
     # Ensure cache repo exists and is updated
     setup_cache_repo(repo_spec)
