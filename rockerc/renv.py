@@ -808,9 +808,9 @@ def build_rocker_config(
         repo.get("extension-blacklist", []),
     )
 
-    # Ensure cwd extension is present
-    if "cwd" not in config["args"]:
-        config["args"].append("cwd")
+    # Remove cwd extension - we use explicit volume mounts to /{repo} instead
+    if "cwd" in config["args"]:
+        config["args"].remove("cwd")
 
     # Filter unavailable extensions
     filtered_args, removed_args = _filter_unavailable_extensions(config.get("args", []))
@@ -824,10 +824,9 @@ def build_rocker_config(
     # Set renv-specific parameters
     config["name"] = container_name
     config["hostname"] = get_hostname(repo_spec)
-    # For subfolders: cd to subfolder directly
-    # For full repo: cd to parent dir so cwd extension mounts parent, keeping folder name as {repo}
+    # Target dir is the working directory we cd to before calling rocker
     config["_renv_target_dir"] = (
-        str(branch_dir / repo_spec.subfolder) if repo_spec.subfolder else str(branch_dir.parent)
+        str(branch_dir / repo_spec.subfolder) if repo_spec.subfolder else str(branch_dir)
     )
 
     meta = {
@@ -1107,19 +1106,18 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
     # Determine workspace mount path and any additional volumes
     # For subfolders: mount only that directory and provide a .git bind mount
-    # For full repo: mount parent directory so folder name in container is {repo}
+    # For full repo: mount branch directory to /{repo}
     extra_volumes = []
     if repo_spec.subfolder:
         mount_path = branch_dir / repo_spec.subfolder
         extra_volumes.append(
             (
                 branch_dir / ".git",
-                f"/workspaces/{container_name}/.git",
+                f"/{repo_spec.repo}/.git",
             )
         )
     else:
-        # Mount parent directory so container has /workspaces/{container_name}/{repo}/
-        mount_path = pathlib.Path(branch_dir).parent
+        mount_path = branch_dir
 
     # Build rocker configuration and get metadata
     config, meta = build_rocker_config(repo_spec, force=force, nocache=nocache)
@@ -1194,6 +1192,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         with _restore_cwd_context():
             # Handle VSCode mode using unified backend (same as rockervsc)
             if vsc:
+                # For renv, mount to /{repo} at root, not /workspaces/{container_name}
+                mount_target = f"/{repo_spec.repo}"
                 plan = prepare_launch_plan(
                     args_dict=config,
                     extra_cli="",
@@ -1203,6 +1203,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     path=mount_path,
                     extensions=config.get("args", []),
                     extra_volumes=extra_volumes,
+                    mount_target=mount_target,
                 )
 
                 if plan.rocker_cmd:
@@ -1271,19 +1272,16 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                             return 1
 
                 if plan.vscode:
-                    # For non-subfolder: open /workspaces/{container_name}/{repo}
-                    # For subfolder: open /workspaces/{container_name} (subfolder is mounted directly)
-                    vsc_folder = (
-                        f"/workspaces/{container_name}"
-                        if repo_spec.subfolder
-                        else f"/workspaces/{container_name}/{repo_spec.repo}"
-                    )
+                    # For non-subfolder: open /{repo} at root
+                    # For subfolder: open /{repo} (subfolder is mounted directly)
+                    vsc_folder = f"/{repo_spec.repo}"
                     launch_vscode(plan.container_name, plan.container_hex, vsc_folder)
 
                 return interactive_shell(container_name)
 
             # Terminal mode: use detached workflow (same as rockerc)
-        # Keep cwd extension - it sets WORKDIR and we can still override with docker exec -w
+        # For renv, mount to /{repo} at root, not /workspaces/{container_name}
+        mount_target = f"/{repo_spec.repo}"
         plan = prepare_launch_plan(
             args_dict=config,
             extra_cli="",
@@ -1293,6 +1291,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             path=mount_path,
             extensions=config["args"],
             extra_volumes=extra_volumes,
+            mount_target=mount_target,
         )
 
         # Add keep-alive command to rocker_cmd so detached container stays running
@@ -1317,12 +1316,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
         # Test for container breakout (if directory was deleted while container running)
         # Only test if we're reusing an existing container
-        # Determine working directory: for subfolders use container root, otherwise use {repo} subfolder
-        workdir = (
-            f"/workspaces/{container_name}"
-            if repo_spec.subfolder
-            else f"/workspaces/{container_name}/{repo_spec.repo}"
-        )
+        # Working directory is always /{repo} at root
+        workdir = f"/{repo_spec.repo}"
 
         if not plan.created:
             # Test if we can actually access the working directory
@@ -1354,6 +1349,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     path=mount_path,
                     extensions=config["args"],
                     extra_volumes=extra_volumes,
+                    mount_target=mount_target,
                 )
 
                 if plan.rocker_cmd:

@@ -269,12 +269,20 @@ def add_extension_env(base_args: str, extensions: list[str]) -> str:
     return f"{base_args} {env_arg}".strip()
 
 
-def ensure_volume_binding(base_args: str, container_name: str, path: pathlib.Path) -> str:
-    """Ensure a volume mount for the workspace folder to /workspaces/<container_name>.
+def ensure_volume_binding(
+    base_args: str, container_name: str, path: pathlib.Path, mount_target: str | None = None
+) -> str:
+    """Ensure a volume mount for the workspace folder.
 
-    Skip if user already provided a --volume referencing /workspaces/<container_name>.
+    Args:
+        base_args: Current rocker argument string
+        container_name: Name of the container
+        path: Host path to mount
+        mount_target: Optional custom mount target (default: /workspaces/{container_name})
+
+    Skip if user already provided a --volume referencing the target.
     """
-    target = f"/workspaces/{container_name}"
+    target = mount_target or f"/workspaces/{container_name}"
     if target in base_args:
         return base_args
     return f"{base_args} --volume {path}:{target}:Z".strip()
@@ -315,18 +323,28 @@ def build_rocker_arg_injections(
     *,
     always_mount: bool = True,
     extra_volumes: Sequence[Tuple[pathlib.Path, str]] | None = None,
+    mount_target: str | None = None,
 ) -> str:
     """Inject required arguments into the user-specified (or config) rocker args string.
 
     We always detach and ensure the container is named so we can later docker exec and VS Code attach.
     Additional host→container volume bindings can be supplied via extra_volumes.
+
+    Args:
+        extra_cli: Additional CLI arguments
+        container_name: Name of the container
+        path: Host path to mount
+        extensions: List of extension names
+        always_mount: Whether to add volume mount (default: True)
+        extra_volumes: Additional volume bindings (host_path, target)
+        mount_target: Optional custom mount target (default: /workspaces/{container_name})
     """
     argline = extra_cli or ""
     argline = ensure_detached_args(argline)
     argline = ensure_name_args(argline, container_name)
     argline = add_extension_env(argline, extensions)
     if always_mount:
-        argline = ensure_volume_binding(argline, container_name, path)
+        argline = ensure_volume_binding(argline, container_name, path, mount_target)
     if extra_volumes:
         for host_path, target in extra_volumes:
             argline = append_volume_binding(argline, host_path, target)
@@ -405,6 +423,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     path: pathlib.Path,
     extensions: list[str] | None = None,
     extra_volumes: Sequence[Tuple[pathlib.Path, str]] | None = None,
+    mount_target: str | None = None,
 ) -> LaunchPlan:
     """Prepare rocker command & stop/remove existing container if forced.
 
@@ -417,6 +436,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         path: Working directory path
         extensions: Optional explicit extension list; if None, extracted from args_dict["args"]
         extra_volumes: Additional host→container volume bindings (host path, target path)
+        mount_target: Optional custom mount target (default: /workspaces/{container_name})
 
     Returns:
         LaunchPlan with container configuration and rocker command
@@ -460,6 +480,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         path,
         current_extensions,
         extra_volumes=extra_volumes,
+        mount_target=mount_target,
     )
     # Build base rocker args from config dictionary (copy because yaml_dict_to_args mutates)
     from .rockerc import yaml_dict_to_args  # type: ignore

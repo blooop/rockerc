@@ -82,7 +82,8 @@ class TestRockerConfig:
         assert "x11" in config["args"]  # Updated to match new default config
         assert "ssh" in config["args"]  # Updated to match new default config
         assert "nocleanup" not in config["args"]  # Removed to let rocker manage security properly
-        assert "cwd" in config["args"]  # cwd extension should be added automatically
+        # cwd extension removed - we use explicit volume mounts to /{repo} instead
+        assert "cwd" not in config["args"]
         assert config["name"] == "test_renv.main"
         assert config["hostname"] == "test_renv"
         # Volume is NOT in config - it's added by prepare_launch_plan via build_rocker_arg_injections
@@ -95,7 +96,8 @@ class TestRockerConfig:
         config, _ = build_rocker_config(spec)
         # Target directory should include subfolder
         assert "src" in config["_renv_target_dir"]
-        assert "cwd" in config["args"]  # cwd extension should be present
+        # cwd extension removed - we use explicit volume mounts to /{repo} instead
+        assert "cwd" not in config["args"]
 
     def test_build_rocker_config_with_force(self):
         # Force rebuild is handled by container removal, not rocker extensions
@@ -510,12 +512,12 @@ class TestManageContainer:
         # Verify docker exec was called with git status and working directory
         mock_subprocess.assert_called_once()
         call_args = mock_subprocess.call_args[0][0]
-        # Workdir should include repo name for non-subfolder cases
+        # Workdir should be /{repo} at root
         assert call_args == [
             "docker",
             "exec",
             "-w",
-            "/workspaces/test_renv.main/test_renv",
+            "/test_renv",
             "test_renv.main",
             "git",
             "status",
@@ -567,9 +569,8 @@ class TestManageContainer:
         assert mock_prepare_plan.call_count == 1
         _args, kwargs = mock_prepare_plan.call_args
         assert kwargs["path"] == pathlib.Path("/test/branch/src")
-        assert kwargs["extra_volumes"] == [
-            (pathlib.Path("/test/branch/.git"), "/workspaces/test_renv.main-sub-src/.git")
-        ]
+        # Git volume should be at /{repo}/.git at root, not /workspaces/
+        assert kwargs["extra_volumes"] == [(pathlib.Path("/test/branch/.git"), "/test_renv/.git")]
 
 
 class TestRockerCommandWorkingDirectory:

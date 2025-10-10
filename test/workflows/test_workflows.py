@@ -50,7 +50,8 @@ def test_workflow_4_container_breakout():
 def test_workflow_6_pwd():
     result, output = run_workflow_script("test_workflow_6_pwd.sh")
     assert result.returncode in (0, 1), f"Workflow 1 pwd failed: {output}"
-    assert "/test_renv.main" in output, (
+    # Working directory should be /{repo} at root
+    assert "/test_renv" in output, (
         "Expected pwd output from inside the container not found in workflow 1 output"
     )
     assert "total" in output or "drwx" in output or "-rw" in output, (
@@ -132,7 +133,8 @@ def test_workflow_9_force_rebuild_cache():
     """Test --nocache flag functionality"""
     result, output = run_workflow_script("test_workflow_9_force_rebuild_cache.sh")
     assert result.returncode in (0, 1), f"Workflow 5 --nocache test failed: {output}"
-    assert "/test_renv.main" in output or "/tmp" in output, (
+    # Working directory should be /{repo} at root
+    assert "/test_renv" in output or "/tmp" in output, (
         "Expected pwd output not found in workflow 5 output"
     )
     assert "No-cache rebuild test completed" in output, "No-cache rebuild section not found"

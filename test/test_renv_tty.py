@@ -65,7 +65,7 @@ def test_docker_exec_interactive_flags(
         + expected_flags
         + [
             "-w",
-            "/workspaces/test_renv.main/test_renv",
+            "/test_renv",
             "test_renv.main",
             "/bin/bash",
         ]

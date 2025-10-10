@@ -1,37 +1,32 @@
 ## Goal
 
-Fix renvvsc by restructuring the folder layout so that the cwd extension handles all mount path logic, keeping behavior consistent between rockerc, rockervsc, renv, and renvvsc.
-
-Ensure that the folder loaded in the container is always named after the project name `{repo}`, regardless of whether it's accessed via CLI or VSCode.
+Unify workspace and folder loading across rockerc, rockervsc, renv, and renvvsc. Ensure that the folder loaded in the container is always at `/{repo}` at the root of the container, matching how rockerc works, regardless of whether it's accessed via CLI or VSCode.
 
 ## Problem
 
-The reverted commit (a836fbe) tried to use custom mount targets and removed the cwd extension for renv. This broke rockervsc because it expected the standard `/workspaces/{container_name}` mount pattern.
-
-Additionally, the previous implementation mounted the repo directory directly to `/workspaces/{container_name}/`, which meant the folder name in the container was `{container_name}` (e.g., `test_renv.main`), not the project name.
+Previous implementation used the cwd extension which mounted to `/workspaces/{container_name}/`, resulting in working directories like `/workspaces/test_renv.main/test_renv`. This was inconsistent with rockerc behavior.
 
 ## Solution
 
-Instead of customizing mount targets, restructure the folder layout:
+Remove the cwd extension and use explicit volume mounts to `/{repo}` at root:
 
-**Current:** `/renv/{owner}/{repo}/{repo}-{branch}/`
-**New:** `/renv/{owner}/{repo}/{branch}/{repo}/`
+**Host folder structure:** `/renv/{owner}/{repo}/{branch}/{repo}/`
 
 This allows us to:
-1. cd to `/renv/{owner}/{repo}/{branch}/` (the parent directory)
-2. Let the cwd extension mount `/renv/{owner}/{repo}/{branch}/` to `/workspaces/{container_name}/`
-3. Inside the container, the project is at `/workspaces/{container_name}/{repo}/` (folder name is always `{repo}`)
-4. VSCode and terminal both open `/workspaces/{container_name}/{repo}/`
-5. Keep the cwd extension enabled for all modes
-6. Maintain consistent behavior across rockerc/rockervsc/renv/renvvsc
+1. Mount `/renv/{owner}/{repo}/{branch}/{repo}` directly to `/{repo}` in the container
+2. Inside the container, the project is always at `/{repo}` (folder name is always `{repo}`)
+3. VSCode and terminal both open `/{repo}`
+4. Maintain consistent behavior with rockerc (which uses `/{project-name}`)
+5. Remove /workspaces/ paths entirely from renv
 
 ## Key Changes
 
-- Modify `get_worktree_dir()` to return `~/renv/{owner}/{repo}/{branch}/{repo}`
-- Update `setup_branch_copy()` to create the new folder structure
-- Update `build_rocker_config()` to set `target_dir` to parent directory (without subfolder)
-- Update `launch_vscode()` in core.py to accept optional folder_path parameter
-- Update renv.py to pass `/workspaces/{container_name}/{repo}` to VSCode (without subfolder)
-- Update docker exec commands to use `/workspaces/{container_name}/{repo}` as workdir (without subfolder)
-- Keep the cwd extension enabled (no changes to extension handling)
-- Ensure legacy migrations work correctly
+- Remove cwd extension from renv config (explicit mounts instead)
+- Add custom mount_target parameter support to core.py:
+  - Modified `ensure_volume_binding()` to accept optional mount_target
+  - Modified `build_rocker_arg_injections()` to pass mount_target
+  - Modified `prepare_launch_plan()` to pass mount_target
+- Update renv.py to use `mount_target = f"/{repo}"` for all prepare_launch_plan calls
+- Update VSCode launch to use `f"/{repo}"` folder path
+- Update docker exec commands to use `f"/{repo}"` as workdir
+- Update all tests to expect `/{repo}` instead of `/workspaces/{container_name}/{repo}`
