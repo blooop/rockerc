@@ -1186,7 +1186,6 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             launch_rocker,
             wait_for_container,
             launch_vscode,
-            interactive_shell,
         )
 
         with _restore_cwd_context():
@@ -1277,7 +1276,16 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     vsc_folder = f"/{repo_spec.repo}"
                     launch_vscode(plan.container_name, plan.container_hex, vsc_folder)
 
-                return interactive_shell(container_name)
+                # Open interactive shell with correct working directory
+                # Working directory is always /{repo} at root
+                workdir = f"/{repo_spec.repo}"
+                if sys.stdin.isatty() and sys.stdout.isatty():
+                    exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"]
+                else:
+                    exec_cmd = ["docker", "exec", "-w", workdir, container_name, "/bin/bash"]
+
+                logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
+                return subprocess.run(exec_cmd, check=False).returncode
 
             # Terminal mode: use detached workflow (same as rockerc)
         # For renv, mount to /{repo} at root, not /workspaces/{container_name}

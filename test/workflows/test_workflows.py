@@ -145,6 +145,13 @@ def test_workflow_10_clean_git():
     assert result.returncode == 0, f"Workflow 6 clean git failed: {output}"
 
 
+def test_workflow_12_cleanup():
+    """Test cleanup of all test containers and directories"""
+    result, output = run_workflow_script("test_workflow_12_cleanup.sh")
+    assert result.returncode == 0, f"Cleanup workflow failed: {output}"
+    assert "✓ Cleanup completed" in output, "Cleanup did not complete"
+
+
 # def test_workflow_7_container_breakout():
 #     script = os.path.join(WORKFLOWS_DIR, "test_workflow_7_container_breakout.sh")
 #     os.chmod(script, 0o755)
