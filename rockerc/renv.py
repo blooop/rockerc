@@ -1380,8 +1380,13 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             # Ensure command is a list of strings
             if not (isinstance(command, list) and all(isinstance(x, str) for x in command)):
                 raise ValueError("command must be a list of strings")
-            # Execute command via docker exec with working directory
-            exec_cmd = ["docker", "exec", "-w", workdir, container_name] + command
+            # Use -it for interactive AI commands
+            interactive_agents = {"gemini", "claude", "codex"}
+            use_tty = command and command[0] in interactive_agents
+            exec_cmd = ["docker", "exec"]
+            if use_tty:
+                exec_cmd.append("-it")
+            exec_cmd += ["-w", workdir, container_name] + command
             logging.info(f"Executing command: {' '.join(exec_cmd)}")
             result = subprocess.run(exec_cmd, check=False)
             with _restore_cwd_context():
