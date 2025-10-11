@@ -12,7 +12,6 @@ from rockerc.renv import (
     container_running,
     setup_cache_repo,
     setup_branch_copy,
-    get_container_mount_target,
     manage_container,
     run_renv,
     _verify_sparse_checkout_path,
@@ -57,10 +56,16 @@ class TestPathHelpers:
     def test_get_worktree_dir_nested_structure(self, tmp_path, monkeypatch):
         monkeypatch.setenv("RENV_DIR", str(tmp_path))
         spec = RepoSpec("blooop", "test_renv", "feature/foo")
-        expected_new = tmp_path / "blooop" / "test_renv" / "test_renv-feature-foo"
+        expected_new = tmp_path / "blooop" / "test_renv" / "feature-foo" / "test_renv"
+        expected_previous = tmp_path / "blooop" / "test_renv" / "test_renv-feature-foo"
         expected_legacy = tmp_path / "blooop" / "test_renv-feature-foo"
         assert get_worktree_dir(spec) == expected_new
         assert get_legacy_worktree_dir(spec) == expected_legacy
+
+        # Import get_previous_worktree_dir to test it too
+        from rockerc.renv import get_previous_worktree_dir
+
+        assert get_previous_worktree_dir(spec) == expected_previous
 
 
 class TestRockerConfig:
@@ -77,7 +82,8 @@ class TestRockerConfig:
         assert "x11" in config["args"]  # Updated to match new default config
         assert "ssh" in config["args"]  # Updated to match new default config
         assert "nocleanup" not in config["args"]  # Removed to let rocker manage security properly
-        assert "cwd" not in config["args"]  # cwd extension disabled for renv (uses custom mounting)
+        # cwd extension removed - we use explicit volume mounts to /{repo} instead
+        assert "cwd" not in config["args"]
         assert config["name"] == "test_renv.main"
         assert config["hostname"] == "test_renv"
         # Volume is NOT in config - it's added by prepare_launch_plan via build_rocker_arg_injections
@@ -90,27 +96,8 @@ class TestRockerConfig:
         config, _ = build_rocker_config(spec)
         # Target directory should include subfolder
         assert "src" in config["_renv_target_dir"]
-        assert "cwd" not in config["args"]  # cwd extension disabled for renv (uses custom mounting)
-
-    def test_build_rocker_config_removes_cwd_extension(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("RENV_DIR", str(tmp_path))
-        spec = RepoSpec("blooop", "test_renv", "main")
-        branch_dir = get_worktree_dir(spec)
-        branch_dir.mkdir(parents=True, exist_ok=True)
-
-        monkeypatch.setattr(
-            "rockerc.renv.load_renv_rockerc_config", lambda: {"args": ["cwd", "ssh"]}
-        )
-
-        import rockerc.rockerc as rockerc_module
-
-        monkeypatch.setattr(rockerc_module, "load_global_config", lambda: {"args": ["git"]})
-        monkeypatch.setattr(rockerc_module, "_load_and_validate_config", lambda _: {"args": []})
-
-        config, _ = build_rocker_config(spec)
-
+        # cwd extension removed - we use explicit volume mounts to /{repo} instead
         assert "cwd" not in config["args"]
-        assert "ssh" in config["args"]
 
     def test_build_rocker_config_with_force(self):
         # Force rebuild is handled by container removal, not rocker extensions
@@ -453,7 +440,6 @@ class TestManageContainer:
             rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
             created=True,
             vscode=False,
-            mount_target="/workspaces/test_renv.main",
         )
         mock_prepare_plan.return_value = mock_plan
         mock_launch_rocker.return_value = 0
@@ -502,14 +488,12 @@ class TestManageContainer:
         # Mock LaunchPlan for new container
         from rockerc.core import LaunchPlan
 
-        username = "testuser"
         mock_plan = LaunchPlan(
             container_name="test_renv.main",
             container_hex="746573745f72656e762d6d61696e",
             rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
             created=True,
             vscode=False,
-            mount_target=f"/home/{username}/test_renv",
         )
         mock_prepare_plan.return_value = mock_plan
         mock_launch_rocker.return_value = 0
@@ -517,8 +501,7 @@ class TestManageContainer:
 
         spec = RepoSpec("blooop", "test_renv", "main")
 
-        with patch("getpass.getuser", return_value=username):
-            result = manage_container(spec, command=["git", "status"])
+        result = manage_container(spec, command=["git", "status"])
 
         assert result == 0
         mock_build_config.assert_called_once()
@@ -529,11 +512,12 @@ class TestManageContainer:
         # Verify docker exec was called with git status and working directory
         mock_subprocess.assert_called_once()
         call_args = mock_subprocess.call_args[0][0]
+        # Workdir should be /{repo} at root
         assert call_args == [
             "docker",
             "exec",
             "-w",
-            f"/home/{username}/test_renv",
+            "/test_renv",
             "test_renv.main",
             "git",
             "status",
@@ -565,14 +549,12 @@ class TestManageContainer:
 
         from rockerc.core import LaunchPlan
 
-        username = "testuser"
         mock_plan = LaunchPlan(
             container_name="test_renv.main-sub-src",
             container_hex="746573745f72656e762d6d61696e2d737263",
             rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
             created=True,
             vscode=False,
-            mount_target=f"/home/{username}/test_renv",
         )
         mock_prepare_plan.return_value = mock_plan
         mock_launch_rocker.return_value = 0
@@ -581,102 +563,14 @@ class TestManageContainer:
 
         spec = RepoSpec("blooop", "test_renv", "main", "src")
 
-        with patch("getpass.getuser", return_value=username):
-            result = manage_container(spec)
+        result = manage_container(spec)
 
         assert result == 0
         assert mock_prepare_plan.call_count == 1
         _args, kwargs = mock_prepare_plan.call_args
         assert kwargs["path"] == pathlib.Path("/test/branch/src")
-        assert kwargs["extra_volumes"] == [
-            (pathlib.Path("/test/branch/.git"), f"/home/{username}/test_renv/.git")
-        ]
-
-    @patch("subprocess.run")
-    @patch("rockerc.core.wait_for_container")
-    @patch("rockerc.core.launch_rocker")
-    @patch("rockerc.core.prepare_launch_plan")
-    @patch("os.chdir")
-    @patch("rockerc.renv.build_rocker_config")
-    @patch("rockerc.renv.setup_branch_copy")
-    def test_manage_container_with_custom_mount_target(self, *mocks):
-        (
-            mock_setup_branch_copy,
-            mock_build_config,
-            mock_chdir,  # pylint: disable=unused-variable
-            mock_prepare_plan,
-            mock_launch_rocker,
-            mock_wait_container,
-            mock_subprocess,
-        ) = mocks
-
-        mock_setup_branch_copy.return_value = pathlib.Path("/test/branch")
-        mock_build_config.return_value = (
-            {"args": [], "image": "ubuntu:22.04", "_renv_target_dir": "/test/branch/src"},
-            {},
-        )
-
-        from rockerc.core import LaunchPlan
-
-        custom_mount_target = "/custom/target/testuser/test_renv"
-        mock_plan = LaunchPlan(
-            container_name="test_renv.main-sub-src",
-            container_hex="746573745f72656e762d6d61696e2d737263",
-            rocker_cmd=["rocker", "--detach", "ubuntu:22.04"],
-            created=True,
-            vscode=False,
-            mount_target=custom_mount_target,
-        )
-        mock_prepare_plan.return_value = mock_plan
-        mock_launch_rocker.return_value = 0
-        mock_wait_container.return_value = True
-        mock_subprocess.return_value.returncode = 0
-
-        spec = RepoSpec("blooop", "test_renv", "main", "src")
-
-        result = manage_container(
-            spec,
-            command=["git", "status"],
-            custom_mount_target=custom_mount_target,
-        )
-
-        assert result == 0
-        mock_prepare_plan.assert_called_once()
-        _args, kwargs = mock_prepare_plan.call_args
-        assert kwargs["custom_mount_target"] == custom_mount_target
-        assert kwargs["extra_volumes"] == [
-            (pathlib.Path("/test/branch/.git"), f"{custom_mount_target}/.git")
-        ]
-
-        mock_subprocess.assert_called_once()
-        call_args = mock_subprocess.call_args[0][0]
-        assert call_args == [
-            "docker",
-            "exec",
-            "-w",
-            custom_mount_target,
-            "test_renv.main-sub-src",
-            "git",
-            "status",
-        ]
-
-
-class TestContainerMountTarget:
-    def test_get_container_mount_target_falls_back_to_user_env(self, monkeypatch):
-        import getpass
-
-        monkeypatch.setenv("USER", "envuser")
-
-        def _raise_oserror():
-            raise OSError("fail")
-
-        monkeypatch.setattr(getpass, "getuser", _raise_oserror)
-
-        spec = RepoSpec("blooop", "test_renv", "main")
-
-        mount_target = get_container_mount_target(spec)
-
-        assert mount_target == "/home/envuser/test_renv"
+        # Git volume should be at /{repo}/.git at root, not /workspaces/
+        assert kwargs["extra_volumes"] == [(pathlib.Path("/test/branch/.git"), "/test_renv/.git")]
 
 
 class TestRockerCommandWorkingDirectory:

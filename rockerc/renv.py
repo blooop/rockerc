@@ -265,7 +265,7 @@ _renv_completion() {
             # Try to find the branch directory in renv
             local renv_root="${RENV_DIR:-$HOME/renv}"
             local safe_branch="${branch_part//\//-}"
-            local branch_dir="$renv_root/$owner/$repo/${repo}-${safe_branch}"
+            local branch_dir="$renv_root/$owner/$repo/$safe_branch/$repo"
 
             if [[ -d "$branch_dir" ]]; then
                 # List directories in the branch (exclude .git)
@@ -356,18 +356,30 @@ def _get_repo_workspace_root(repo_spec: RepoSpec) -> pathlib.Path:
 
 
 def get_legacy_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Return the legacy branch directory path (pre repo-folder layout)."""
+    """Return the legacy branch directory path (pre repo-folder layout).
+
+    Returns: ~/renv/{owner}/{repo}-{branch}
+    """
     safe_branch = repo_spec.branch.replace("/", "-")
     return get_renv_root() / repo_spec.owner / f"{repo_spec.repo}-{safe_branch}"
 
 
-def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Get the branch copy directory path for a repository and branch.
+def get_previous_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
+    """Return the previous branch directory path (before cwd-based layout).
 
     Returns: ~/renv/{owner}/{repo}/{repo}-{branch}
     """
     safe_branch = repo_spec.branch.replace("/", "-")
     return _get_repo_workspace_root(repo_spec) / f"{repo_spec.repo}-{safe_branch}"
+
+
+def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
+    """Get the branch copy directory path for a repository and branch.
+
+    Returns: ~/renv/{owner}/{repo}/{branch}/{repo}
+    """
+    safe_branch = repo_spec.branch.replace("/", "-")
+    return _get_repo_workspace_root(repo_spec) / safe_branch / repo_spec.repo
 
 
 def _verify_sparse_checkout_path(branch_dir: pathlib.Path, subfolder: str, branch: str) -> None:
@@ -517,23 +529,6 @@ def get_hostname(repo_spec: RepoSpec) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_spec.repo)
 
 
-def get_container_mount_target(repo_spec: RepoSpec) -> str:
-    """Generate container mount target path for renv
-
-    Returns /home/{user}/{repo} for mounting inside the container.
-    This provides a cleaner path without branch suffixes.
-    """
-    import getpass
-
-    try:
-        username = getpass.getuser()
-    except (OSError, ImportError, KeyError):  # pragma: no cover - documented failure modes
-        # Fallback to USER env var if getpass cannot resolve a username
-        username = os.getenv("USER", "user")
-
-    return f"/home/{username}/{repo_spec.repo}"
-
-
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
     """Clone or update cache repository (full clone, not bare)"""
     repo_dir = get_repo_dir(repo_spec)
@@ -564,18 +559,24 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
     repo_workspace = _get_repo_workspace_root(repo_spec)
     repo_workspace.mkdir(parents=True, exist_ok=True)
 
+    # Handle migrations from old layouts
+    # Priority: previous layout > legacy layout (migrate from newest to oldest)
+    previous_dir = get_previous_worktree_dir(repo_spec)
     legacy_dir = get_legacy_worktree_dir(repo_spec)
-    if not branch_dir.exists() and legacy_dir.exists():
-        # Check for existing files in both dirs to avoid overwriting
-        legacy_files = set(p.name for p in legacy_dir.iterdir()) if legacy_dir.exists() else set()
-        branch_files = set(p.name for p in branch_dir.iterdir()) if branch_dir.exists() else set()
-        overlap = legacy_files & branch_files
-        if overlap:
-            logging.warning(
-                f"Migration risk: overlapping files {overlap} between legacy and new workspace for {repo_spec.repo}@{repo_spec.branch}"
-            )
-        logging.info(f"Migrating legacy workspace layout for {repo_spec.repo}@{repo_spec.branch}")
-        shutil.move(str(legacy_dir), str(branch_dir))
+
+    if not branch_dir.exists():
+        # Try to migrate from previous layout first
+        if previous_dir.exists():
+            logging.info(f"Migrating from previous layout for {repo_spec.repo}@{repo_spec.branch}")
+            # Create parent branch directory
+            branch_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(previous_dir), str(branch_dir))
+        # Otherwise try legacy layout
+        elif legacy_dir.exists():
+            logging.info(f"Migrating from legacy layout for {repo_spec.repo}@{repo_spec.branch}")
+            # Create parent branch directory
+            branch_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(legacy_dir), str(branch_dir))
 
     # Ensure cache repo exists and is updated
     setup_cache_repo(repo_spec)
@@ -807,8 +808,7 @@ def build_rocker_config(
         repo.get("extension-blacklist", []),
     )
 
-    # Remove cwd extension for renv - we use custom mounting logic
-    # that doesn't rely on the cwd extension's automatic directory detection
+    # Remove cwd extension - we use explicit volume mounts to /{repo} instead
     if "cwd" in config["args"]:
         config["args"].remove("cwd")
 
@@ -824,6 +824,7 @@ def build_rocker_config(
     # Set renv-specific parameters
     config["name"] = container_name
     config["hostname"] = get_hostname(repo_spec)
+    # Target dir is the working directory we cd to before calling rocker
     config["_renv_target_dir"] = (
         str(branch_dir / repo_spec.subfolder) if repo_spec.subfolder else str(branch_dir)
     )
@@ -1091,7 +1092,6 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     nocache: bool = False,
     no_container: bool = False,
     vsc: bool = False,
-    custom_mount_target: Optional[str] = None,
 ) -> int:
     """Manage container lifecycle and execution using core.py's unified flow"""
     if no_container:
@@ -1103,20 +1103,21 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     branch_dir = setup_branch_copy(repo_spec)
 
     container_name = get_container_name(repo_spec)
-    mount_target = custom_mount_target or get_container_mount_target(repo_spec)
 
     # Determine workspace mount path and any additional volumes
-    # When a subfolder is requested we mount only that directory and provide a .git bind mount
-    mount_path = branch_dir
+    # For subfolders: mount only that directory and provide a .git bind mount
+    # For full repo: mount branch directory to /{repo}
     extra_volumes = []
     if repo_spec.subfolder:
         mount_path = branch_dir / repo_spec.subfolder
         extra_volumes.append(
             (
                 branch_dir / ".git",
-                f"{mount_target}/.git",
+                f"/{repo_spec.repo}/.git",
             )
         )
+    else:
+        mount_path = branch_dir
 
     # Build rocker configuration and get metadata
     config, meta = build_rocker_config(repo_spec, force=force, nocache=nocache)
@@ -1185,12 +1186,13 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             launch_rocker,
             wait_for_container,
             launch_vscode,
-            interactive_shell,
         )
 
         with _restore_cwd_context():
             # Handle VSCode mode using unified backend (same as rockervsc)
             if vsc:
+                # For renv, mount to /{repo} at root, not /workspaces/{container_name}
+                mount_target = f"/{repo_spec.repo}"
                 plan = prepare_launch_plan(
                     args_dict=config,
                     extra_cli="",
@@ -1200,7 +1202,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     path=mount_path,
                     extensions=config.get("args", []),
                     extra_volumes=extra_volumes,
-                    custom_mount_target=mount_target,
+                    mount_target=mount_target,
                 )
 
                 if plan.rocker_cmd:
@@ -1245,9 +1247,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                         injections = ""
                         injections = ensure_name_args(injections, container_name)
                         injections = add_extension_env(injections, config.get("args", []))
-                        injections = ensure_volume_binding(
-                            injections, container_name, mount_path, mount_target
-                        )
+                        injections = ensure_volume_binding(injections, container_name, mount_path)
                         for host_path, target in extra_volumes:
                             injections = append_volume_binding(injections, host_path, target)
 
@@ -1271,11 +1271,25 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                             return 1
 
                 if plan.vscode:
-                    launch_vscode(plan.container_name, plan.container_hex, plan.mount_target)
+                    # For non-subfolder: open /{repo} at root
+                    # For subfolder: open /{repo} (subfolder is mounted directly)
+                    vsc_folder = f"/{repo_spec.repo}"
+                    launch_vscode(plan.container_name, plan.container_hex, vsc_folder)
 
-                return interactive_shell(container_name)
+                # Open interactive shell with correct working directory
+                # Working directory is always /{repo} at root
+                workdir = f"/{repo_spec.repo}"
+                if sys.stdin.isatty() and sys.stdout.isatty():
+                    exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"]
+                else:
+                    exec_cmd = ["docker", "exec", "-w", workdir, container_name, "/bin/bash"]
+
+                logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
+                return subprocess.run(exec_cmd, check=False).returncode
 
             # Terminal mode: use detached workflow (same as rockerc)
+        # For renv, mount to /{repo} at root, not /workspaces/{container_name}
+        mount_target = f"/{repo_spec.repo}"
         plan = prepare_launch_plan(
             args_dict=config,
             extra_cli="",
@@ -1285,7 +1299,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             path=mount_path,
             extensions=config["args"],
             extra_volumes=extra_volumes,
-            custom_mount_target=mount_target,
+            mount_target=mount_target,
         )
 
         # Add keep-alive command to rocker_cmd so detached container stays running
@@ -1310,11 +1324,14 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
         # Test for container breakout (if directory was deleted while container running)
         # Only test if we're reusing an existing container
+        # Working directory is always /{repo} at root
+        workdir = f"/{repo_spec.repo}"
+
         if not plan.created:
             # Test if we can actually access the working directory
             # Just checking if it exists isn't enough - we need to try to use it
             test_result = subprocess.run(
-                ["docker", "exec", "-w", mount_target, container_name, "pwd"],
+                ["docker", "exec", "-w", workdir, container_name, "pwd"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1340,7 +1357,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     path=mount_path,
                     extensions=config["args"],
                     extra_volumes=extra_volumes,
-                    custom_mount_target=mount_target,
+                    mount_target=mount_target,
                 )
 
                 if plan.rocker_cmd:
@@ -1358,12 +1375,13 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     return 1
 
         # Execute command or attach interactive shell with working directory set
+
         if command:
             # Ensure command is a list of strings
             if not (isinstance(command, list) and all(isinstance(x, str) for x in command)):
                 raise ValueError("command must be a list of strings")
             # Execute command via docker exec with working directory
-            exec_cmd = ["docker", "exec", "-w", mount_target, container_name] + command
+            exec_cmd = ["docker", "exec", "-w", workdir, container_name] + command
             logging.info(f"Executing command: {' '.join(exec_cmd)}")
             result = subprocess.run(exec_cmd, check=False)
             with _restore_cwd_context():
@@ -1374,10 +1392,10 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         # Since core.py's interactive_shell doesn't support -w flag, we need to use our own exec
         # Check if we have a TTY to use -it flags
         if sys.stdin.isatty() and sys.stdout.isatty():
-            exec_cmd = ["docker", "exec", "-it", "-w", mount_target, container_name, "/bin/bash"]
+            exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"]
         else:
             # No TTY, run without -it
-            exec_cmd = ["docker", "exec", "-w", mount_target, container_name, "/bin/bash"]
+            exec_cmd = ["docker", "exec", "-w", workdir, container_name, "/bin/bash"]
 
         logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
         result = subprocess.run(exec_cmd, check=False)

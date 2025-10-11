@@ -46,8 +46,6 @@ class LaunchPlan:
     rocker_cmd: List[str]
     created: bool  # whether we launched a new container this run
     vscode: bool  # whether to attempt VS Code attach
-    # container mount path (e.g., /workspaces/{container_name} or /home/user/repo)
-    mount_target: str
 
 
 def derive_container_name(explicit: str | None = None) -> str:
@@ -272,20 +270,19 @@ def add_extension_env(base_args: str, extensions: list[str]) -> str:
 
 
 def ensure_volume_binding(
-    base_args: str, container_name: str, path: pathlib.Path, custom_target: str | None = None
+    base_args: str, container_name: str, path: pathlib.Path, mount_target: str | None = None
 ) -> str:
     """Ensure a volume mount for the workspace folder.
-
-    By default mounts to /workspaces/<container_name>, but can use custom_target if provided.
-    Skip if user already provided a --volume referencing the target path.
 
     Args:
         base_args: Current rocker argument string
         container_name: Name of the container
         path: Host path to mount
-        custom_target: Optional custom mount target path (default: /workspaces/{container_name})
+        mount_target: Optional custom mount target (default: /workspaces/{container_name})
+
+    Skip if user already provided a --volume referencing the target.
     """
-    target = custom_target or f"/workspaces/{container_name}"
+    target = mount_target or f"/workspaces/{container_name}"
     if target in base_args:
         return base_args
     return f"{base_args} --volume {path}:{target}:Z".strip()
@@ -326,7 +323,7 @@ def build_rocker_arg_injections(
     *,
     always_mount: bool = True,
     extra_volumes: Sequence[Tuple[pathlib.Path, str]] | None = None,
-    custom_mount_target: str | None = None,
+    mount_target: str | None = None,
 ) -> str:
     """Inject required arguments into the user-specified (or config) rocker args string.
 
@@ -340,14 +337,14 @@ def build_rocker_arg_injections(
         extensions: List of extension names
         always_mount: Whether to add volume mount (default: True)
         extra_volumes: Additional volume bindings (host_path, target)
-        custom_mount_target: Optional custom mount target path (default: /workspaces/{container_name})
+        mount_target: Optional custom mount target (default: /workspaces/{container_name})
     """
     argline = extra_cli or ""
     argline = ensure_detached_args(argline)
     argline = ensure_name_args(argline, container_name)
     argline = add_extension_env(argline, extensions)
     if always_mount:
-        argline = ensure_volume_binding(argline, container_name, path, custom_mount_target)
+        argline = ensure_volume_binding(argline, container_name, path, mount_target)
     if extra_volumes:
         for host_path, target in extra_volumes:
             argline = append_volume_binding(argline, host_path, target)
@@ -380,23 +377,23 @@ def wait_for_container(
     return False
 
 
-def launch_vscode(container_name: str, container_hex: str, mount_target: str | None = None) -> bool:
+def launch_vscode(container_name: str, container_hex: str, folder_path: str | None = None) -> bool:
     """Attempt to launch VS Code attached to a running container.
 
     Args:
         container_name: Name of the container
         container_hex: Hex-encoded container name for VSCode URI
-        mount_target: Container mount path (default: /workspaces/{container_name})
+        folder_path: Optional container path to open (default: /workspaces/{container_name})
 
     Returns True on success, False on failure.
     """
-    if not mount_target:
-        mount_target = f"/workspaces/{container_name}"
-    vscode_uri = f"vscode-remote://attached-container+{container_hex}{mount_target}"
+    if folder_path is None:
+        folder_path = f"/workspaces/{container_name}"
+    vscode_uri = f"vscode-remote://attached-container+{container_hex}{folder_path}"
     cmd = ["code", "--folder-uri", vscode_uri]
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
-        LOGGER.info("Launched VS Code on container '%s'", container_name)
+        LOGGER.info("Launched VS Code on container '%s' at '%s'", container_name, folder_path)
         return True
     except FileNotFoundError:
         LOGGER.warning("VS Code 'code' command not found in PATH; skipping attach.")
@@ -426,7 +423,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     path: pathlib.Path,
     extensions: list[str] | None = None,
     extra_volumes: Sequence[Tuple[pathlib.Path, str]] | None = None,
-    custom_mount_target: str | None = None,
+    mount_target: str | None = None,
 ) -> LaunchPlan:
     """Prepare rocker command & stop/remove existing container if forced.
 
@@ -439,7 +436,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         path: Working directory path
         extensions: Optional explicit extension list; if None, extracted from args_dict["args"]
         extra_volumes: Additional host→container volume bindings (host path, target path)
-        custom_mount_target: Optional custom mount target path (default: /workspaces/{container_name})
+        mount_target: Optional custom mount target (default: /workspaces/{container_name})
 
     Returns:
         LaunchPlan with container configuration and rocker command
@@ -483,7 +480,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         path,
         current_extensions,
         extra_volumes=extra_volumes,
-        custom_mount_target=custom_mount_target,
+        mount_target=mount_target,
     )
     # Build base rocker args from config dictionary (copy because yaml_dict_to_args mutates)
     from .rockerc import yaml_dict_to_args  # type: ignore
@@ -498,16 +495,12 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     else:
         LOGGER.info("Container '%s' already exists; reusing.", container_name)
 
-    # Determine the mount target for the plan
-    mount_target = custom_mount_target or f"/workspaces/{container_name}"
-
     return LaunchPlan(
         container_name=container_name,
         container_hex=container_hex,
         rocker_cmd=rocker_cmd,
         created=created,
         vscode=vscode,
-        mount_target=mount_target,
     )
 
 
@@ -534,7 +527,7 @@ def execute_plan(plan: LaunchPlan) -> int:
         return 1
 
     if plan.vscode:
-        launch_vscode(plan.container_name, plan.container_hex, plan.mount_target)
+        launch_vscode(plan.container_name, plan.container_hex)
 
     # open interactive shell (exit code of shell becomes our exit)
     return interactive_shell(plan.container_name)
