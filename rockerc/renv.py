@@ -22,6 +22,7 @@ This design ensures:
 
 import sys
 import subprocess
+import importlib.metadata
 import pathlib
 import logging
 import argparse
@@ -30,10 +31,45 @@ import yaml
 import shutil
 import shlex
 import os
+import re
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
-
+from typing import List, Optional, Dict, Any, Tuple
+from contextlib import contextmanager
 from .rockerc import deduplicate_extensions
+
+
+# Shared utility for git subprocess.run
+def git_run(args, **kwargs):
+    """Run a git command with consistent error handling."""
+    # Security: args must be a list of static strings, not user-controlled
+    # If any element is user-controlled, use shlex.quote()
+    safe_args = [str(a) for a in args]
+    try:
+        return subprocess.run(["git"] + safe_args, check=True, **kwargs)
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Git command failed: {' '.join(safe_args)}; {e}")
+        raise
+
+
+# Context manager for changing cwd
+@contextmanager
+def cwd(path: str):
+    prev = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(prev)
+
+
+# Helper for sparse-checkout setup/update
+def _apply_sparse_checkout(branch_dir: pathlib.Path, subfolder: str, reapply: bool = False):
+    base = ["-C", str(branch_dir), "sparse-checkout"]
+    git_run(base + ["init", "--cone"])
+    git_run(base + ["set", subfolder])
+    if reapply:
+        git_run(base + ["reapply"])
+    _verify_sparse_checkout_path(branch_dir, subfolder, branch_dir.name)
 
 
 @dataclass
@@ -91,7 +127,22 @@ def get_available_repos(user: str) -> List[str]:
     user_dir = get_renv_root() / user
     if not user_dir.exists():
         return []
-    return [d.name for d in user_dir.iterdir() if d.is_dir()]
+    repos: set[str] = set()
+    for entry in user_dir.iterdir():
+        if not entry.is_dir():
+            continue
+        if entry.name.startswith("."):
+            continue
+        if (entry / ".git").exists():
+            # Legacy layout repo-branch directories (e.g., repo-main, repo-with-dashes-main)
+            if "-" in entry.name:
+                name = entry.name.rsplit("-", 1)[0]
+            else:
+                name = entry.name
+            repos.add(name)
+        else:
+            repos.add(entry.name)
+    return sorted(repos)
 
 
 def get_available_branches(repo_spec: RepoSpec) -> List[str]:
@@ -181,7 +232,7 @@ def fuzzy_select_repo() -> Optional[str]:
 
 def install_shell_completion() -> int:
     """Install shell autocompletion for renv"""
-    bash_completion = """# renv completion
+    bash_completion = r"""# renv completion
 _renv_completion() {
     local cur prev opts
     COMPREPLY=()
@@ -201,8 +252,32 @@ _renv_completion() {
         local renv_root="${RENV_DIR:-$HOME/renv}"
         local cache_root="$renv_root/.cache"
 
+        # Check if we're completing subfolders (after #)
+        if [[ "$cur" == *"#"* ]]; then
+            # Extract owner/repo@branch from before #
+            local spec_part="${cur%%#*}"
+            local subfolder_part="${cur##*#}"
+            local repo_part="${spec_part%%@*}"
+            local branch_part="${spec_part##*@}"
+            local owner="${repo_part%%/*}"
+            local repo="${repo_part##*/}"
+
+            # Try to find the branch directory in renv
+            local renv_root="${RENV_DIR:-$HOME/renv}"
+            local safe_branch="${branch_part//\//-}"
+            local branch_dir="$renv_root/$owner/$repo/$safe_branch/$repo"
+
+            if [[ -d "$branch_dir" ]]; then
+                # List directories in the branch (exclude .git)
+                local folders=$(find "$branch_dir" -type d -not -path "*/.git/*" -not -name ".git" | sed "s|$branch_dir/||" | grep -v "^$" | xargs)
+                local completions=""
+                for folder in $folders; do
+                    completions="$completions $spec_part#$folder"
+                done
+                COMPREPLY=( $(compgen -W "${completions}" -- ${cur}) )
+            fi
         # Check if we're completing branches (after @)
-        if [[ "$cur" == *"@"* ]]; then
+        elif [[ "$cur" == *"@"* ]]; then
             # Extract owner/repo from before @
             local repo_part="${cur%%@*}"
             local branch_part="${cur##*@}"
@@ -275,13 +350,74 @@ def get_repo_dir(repo_spec: RepoSpec) -> pathlib.Path:
     return get_renv_root() / ".cache" / repo_spec.owner / repo_spec.repo
 
 
-def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
-    """Get the branch copy directory path for a repository and branch
+def _get_repo_workspace_root(repo_spec: RepoSpec) -> pathlib.Path:
+    """Return the workspace directory dedicated to a repo."""
+    return get_renv_root() / repo_spec.owner / repo_spec.repo
+
+
+def get_legacy_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
+    """Return the legacy branch directory path (pre repo-folder layout).
 
     Returns: ~/renv/{owner}/{repo}-{branch}
     """
     safe_branch = repo_spec.branch.replace("/", "-")
     return get_renv_root() / repo_spec.owner / f"{repo_spec.repo}-{safe_branch}"
+
+
+def get_previous_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
+    """Return the previous branch directory path (before cwd-based layout).
+
+    Returns: ~/renv/{owner}/{repo}/{repo}-{branch}
+    """
+    safe_branch = repo_spec.branch.replace("/", "-")
+    return _get_repo_workspace_root(repo_spec) / f"{repo_spec.repo}-{safe_branch}"
+
+
+def get_worktree_dir(repo_spec: RepoSpec) -> pathlib.Path:
+    """Get the branch copy directory path for a repository and branch.
+
+    Returns: ~/renv/{owner}/{repo}/{branch}/{repo}
+    """
+    safe_branch = repo_spec.branch.replace("/", "-")
+    return _get_repo_workspace_root(repo_spec) / safe_branch / repo_spec.repo
+
+
+def _verify_sparse_checkout_path(branch_dir: pathlib.Path, subfolder: str, branch: str) -> None:
+    """Ensure the sparse-checkout subfolder exists in the repository history."""
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(branch_dir),
+            "rev-parse",
+            "--verify",
+            f"HEAD:{subfolder}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise FileNotFoundError(f"Subfolder '{subfolder}' not found in branch '{branch}'.")
+
+
+def _has_upstream(branch_dir: pathlib.Path) -> bool:
+    """Return True if the current branch has an upstream configured."""
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(branch_dir),
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            "@{u}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
 
 
 def load_renv_rockerc_config() -> dict:
@@ -366,9 +502,31 @@ def combine_rockerc_configs(renv_config: dict, repo_config: dict) -> dict:
 
 
 def get_container_name(repo_spec: RepoSpec) -> str:
-    """Generate container name from repo specification"""
+    """Generate container name from repo specification
+
+    Uses '.' separator between repo and branch, and 'sub-' prefix for subfolder
+    to prevent naming conflicts between branch names and subfolder paths.
+    """
     safe_branch = repo_spec.branch.replace("/", "-")
-    return f"{repo_spec.repo}-{safe_branch}"
+    # Use '.' separator between repo and branch
+    base_name = f"{repo_spec.repo}.{safe_branch}"
+    if repo_spec.subfolder:
+        # Use 'sub-' prefix and sanitize subfolder path
+        safe_subfolder = repo_spec.subfolder.replace("/", "-")
+        result = f"{base_name}-sub-{safe_subfolder}"
+    else:
+        result = base_name
+    # Sanitize to allow only alphanumeric, dash, underscore, dot
+    return re.sub(r"[^a-zA-Z0-9_.-]", "_", result)
+
+
+def get_hostname(repo_spec: RepoSpec) -> str:
+    """Generate hostname from repo specification
+
+    Returns just the repo name as hostname, without branch information.
+    """
+    # Sanitize to allow only alphanumeric, dash, underscore
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_spec.repo)
 
 
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
@@ -379,7 +537,10 @@ def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
     if not repo_dir.exists():
         logging.info(f"Cloning cache repository: {repo_url}")
         repo_dir.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["git", "clone", repo_url, str(repo_dir)], check=True)
+        # repo_url and repo_dir are constructed, not user input
+        subprocess.run(
+            ["git", "clone", repo_url, str(repo_dir)], check=True, cwd=str(repo_dir.parent)
+        )
     else:
         logging.info(f"Fetching updates for cache: {repo_url}")
         subprocess.run(["git", "-C", str(repo_dir), "fetch", "--all"], check=True)
@@ -388,9 +549,34 @@ def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
 
 
 def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
-    """Set up branch copy by copying from cache and checking out branch"""
+    """Set up branch copy by copying from cache and checking out branch
+
+    If repo_spec.subfolder is specified, enables sparse-checkout to only
+    check out that subfolder in the working tree.
+    """
     cache_dir = get_repo_dir(repo_spec)
     branch_dir = get_worktree_dir(repo_spec)
+    repo_workspace = _get_repo_workspace_root(repo_spec)
+    repo_workspace.mkdir(parents=True, exist_ok=True)
+
+    # Handle migrations from old layouts
+    # Priority: previous layout > legacy layout (migrate from newest to oldest)
+    previous_dir = get_previous_worktree_dir(repo_spec)
+    legacy_dir = get_legacy_worktree_dir(repo_spec)
+
+    if not branch_dir.exists():
+        # Try to migrate from previous layout first
+        if previous_dir.exists():
+            logging.info(f"Migrating from previous layout for {repo_spec.repo}@{repo_spec.branch}")
+            # Create parent branch directory
+            branch_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(previous_dir), str(branch_dir))
+        # Otherwise try legacy layout
+        elif legacy_dir.exists():
+            logging.info(f"Migrating from legacy layout for {repo_spec.repo}@{repo_spec.branch}")
+            # Create parent branch directory
+            branch_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(legacy_dir), str(branch_dir))
 
     # Ensure cache repo exists and is updated
     setup_cache_repo(repo_spec)
@@ -400,27 +586,84 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
 
         # Copy entire cache directory to branch directory
         shutil.copytree(cache_dir, branch_dir)
+        # Ensure remote references are up to date in the new working tree
+        subprocess.run(
+            ["git", "-C", str(branch_dir), "fetch", "--all"],
+            check=True,
+        )
 
         # Use git_ref_exists to check for local and remote branch
         local = git_ref_exists(branch_dir, repo_spec.branch)
         remote = git_ref_exists(branch_dir, f"origin/{repo_spec.branch}")
         default = get_default_branch(repo_spec)
 
-        cmd = ["git", "-C", str(branch_dir), "checkout"]
-        if local:
-            cmd.append(repo_spec.branch)
-            logging.info(f"Checking out local branch: {repo_spec.branch}")
-        elif remote:
-            cmd += ["-b", repo_spec.branch, f"origin/{repo_spec.branch}"]
-            logging.info(f"Checking out remote branch: {repo_spec.branch}")
-        else:
-            cmd += ["-b", repo_spec.branch, f"origin/{default}"]
-            logging.info(f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default}'")
         try:
-            subprocess.run(cmd, check=True)
+            if local:
+                logging.info(f"Checking out local branch: {repo_spec.branch}")
+                subprocess.run(
+                    ["git", "-C", str(branch_dir), "checkout", repo_spec.branch],
+                    check=True,
+                )
+            elif remote:
+                logging.info(f"Checking out remote branch: {repo_spec.branch}")
+                subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(branch_dir),
+                        "checkout",
+                        "-b",
+                        repo_spec.branch,
+                        f"origin/{repo_spec.branch}",
+                    ],
+                    check=True,
+                )
+            else:
+                logging.info(
+                    f"Branch '{repo_spec.branch}' doesn't exist, creating from '{default}'"
+                )
+                subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(branch_dir),
+                        "checkout",
+                        "--no-track",
+                        "-b",
+                        repo_spec.branch,
+                        f"origin/{default}",
+                    ],
+                    check=True,
+                )
         except subprocess.CalledProcessError as e:
             logging.error(f"Failed to checkout branch '{repo_spec.branch}'. Error: {e}")
             raise
+        if not remote and _has_upstream(branch_dir):
+            # Newly created branches should not track the default branch automatically
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "branch", "--unset-upstream"],
+                check=False,
+            )
+
+        # Enable sparse checkout if subfolder specified
+        if repo_spec.subfolder:
+            logging.info(f"Enabling sparse-checkout for subfolder: {repo_spec.subfolder}")
+            # Initialize sparse-checkout in cone mode
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "sparse-checkout", "init", "--cone"],
+                check=True,
+            )
+            # Set the subfolder pattern
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "sparse-checkout", "set", repo_spec.subfolder],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "sparse-checkout", "reapply"],
+                check=True,
+            )
+            logging.info(f"Sparse-checkout configured for: {repo_spec.subfolder}")
+            _verify_sparse_checkout_path(branch_dir, repo_spec.subfolder, repo_spec.branch)
     else:
         logging.info(f"Branch copy already exists: {branch_dir}")
         # Fetch and pull latest changes
@@ -428,12 +671,73 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
             ["git", "-C", str(branch_dir), "fetch", "--all"],
             check=True,
         )
-        subprocess.run(
-            ["git", "-C", str(branch_dir), "pull"],
-            check=False,  # Don't fail if already up to date
-        )
+        if _has_upstream(branch_dir):
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "pull"],
+                check=False,  # Don't fail if already up to date
+            )
+        else:
+            logging.info("Skipping git pull for %s (no upstream configured)", branch_dir)
+
+        # Update sparse checkout if subfolder specified and not already configured
+        if repo_spec.subfolder:
+            # Check if sparse-checkout is already enabled
+            sparse_checkout_file = branch_dir / ".git" / "info" / "sparse-checkout"
+            if not sparse_checkout_file.exists():
+                logging.info(f"Enabling sparse-checkout for subfolder: {repo_spec.subfolder}")
+                subprocess.run(
+                    ["git", "-C", str(branch_dir), "sparse-checkout", "init", "--cone"],
+                    check=True,
+                )
+            # Update the subfolder pattern
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "sparse-checkout", "set", repo_spec.subfolder],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(branch_dir), "sparse-checkout", "reapply"],
+                check=True,
+            )
+            _verify_sparse_checkout_path(branch_dir, repo_spec.subfolder, repo_spec.branch)
 
     return branch_dir
+
+
+AVAILABLE_ROCKER_EXTENSIONS: Optional[set[str]] = None
+ESSENTIAL_CORE_ARGS = {"pull", "persist-image"}
+
+
+def _get_available_rocker_extensions() -> set[str]:
+    """Discover rocker extension names available in the current environment."""
+    global AVAILABLE_ROCKER_EXTENSIONS  # pylint: disable=global-statement
+    if AVAILABLE_ROCKER_EXTENSIONS is not None:
+        return AVAILABLE_ROCKER_EXTENSIONS
+
+    try:
+        entry_points = importlib.metadata.entry_points()
+        group = entry_points.select(group="rocker.extensions")
+        AVAILABLE_ROCKER_EXTENSIONS = {ep.name.replace("_", "-") for ep in group}
+    except Exception as exc:  # pragma: no cover - defensive, shouldn't happen
+        logging.warning("Failed to discover rocker extensions: %s", exc)
+        AVAILABLE_ROCKER_EXTENSIONS = set()
+    return AVAILABLE_ROCKER_EXTENSIONS
+
+
+def _filter_unavailable_extensions(args: list[str]) -> Tuple[list[str], list[str]]:
+    """Filter out extensions that are not installed in the current environment."""
+    if not args:
+        return [], []
+
+    available = _get_available_rocker_extensions()
+    kept = []
+    removed = []
+    for arg in args:
+        normalized = arg.replace("_", "-")
+        if normalized in ESSENTIAL_CORE_ARGS or normalized in available:
+            kept.append(arg)
+        else:
+            removed.append(arg)
+    return kept, removed
 
 
 def build_rocker_config(
@@ -458,85 +762,86 @@ def build_rocker_config(
         _load_and_validate_config,
     )
 
-    import re
-
     container_name = get_container_name(repo_spec)
-    # Sanitize container_name to allow only alphanumeric, dash, underscore
-    container_name = re.sub(r"[^a-zA-Z0-9_-]", "_", container_name)
     branch_dir = get_worktree_dir(repo_spec)
 
-    # Load configs in order of precedence (lowest first)
-    # 1. Standard global config from ~/.rockerc.yaml
-    standard_global_config = load_global_config()
+    def _load_configs():
+        standard = load_global_config()
+        renv = load_renv_rockerc_config()
+        repo = {}
+        if branch_dir.exists():
+            repo_config_path = branch_dir / "rockerc.yaml"
+            if repo_config_path.exists():
+                repo = _load_and_validate_config(repo_config_path)
+        return standard, renv, repo
 
-    # 2. Renv global config from ~/renv/rockerc.yaml (creates from template if needed)
-    renv_config = load_renv_rockerc_config()
+    def _merge_args(*args_lists):
+        merged = []
+        for lst in args_lists:
+            if lst:
+                merged.extend(lst)
+        return deduplicate_extensions(merged)
 
-    # 3. Repo-specific config from worktree (if it exists)
-    repo_config = {}
-    if branch_dir.exists():
-        repo_config_path = branch_dir / "rockerc.yaml"
-        if repo_config_path.exists():
-            repo_config = _load_and_validate_config(repo_config_path)
+    def _merge_blacklists(*blists):
+        merged = []
+        for bl in blists:
+            if not isinstance(bl, list):
+                if bl:
+                    merged.append(bl)
+            elif bl:
+                merged.extend(bl)
+        return deduplicate_extensions(merged)
 
-    # Merge configs: standard_global < renv_global < repo
-    config = standard_global_config.copy()
-    config.update(renv_config)
-    config.update(repo_config)
+    standard, renv, repo = _load_configs()
+    config = standard.copy()
+    config.update(renv)
+    config.update(repo)
 
-    # Special handling for args - merge and deduplicate instead of overriding
-    standard_args = standard_global_config.get("args", []) or []
-    renv_args = renv_config.get("args", []) or []
-    repo_args = repo_config.get("args", []) or []
+    # Merge and deduplicate args
+    config["args"] = _merge_args(
+        standard.get("args", []), renv.get("args", []), repo.get("args", [])
+    )
+    # Merge and deduplicate blacklists
+    config["extension-blacklist"] = _merge_blacklists(
+        standard.get("extension-blacklist", []),
+        renv.get("extension-blacklist", []),
+        repo.get("extension-blacklist", []),
+    )
 
-    if standard_args or renv_args or repo_args:
-        config["args"] = deduplicate_extensions(standard_args + renv_args + repo_args)
+    # Remove cwd extension - we use explicit volume mounts to /{repo} instead
+    if "cwd" in config["args"]:
+        config["args"].remove("cwd")
 
-    # Special handling for extension-blacklist - merge lists
-    standard_bl = standard_global_config.get("extension-blacklist", []) or []
-    renv_bl = renv_config.get("extension-blacklist", []) or []
-    repo_bl = repo_config.get("extension-blacklist", []) or []
-
-    if not isinstance(standard_bl, list):
-        standard_bl = [standard_bl] if standard_bl else []
-    if not isinstance(renv_bl, list):
-        renv_bl = [renv_bl] if renv_bl else []
-    if not isinstance(repo_bl, list):
-        repo_bl = [repo_bl] if repo_bl else []
-
-    if standard_bl or renv_bl or repo_bl:
-        config["extension-blacklist"] = deduplicate_extensions(standard_bl + renv_bl + repo_bl)
-
-    # Add cwd extension if not already present
-    if "args" not in config:
-        config["args"] = []
-    if "cwd" not in config["args"]:
-        config["args"].append("cwd")
+    # Filter unavailable extensions
+    filtered_args, removed_args = _filter_unavailable_extensions(config.get("args", []))
+    if removed_args:
+        logging.warning(
+            "Removing unavailable rocker extensions: %s",
+            ", ".join(sorted(removed_args)),
+        )
+    config["args"] = filtered_args
 
     # Set renv-specific parameters
     config["name"] = container_name
-    config["hostname"] = container_name
-
-    # NOTE: Volume mount is NOT added here - prepare_launch_plan() will add it
-    # via build_rocker_arg_injections() -> ensure_volume_binding()
-
-    # Store the target directory for changing cwd before launching
-    # The cwd extension will pick up the current working directory
+    config["hostname"] = get_hostname(repo_spec)
+    # Target dir is the working directory we cd to before calling rocker
     config["_renv_target_dir"] = (
         str(branch_dir / repo_spec.subfolder) if repo_spec.subfolder else str(branch_dir)
     )
 
-    # Create metadata for extension table rendering (matching collect_arguments_with_meta format)
     meta = {
-        "original_global_args": standard_args or None,
-        "original_project_args": (renv_args + repo_args) or None,
+        "original_global_args": standard.get("args", []) or None,
+        "original_project_args": (renv.get("args", []) + repo.get("args", [])) or None,
         "merged_args_before_blacklist": config.get("args", []),
         "removed_by_blacklist": [],
         "blacklist": config.get("extension-blacklist", []),
-        "original_global_blacklist": standard_bl or None,
-        "original_project_blacklist": (renv_bl + repo_bl) or None,
-        "global_config_used": bool(standard_global_config or renv_config),
-        "project_config_used": bool(repo_config),
+        "original_global_blacklist": standard.get("extension-blacklist", []) or None,
+        "original_project_blacklist": (
+            renv.get("extension-blacklist", []) + repo.get("extension-blacklist", [])
+        )
+        or None,
+        "global_config_used": bool(standard or renv),
+        "project_config_used": bool(repo),
         "source_files": [],
     }
 
@@ -717,29 +1022,32 @@ def run_rocker_command(
     logging.info(f"Running rocker: {cmd_str}")
 
     # Always use worktree directory as working directory for renv
-    cwd = None
+    worktree_cwd = None
     # Extract worktree directory from volume mounts
     for volume in volumes:
         if "/workspace/" in volume and not volume.endswith(".git"):
             host_path = volume.split(":")[0]
             if pathlib.Path(host_path).exists():
-                cwd = host_path
-                logging.info(f"Using worktree directory as cwd: {cwd}")
+                worktree_cwd = host_path
+                logging.info(f"Using worktree directory as cwd: {worktree_cwd}")
                 break
 
     # Enable Docker BuildKit for improved build performance
     env = {**os.environ, "DOCKER_BUILDKIT": "1"}
 
     if detached:
-        # Run in background and return immediately
-        # pylint: disable=consider-using-with
-        subprocess.Popen(
-            cmd_parts, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd, env=env
-        )
-        # Give it a moment to start
-        time.sleep(2)
+        # Security: cmd_parts is constructed from validated config and arguments
+        with subprocess.Popen(
+            cmd_parts,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=worktree_cwd,
+            env=env,
+        ):
+            time.sleep(2)
         return 0
-    return subprocess.run(cmd_parts, check=False, cwd=cwd, env=env).returncode
+    # Security: cmd_parts is constructed from validated config and arguments
+    return subprocess.run(cmd_parts, check=False, cwd=worktree_cwd, env=env).returncode
 
 
 def _handle_container_corruption(
@@ -791,9 +1099,25 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         logging.info(f"Branch copy set up at: {get_worktree_dir(repo_spec)}")
         return 0
 
-    # Set up branch copy
+    # Set up branch copy (with sparse-checkout if subfolder specified)
     branch_dir = setup_branch_copy(repo_spec)
+
     container_name = get_container_name(repo_spec)
+
+    # Determine workspace mount path and any additional volumes
+    # For subfolders: mount only that directory and provide a .git bind mount
+    # For full repo: mount branch directory to /{repo}
+    extra_volumes = []
+    if repo_spec.subfolder:
+        mount_path = branch_dir / repo_spec.subfolder
+        extra_volumes.append(
+            (
+                branch_dir / ".git",
+                f"/{repo_spec.repo}/.git",
+            )
+        )
+    else:
+        mount_path = branch_dir
 
     # Build rocker configuration and get metadata
     config, meta = build_rocker_config(repo_spec, force=force, nocache=nocache)
@@ -815,8 +1139,46 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     target_dir = config.pop("_renv_target_dir", str(branch_dir))
 
     # Change to the target directory so cwd extension picks it up
-    original_cwd = os.getcwd()
-    os.chdir(target_dir)
+    @contextmanager
+    def _restore_cwd_context():
+        try:
+            original_cwd = os.getcwd()
+        except FileNotFoundError:
+            logging.warning(
+                "Current working directory missing; defaulting subsequent operations to %s",
+                branch_dir,
+            )
+            original_cwd = None
+        target = (
+            original_cwd
+            if original_cwd and pathlib.Path(original_cwd).exists()
+            else str(branch_dir)
+        )
+        try:
+            os.chdir(target_dir)
+        except FileNotFoundError as exc:
+            target_path = pathlib.Path(target_dir)
+            logging.error(
+                "Target directory missing after setup: %s (branch dir: %s)",
+                target_path,
+                branch_dir,
+            )
+            raise FileNotFoundError(f"Target directory not found: {target_path}") from exc
+        try:
+            yield
+        finally:
+            try:
+                os.chdir(target)
+            except FileNotFoundError as exc:
+                logging.error(
+                    "Failed to restore cwd: target directory missing (%s). original_cwd: %s, branch_dir: %s",
+                    target,
+                    original_cwd,
+                    branch_dir,
+                )
+                raise FileNotFoundError(
+                    f"Could not restore cwd, target directory not found: {target} (original_cwd: {original_cwd}, branch_dir: {branch_dir})"
+                ) from exc
 
     try:
         from rockerc.core import (
@@ -824,110 +1186,120 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             launch_rocker,
             wait_for_container,
             launch_vscode,
-            interactive_shell,
         )
 
-        # Handle VSCode mode using unified backend (same as rockervsc)
-        if vsc:
-            # Prepare launch plan - this handles container existence, force rebuild, etc.
-            plan = prepare_launch_plan(
-                args_dict=config,
-                extra_cli="",
-                container_name=container_name,
-                vscode=True,
-                force=force,
-                path=branch_dir,
-                extensions=config.get("args", []),
-            )
-
-            # If we need to launch a new container, do it with correct cwd
-            if plan.rocker_cmd:
-                ret = launch_rocker(plan.rocker_cmd)
-                if ret != 0:
-                    return ret
-
-            # Change to branch_dir for docker exec operations (must be in mounted directory)
-            os.chdir(branch_dir)
-
-            # Wait for container to be ready
-            if not wait_for_container(container_name):
-                logging.error(f"Timed out waiting for container '{container_name}'")
-                return 1
-
-            # Test if container is corrupted (breakout detection) before attaching
-            # This can happen if renv dir was deleted while container was running
-            if not plan.created:  # Only test if we're reusing an existing container
-                test_result = subprocess.run(
-                    ["docker", "exec", container_name, "pwd"],
-                    capture_output=True,
-                    text=True,
-                    check=False,
+        with _restore_cwd_context():
+            # Handle VSCode mode using unified backend (same as rockervsc)
+            if vsc:
+                # For renv, mount to /{repo} at root, not /workspaces/{container_name}
+                mount_target = f"/{repo_spec.repo}"
+                plan = prepare_launch_plan(
+                    args_dict=config,
+                    extra_cli="",
+                    container_name=container_name,
+                    vscode=True,
+                    force=force,
+                    path=mount_path,
+                    extensions=config.get("args", []),
+                    extra_volumes=extra_volumes,
+                    mount_target=mount_target,
                 )
 
-                if (
-                    test_result.returncode != 0
-                    or "container breakout" in test_result.stderr.lower()
-                ):
-                    # Container is corrupted - rebuild it
-                    logging.info(
-                        "Container appears corrupted (possible breakout detection), rebuilding for VSCode"
+                if plan.rocker_cmd:
+                    ret = launch_rocker(plan.rocker_cmd)
+                    if ret != 0:
+                        return ret
+
+                # Change to branch_dir for docker exec operations (must be in mounted directory)
+                os.chdir(branch_dir)
+
+                if not wait_for_container(container_name):
+                    logging.error(f"Timed out waiting for container '{container_name}'")
+                    return 1
+
+                if not plan.created:
+                    test_result = subprocess.run(
+                        ["docker", "exec", container_name, "pwd"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
                     )
-                    from rockerc.core import stop_and_remove_container as core_stop_and_remove
 
-                    core_stop_and_remove(container_name)
+                    if (
+                        test_result.returncode != 0
+                        or "container breakout" in test_result.stderr.lower()
+                    ):
+                        logging.info(
+                            "Container appears corrupted (possible breakout detection), rebuilding for VSCode"
+                        )
+                        from rockerc.core import stop_and_remove_container as core_stop_and_remove
 
-                    # Rebuild container using rocker command without --detach (rocker doesn't support it)
-                    # Build rocker args manually to avoid --detach flag from build_rocker_arg_injections
-                    from rockerc.core import (
-                        ensure_name_args,
-                        add_extension_env,
-                        ensure_volume_binding,
-                    )
-                    from rockerc.rockerc import yaml_dict_to_args
+                        core_stop_and_remove(container_name)
 
-                    injections = ""
-                    injections = ensure_name_args(injections, container_name)
-                    injections = add_extension_env(injections, config.get("args", []))
-                    injections = ensure_volume_binding(injections, container_name, branch_dir)
+                        from rockerc.core import (
+                            ensure_name_args,
+                            add_extension_env,
+                            ensure_volume_binding,
+                            append_volume_binding,
+                        )
+                        from rockerc.rockerc import yaml_dict_to_args
 
-                    args_copy = dict(config)
-                    rocker_argline = yaml_dict_to_args(args_copy, injections)
-                    rocker_cmd = ["rocker"] + shlex.split(rocker_argline)
+                        injections = ""
+                        injections = ensure_name_args(injections, container_name)
+                        injections = add_extension_env(injections, config.get("args", []))
+                        injections = ensure_volume_binding(injections, container_name, mount_path)
+                        for host_path, target in extra_volumes:
+                            injections = append_volume_binding(injections, host_path, target)
 
-                    logging.info(f"Rebuilding container: {' '.join(rocker_cmd)}")
+                        args_copy = dict(config)
+                        rocker_argline = yaml_dict_to_args(args_copy, injections)
+                        rocker_cmd = ["rocker"] + shlex.split(rocker_argline)
 
-                    # Run rocker in detached mode using subprocess (container runs in background)
-                    # Enable Docker BuildKit for improved build performance
-                    env = {**os.environ, "DOCKER_BUILDKIT": "1"}
-                    result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir, env=env)
-                    if result.returncode != 0:
-                        return result.returncode
+                        logging.info(f"Rebuilding container: {' '.join(rocker_cmd)}")
 
-                    # Give container time to start
-                    time.sleep(2)
+                        env = {**os.environ, "DOCKER_BUILDKIT": "1"}
+                        result = subprocess.run(rocker_cmd, check=False, cwd=branch_dir, env=env)
+                        if result.returncode != 0:
+                            return result.returncode
 
-                    # Wait for new container to be ready
-                    if not wait_for_container(container_name):
-                        logging.error(f"Timed out waiting for rebuilt container '{container_name}'")
-                        return 1
+                        time.sleep(2)
 
-            # Launch VSCode if requested
-            if plan.vscode:
-                launch_vscode(plan.container_name, plan.container_hex)
+                        if not wait_for_container(container_name):
+                            logging.error(
+                                f"Timed out waiting for rebuilt container '{container_name}'"
+                            )
+                            return 1
 
-            # Attach interactive shell
-            return interactive_shell(container_name)
+                if plan.vscode:
+                    # For non-subfolder: open /{repo} at root
+                    # For subfolder: open /{repo} (subfolder is mounted directly)
+                    vsc_folder = f"/{repo_spec.repo}"
+                    launch_vscode(plan.container_name, plan.container_hex, vsc_folder)
 
-        # Terminal mode: use detached workflow (same as rockerc)
-        # Keep cwd extension - it sets WORKDIR and we can still override with docker exec -w
+                # Open interactive shell with correct working directory
+                # Working directory is always /{repo} at root
+                workdir = f"/{repo_spec.repo}"
+                if sys.stdin.isatty() and sys.stdout.isatty():
+                    exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"]
+                else:
+                    exec_cmd = ["docker", "exec", "-w", workdir, container_name, "/bin/bash"]
+
+                logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
+                return subprocess.run(exec_cmd, check=False).returncode
+
+            # Terminal mode: use detached workflow (same as rockerc)
+        # For renv, mount to /{repo} at root, not /workspaces/{container_name}
+        mount_target = f"/{repo_spec.repo}"
         plan = prepare_launch_plan(
             args_dict=config,
             extra_cli="",
             container_name=container_name,
             vscode=False,
             force=force,
-            path=branch_dir,
+            path=mount_path,
             extensions=config["args"],
+            extra_volumes=extra_volumes,
+            mount_target=mount_target,
         )
 
         # Add keep-alive command to rocker_cmd so detached container stays running
@@ -938,21 +1310,26 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         if plan.rocker_cmd:
             ret = launch_rocker(plan.rocker_cmd)
             if ret != 0:
-                os.chdir(original_cwd)
+                # Restore cwd using context manager
+                with _restore_cwd_context():
+                    pass
                 return ret
 
         # Wait for container to be ready
         if not wait_for_container(container_name):
             logging.error(f"Timed out waiting for container '{container_name}'")
-            os.chdir(original_cwd)
+            with _restore_cwd_context():
+                pass
             return 1
 
         # Test for container breakout (if directory was deleted while container running)
         # Only test if we're reusing an existing container
+        # Working directory is always /{repo} at root
+        workdir = f"/{repo_spec.repo}"
+
         if not plan.created:
             # Test if we can actually access the working directory
             # Just checking if it exists isn't enough - we need to try to use it
-            workdir = f"/workspaces/{container_name}"
             test_result = subprocess.run(
                 ["docker", "exec", "-w", workdir, container_name, "pwd"],
                 capture_output=True,
@@ -977,24 +1354,27 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     container_name=container_name,
                     vscode=False,
                     force=True,
-                    path=branch_dir,
+                    path=mount_path,
                     extensions=config["args"],
+                    extra_volumes=extra_volumes,
+                    mount_target=mount_target,
                 )
 
                 if plan.rocker_cmd:
                     plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
                     ret = launch_rocker(plan.rocker_cmd)
                     if ret != 0:
-                        os.chdir(original_cwd)
+                        with _restore_cwd_context():
+                            pass
                         return ret
 
                 if not wait_for_container(container_name):
                     logging.error(f"Timed out waiting for rebuilt container '{container_name}'")
-                    os.chdir(original_cwd)
+                    with _restore_cwd_context():
+                        pass
                     return 1
 
         # Execute command or attach interactive shell with working directory set
-        workdir = f"/workspaces/{container_name}"
 
         if command:
             # Ensure command is a list of strings
@@ -1004,7 +1384,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             exec_cmd = ["docker", "exec", "-w", workdir, container_name] + command
             logging.info(f"Executing command: {' '.join(exec_cmd)}")
             result = subprocess.run(exec_cmd, check=False)
-            os.chdir(original_cwd)
+            with _restore_cwd_context():
+                pass
             return result.returncode
 
         # Attach interactive shell - need to set working directory via env or wrapper
@@ -1018,11 +1399,13 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
         logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
         result = subprocess.run(exec_cmd, check=False)
-        os.chdir(original_cwd)
+        with _restore_cwd_context():
+            pass
         return result.returncode
     finally:
         # Restore original working directory
-        os.chdir(original_cwd)
+        with _restore_cwd_context():
+            pass
 
 
 def run_renv(args: Optional[List[str]] = None) -> int:

@@ -25,7 +25,7 @@ import time
 import logging
 import binascii
 import os
-from typing import List
+from typing import List, Sequence, Tuple
 
 # NOTE: Avoid importing from rockerc at module import time to prevent circular imports.
 # We will lazily import yaml_dict_to_args inside functions that need it.
@@ -269,15 +269,50 @@ def add_extension_env(base_args: str, extensions: list[str]) -> str:
     return f"{base_args} {env_arg}".strip()
 
 
-def ensure_volume_binding(base_args: str, container_name: str, path: pathlib.Path) -> str:
-    """Ensure a volume mount for the workspace folder to /workspaces/<container_name>.
+def ensure_volume_binding(
+    base_args: str, container_name: str, path: pathlib.Path, mount_target: str | None = None
+) -> str:
+    """Ensure a volume mount for the workspace folder.
 
-    Skip if user already provided a --volume referencing /workspaces/<container_name>.
+    Args:
+        base_args: Current rocker argument string
+        container_name: Name of the container
+        path: Host path to mount
+        mount_target: Optional custom mount target (default: /workspaces/{container_name})
+
+    Skip if user already provided a --volume referencing the target.
     """
-    target = f"/workspaces/{container_name}"
+    target = mount_target or f"/workspaces/{container_name}"
     if target in base_args:
         return base_args
     return f"{base_args} --volume {path}:{target}:Z".strip()
+
+
+def append_volume_binding(base_args: str, host_path: pathlib.Path, target: str) -> str:
+    """Append an additional volume mount if it's not already present."""
+    # shlex is already imported at the module level
+
+    volume_arg = f"--volume {host_path}:{target}:Z"
+
+    # Parse base_args into tokens
+    tokens = shlex.split(base_args)
+    # Find all --volume arguments and extract their targets
+    existing_targets = set()
+    for i, token in enumerate(tokens):
+        if token == "--volume" and i + 1 < len(tokens):
+            volume_spec = tokens[i + 1]
+            parts = volume_spec.split(":")
+            if len(parts) >= 2:
+                existing_targets.add(parts[1])
+        elif token.startswith("--volume="):
+            volume_spec = token[len("--volume=") :]
+            parts = volume_spec.split(":")
+            if len(parts) >= 2:
+                existing_targets.add(parts[1])
+
+    if target in existing_targets:
+        return base_args
+    return f"{base_args} {volume_arg}".strip()
 
 
 def build_rocker_arg_injections(
@@ -285,18 +320,34 @@ def build_rocker_arg_injections(
     container_name: str,
     path: pathlib.Path,
     extensions: list[str],
+    *,
     always_mount: bool = True,
+    extra_volumes: Sequence[Tuple[pathlib.Path, str]] | None = None,
+    mount_target: str | None = None,
 ) -> str:
     """Inject required arguments into the user-specified (or config) rocker args string.
 
     We always detach and ensure the container is named so we can later docker exec and VS Code attach.
+    Additional host→container volume bindings can be supplied via extra_volumes.
+
+    Args:
+        extra_cli: Additional CLI arguments
+        container_name: Name of the container
+        path: Host path to mount
+        extensions: List of extension names
+        always_mount: Whether to add volume mount (default: True)
+        extra_volumes: Additional volume bindings (host_path, target)
+        mount_target: Optional custom mount target (default: /workspaces/{container_name})
     """
     argline = extra_cli or ""
     argline = ensure_detached_args(argline)
     argline = ensure_name_args(argline, container_name)
     argline = add_extension_env(argline, extensions)
     if always_mount:
-        argline = ensure_volume_binding(argline, container_name, path)
+        argline = ensure_volume_binding(argline, container_name, path, mount_target)
+    if extra_volumes:
+        for host_path, target in extra_volumes:
+            argline = append_volume_binding(argline, host_path, target)
     return argline
 
 
@@ -326,16 +377,23 @@ def wait_for_container(
     return False
 
 
-def launch_vscode(container_name: str, container_hex: str) -> bool:
+def launch_vscode(container_name: str, container_hex: str, folder_path: str | None = None) -> bool:
     """Attempt to launch VS Code attached to a running container.
+
+    Args:
+        container_name: Name of the container
+        container_hex: Hex-encoded container name for VSCode URI
+        folder_path: Optional container path to open (default: /workspaces/{container_name})
 
     Returns True on success, False on failure.
     """
-    vscode_uri = f"vscode-remote://attached-container+{container_hex}/workspaces/{container_name}"
+    if folder_path is None:
+        folder_path = f"/workspaces/{container_name}"
+    vscode_uri = f"vscode-remote://attached-container+{container_hex}{folder_path}"
     cmd = ["code", "--folder-uri", vscode_uri]
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
-        LOGGER.info("Launched VS Code on container '%s'", container_name)
+        LOGGER.info("Launched VS Code on container '%s' at '%s'", container_name, folder_path)
         return True
     except FileNotFoundError:
         LOGGER.warning("VS Code 'code' command not found in PATH; skipping attach.")
@@ -364,6 +422,8 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     force: bool,
     path: pathlib.Path,
     extensions: list[str] | None = None,
+    extra_volumes: Sequence[Tuple[pathlib.Path, str]] | None = None,
+    mount_target: str | None = None,
 ) -> LaunchPlan:
     """Prepare rocker command & stop/remove existing container if forced.
 
@@ -375,6 +435,8 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         force: Whether to force rebuild
         path: Working directory path
         extensions: Optional explicit extension list; if None, extracted from args_dict["args"]
+        extra_volumes: Additional host→container volume bindings (host path, target path)
+        mount_target: Optional custom mount target (default: /workspaces/{container_name})
 
     Returns:
         LaunchPlan with container configuration and rocker command
@@ -412,7 +474,14 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         stop_and_remove_container(container_name)
         exists = False  # treat as not existing for creation phase
 
-    injections = build_rocker_arg_injections(extra_cli, container_name, path, current_extensions)
+    injections = build_rocker_arg_injections(
+        extra_cli,
+        container_name,
+        path,
+        current_extensions,
+        extra_volumes=extra_volumes,
+        mount_target=mount_target,
+    )
     # Build base rocker args from config dictionary (copy because yaml_dict_to_args mutates)
     from .rockerc import yaml_dict_to_args  # type: ignore
 

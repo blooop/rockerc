@@ -617,14 +617,15 @@ def save_rocker_cmd(split_cmd: List[str]) -> str | None:
     return None
 
 
-def _parse_extra_flags(argv: List[str]) -> Tuple[bool, bool, bool, List[str]]:
-    """Parse ad-hoc flags for --vsc, --force and --verbose.
+def _parse_extra_flags(argv: List[str]) -> Tuple[bool, bool, bool, bool, List[str]]:
+    """Parse ad-hoc flags for --vsc, --force, --verbose and --show-dockerfile.
 
-    Returns: (vsc, force, verbose, remaining_args)
+    Returns: (vsc, force, verbose, show_dockerfile, remaining_args)
     """
     vsc = False
     force = False
     verbose = False
+    show_dockerfile = False
     remaining: List[str] = []
     for a in argv:
         if a == "--vsc":
@@ -636,8 +637,11 @@ def _parse_extra_flags(argv: List[str]) -> Tuple[bool, bool, bool, List[str]]:
         if a in ("--verbose", "-v"):
             verbose = True
             continue
+        if a == "--show-dockerfile":
+            show_dockerfile = True
+            continue
         remaining.append(a)
-    return vsc, force, verbose, remaining
+    return vsc, force, verbose, show_dockerfile, remaining
 
 
 def parse_cli_extensions_and_image(
@@ -750,15 +754,37 @@ def run_rockerc(path: str = "."):
     6. Reuse existing container unless --force provided.
     """
 
-    # Raw arguments after script name
+    # --- Begin fix for auto extension workspace path handling ---
     cli_args = sys.argv[1:]
-    vsc, force, verbose, filtered_cli = _parse_extra_flags(cli_args)
-
+    vsc, force, verbose, show_dockerfile, filtered_cli = _parse_extra_flags(cli_args)
     _configure_logging(verbose)
 
-    # Suppress banner printing per user request (previously printed 'rockerc' header)
+    # Detect --auto and workspace path
+    auto_idx = None
+    auto_path = None
+    auto_flag = False
+    if "--auto" in filtered_cli:
+        auto_idx = filtered_cli.index("--auto")
+        auto_flag = True
+        # If next argument exists and does not start with --, treat as workspace path
+        if auto_idx + 1 < len(filtered_cli) and not filtered_cli[auto_idx + 1].startswith("--"):
+            auto_path = filtered_cli[auto_idx + 1]
+            # Remove workspace path from CLI so it is not treated as image or extension
+            filtered_cli.pop(auto_idx + 1)
+        else:
+            auto_path = os.getcwd()
+    # Remove --auto from CLI args for extension parsing
+    if auto_idx is not None:
+        filtered_cli.pop(auto_idx)
 
-    merged_dict, meta = collect_arguments_with_meta(path)
+    # Use auto_path for config merging if present
+    config_path = auto_path if auto_path else path
+    merged_dict, meta = collect_arguments_with_meta(config_path)
+
+    # Ensure auto extension is present in args if --auto was passed
+    if auto_flag:
+        if "auto" not in merged_dict.get("args", []):
+            merged_dict["args"] = ["auto"] + merged_dict.get("args", [])
 
     if not merged_dict:
         logging.error(
@@ -796,7 +822,9 @@ def run_rockerc(path: str = "."):
 
     # Override image if provided via CLI
     if cli_image:
-        merged_dict["image"] = cli_image
+        # Only set image if it is not a workspace path
+        if not (auto_path and cli_image == auto_path):
+            merged_dict["image"] = cli_image
 
     # Detect explicit container name in user filtered args (very naive: look for --name <value>)
     explicit_name = None
@@ -818,7 +846,7 @@ def run_rockerc(path: str = "."):
         container_name,
         vsc,
         force,
-        pathlib.Path(path).absolute(),
+        pathlib.Path(config_path).absolute(),
     )
 
     # Render new provenance table (replaces prior summary block)
@@ -838,13 +866,14 @@ def run_rockerc(path: str = "."):
 
     if create_dockerfile and plan.rocker_cmd:
         dockerfile_content = save_rocker_cmd(plan.rocker_cmd)
-        if verbose and dockerfile_content:
+        if show_dockerfile and dockerfile_content:
             print(_header("Generated Dockerfile (Dockerfile.rocker):"))
             print(_c(dockerfile_content, _Colors.DIM))
             print(_c("(End Dockerfile)", _Colors.DIM))
 
     exit_code = execute_plan(plan)
     sys.exit(exit_code)
+    # --- End fix ---
 
 
 if __name__ == "__main__":
