@@ -45,6 +45,14 @@ Examples:
         "--codex", action="store_const", dest="agent", const="codex", help="Use OpenAI Codex"
     )
 
+    # y/--yolo flag
+    parser.add_argument(
+        "-y",
+        "--yolo",
+        action="store_true",
+        help="Pass --yolo to gemini agent",
+    )
+
     # Repository specification
     parser.add_argument(
         "repo_spec", help="Repository specification: owner/repo[@branch][#subfolder]"
@@ -72,13 +80,23 @@ def build_ai_command(agent: str, prompt: str) -> List[str]:
     # Escape single quotes in prompt for shell safety
     escaped_prompt = prompt.replace("'", "'\"'\"'")
 
+    def build_gemini_cmd(yolo: bool) -> List[str]:
+        cmd = ["gemini", "--prompt-interactive"]
+        if yolo:
+            cmd.append("--yolo")
+        cmd.append(f'"{escaped_prompt}"')
+        return cmd
+
     if agent == "gemini":
-        # Use gemini CLI with --prompt-interactive and prompt wrapped in double quotes
-        return [
-            "gemini",
-            "--prompt-interactive",
-            f'"{escaped_prompt}"',
-        ]
+        # Use gemini CLI with --prompt-interactive and optional --yolo
+        import inspect
+        frame = inspect.currentframe()
+        outer = frame.f_back
+        parsed_args = outer.f_locals.get("parsed_args")
+        yolo = False
+        if parsed_args and hasattr(parsed_args, "yolo"):
+            yolo = parsed_args.yolo or getattr(parsed_args, "y", False)
+        return build_gemini_cmd(yolo)
     if agent == "claude":
         # Use claude CLI - send prompt then start interactive mode
         return [
