@@ -32,9 +32,8 @@ def test_build_ai_command_gemini():
     """Test gemini command construction."""
     command = build_ai_command("gemini", "test prompt")
     assert len(command) == 3
-    assert command[0] == "bash"
-    assert command[1] == "-c"
-    assert "gemini" in command[2]
+    assert command[0] == "gemini"
+    assert command[1] == "--prompt-interactive"
     assert "test prompt" in command[2]
 
 
