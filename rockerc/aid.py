@@ -77,19 +77,18 @@ def build_ai_command(agent: str, prompt: str) -> List[str]:
     Returns:
         List of command components for execution
     """
-    # Escape single quotes in prompt for shell safety
-    escaped_prompt = prompt.replace("'", "'\"'\"'")
 
+    # For all agents, pass prompt as a single argument, avoid shell quoting
     def build_gemini_cmd(yolo: bool) -> List[str]:
         cmd = ["gemini", "--prompt-interactive"]
         if yolo:
             cmd.append("--yolo")
-        cmd.append(f'"{escaped_prompt}"')
+        cmd.append(prompt)
         return cmd
 
     if agent == "gemini":
-        # Use gemini CLI with --prompt-interactive and optional --yolo
         import inspect
+
         frame = inspect.currentframe()
         outer = frame.f_back
         parsed_args = outer.f_locals.get("parsed_args")
@@ -98,19 +97,11 @@ def build_ai_command(agent: str, prompt: str) -> List[str]:
             yolo = parsed_args.yolo or getattr(parsed_args, "y", False)
         return build_gemini_cmd(yolo)
     if agent == "claude":
-        # Use claude CLI - send prompt then start interactive mode
-        return [
-            "bash",
-            "-c",
-            f"claude '{escaped_prompt}' && echo 'Starting interactive session...' && claude",
-        ]
+        # Pass prompt as argument, then start interactive session
+        return ["claude", prompt]
     if agent == "codex":
-        # Use openai CLI for interactive chat with GPT-4
-        return [
-            "bash",
-            "-c",
-            f"openai api chat.completions.create -m gpt-4 -g user '{escaped_prompt}' && echo 'Starting interactive session...' && openai api chat.completions.create -m gpt-4",
-        ]
+        # Pass prompt as argument, then start interactive session
+        return ["openai", "api", "chat.completions.create", "-m", "gpt-4", "-g", "user", prompt]
     raise ValueError(f"Unsupported AI agent: {agent}")
 
 
@@ -120,36 +111,33 @@ def run_aid(args: Optional[List[str]] = None) -> int:
 
     try:
         parsed_args = parse_aid_args(args)
-
-        # Parse repository specification
+    except SystemExit as e:
+        # argparse throws SystemExit for missing/invalid args
+        logging.error("Argument parsing failed. See usage above.")
+        return e.code if hasattr(e, "code") else 1
+    try:
         repo_spec = RepoSpec.parse(parsed_args.repo_spec)
-        logging.info(f"Working with: {repo_spec}")
-
-        # Combine prompt parts into single string
-        prompt_text = " ".join(parsed_args.prompt)
-        logging.info(
-            f"Using {parsed_args.agent} with prompt: {prompt_text[:100]}{'...' if len(prompt_text) > 100 else ''}"
-        )
-
-        # Build AI command
-        ai_command = build_ai_command(parsed_args.agent, prompt_text)
-
-        # Use renv's container management to execute the AI command
-        return manage_container(
-            repo_spec=repo_spec,
-            command=ai_command,
-            force=False,  # Don't force rebuild unless needed
-            nocache=False,  # Use cache for faster startup
-            no_container=False,  # We need the container for AI CLI
-            vsc=False,  # Terminal mode, not VSCode
-        )
-
-    except ValueError as e:
+    except Exception as e:
         logging.error(f"Invalid repository specification: {e}")
         return 1
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+    prompt_text = " ".join(parsed_args.prompt)
+    logging.info(
+        f"Using {parsed_args.agent} with prompt: {prompt_text[:100]}{'...' if len(prompt_text) > 100 else ''}"
+    )
+    try:
+        ai_command = build_ai_command(parsed_args.agent, prompt_text)
+    except ValueError as e:
+        logging.error(f"Agent selection error: {e}")
         return 1
+    return manage_container(
+        repo_spec=repo_spec,
+        command=ai_command,
+        force=False,
+        nocache=False,
+        no_container=False,
+        vsc=False,
+        agent=parsed_args.agent,
+    )
 
 
 def main():

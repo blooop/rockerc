@@ -31,43 +31,66 @@ def test_parse_aid_args_codex():
 def test_build_ai_command_gemini():
     """Test gemini command construction."""
     command = build_ai_command("gemini", "test prompt")
-    assert len(command) == 3
-    assert command[0] == "gemini"
-    assert command[1] == "--prompt-interactive"
-    assert "test prompt" in command[2]
+    assert command == ["gemini", "--prompt-interactive", "test prompt"]
 
 
 def test_build_ai_command_claude():
     """Test claude command construction."""
     command = build_ai_command("claude", "test prompt")
-    assert len(command) == 3
-    assert command[0] == "bash"
-    assert command[1] == "-c"
-    assert "claude" in command[2]
-    assert "test prompt" in command[2]
+    assert command == ["claude", "test prompt"]
 
 
 def test_build_ai_command_codex():
     """Test codex command construction."""
     command = build_ai_command("codex", "test prompt")
-    assert len(command) == 3
-    assert command[0] == "bash"
-    assert command[1] == "-c"
-    assert "openai" in command[2]
-    assert "test prompt" in command[2]
+    assert command == [
+        "openai",
+        "api",
+        "chat.completions.create",
+        "-m",
+        "gpt-4",
+        "-g",
+        "user",
+        "test prompt",
+    ]
 
 
 def test_build_ai_command_quote_escaping():
     """Test that single quotes in prompts are properly escaped."""
     command = build_ai_command("gemini", "test 'quoted' prompt")
-    # Check that the command contains properly escaped quotes
-    assert "test '\"'\"'quoted'\"'\"' prompt" in command[2] or "test" in command[2]
+    # No escaping needed, prompt is passed as-is
+    assert command == ["gemini", "--prompt-interactive", "test 'quoted' prompt"]
 
 
 def test_build_ai_command_invalid_agent():
     """Test that invalid agent raises ValueError."""
     with pytest.raises(ValueError, match="Unsupported AI agent"):
         build_ai_command("invalid_agent", "test prompt")
+
+
+def test_run_aid_invalid_repo_spec(monkeypatch):
+    """Test that invalid repo spec returns 1."""
+    from rockerc.aid import run_aid
+
+    # Patch sys.argv to simulate CLI call
+    monkeypatch.setattr("sys.argv", ["aid", "invalid/repo@", "prompt"])
+    # Should return 1 for invalid repo spec
+    assert run_aid() == 1
+
+
+def test_run_aid_invalid_agent(monkeypatch):
+    """Test that invalid agent returns 1."""
+    from rockerc.aid import run_aid
+
+    # Patch parse_aid_args to return invalid agent
+    class Args:
+        agent = "invalid_agent"
+        repo_spec = "owner/repo"
+        prompt = ["prompt"]
+
+    monkeypatch.setattr("rockerc.aid.parse_aid_args", lambda args=None: Args())
+    # Should return 1 for invalid agent
+    assert run_aid() == 1
 
 
 def test_parse_aid_args_missing_arguments():

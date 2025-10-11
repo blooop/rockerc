@@ -1092,6 +1092,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     nocache: bool = False,
     no_container: bool = False,
     vsc: bool = False,
+    agent: Optional[str] = None,
 ) -> int:
     """Manage container lifecycle and execution using core.py's unified flow"""
     if no_container:
@@ -1380,12 +1381,10 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             # Ensure command is a list of strings
             if not (isinstance(command, list) and all(isinstance(x, str) for x in command)):
                 raise ValueError("command must be a list of strings")
-            # Use -it for interactive AI commands
-            interactive_agents = {"gemini", "claude", "codex"}
-            use_tty = command and command[0] in interactive_agents
+            # Use -i and -t for interactive AI agents, based on explicit agent parameter
             exec_cmd = ["docker", "exec"]
-            if use_tty:
-                exec_cmd.append("-it")
+            if agent in {"gemini", "claude", "codex"}:
+                exec_cmd.extend(["-i", "-t"])
             exec_cmd += ["-w", workdir, container_name] + command
             logging.info(f"Executing command: {' '.join(exec_cmd)}")
             result = subprocess.run(exec_cmd, check=False)
