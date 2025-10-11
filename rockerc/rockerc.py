@@ -12,6 +12,7 @@ from rockerc.core import (
     prepare_launch_plan,
     execute_plan,
 )
+from .completion import install_all_completions
 
 
 #############################################
@@ -754,8 +755,24 @@ def run_rockerc(path: str = "."):
     6. Reuse existing container unless --force provided.
     """
 
-    # --- Begin fix for auto extension workspace path handling ---
     cli_args = sys.argv[1:]
+    if "--install" in cli_args:
+        rc_path: Optional[pathlib.Path] = None
+        if "--rc-file" in cli_args:
+            rc_index = cli_args.index("--rc-file")
+            try:
+                rc_arg = cli_args[rc_index + 1]
+            except IndexError:
+                logging.error("--rc-file requires a path argument when used with --install")
+                sys.exit(1)
+            rc_path = pathlib.Path(rc_arg)
+        if len([arg for arg in cli_args if not arg.startswith("--")]) > (1 if rc_path else 0):
+            logging.warning(
+                "Ignoring unexpected arguments while installing completions: %s", cli_args
+            )
+        sys.exit(install_all_completions(rc_path))
+
+    # --- Begin fix for auto extension workspace path handling ---
     vsc, force, verbose, show_dockerfile, filtered_cli = _parse_extra_flags(cli_args)
     _configure_logging(verbose)
 

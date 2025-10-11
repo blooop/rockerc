@@ -5,9 +5,10 @@ Provides streamlined AI-driven development within containerized environments.
 Reuses renv infrastructure for container management and setup.
 """
 
-import sys
 import argparse
 import logging
+import pathlib
+import sys
 from typing import List, Optional
 
 from .renv import RepoSpec, manage_container
@@ -52,6 +53,12 @@ Examples:
         action="store_true",
         help="Pass --yolo to gemini agent",
     )
+    parser.add_argument(
+        "-f",
+        "--flash",
+        action="store_true",
+        help="Use Gemini in flash mode (gemini-2.5-flash)",
+    )
 
     # Repository specification
     parser.add_argument(
@@ -67,7 +74,166 @@ Examples:
     return parser.parse_args(args)
 
 
-def build_ai_command(agent: str, prompt: str) -> List[str]:
+def _aid_bash_completion_script() -> str:
+    """Return the bash completion script for aid."""
+    return r"""# aid completion
+_aid_completion() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    opts="--help --claude --codex --gemini --yolo --flash -y -f"
+
+    if [[ ${cur} == -* ]]; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+
+    if [[ ${COMP_CWORD} -eq 1 ]]; then
+        local renv_root="${RENV_DIR:-$HOME/renv}"
+        local cache_root="$renv_root/.cache"
+
+        if [[ "$cur" == *"#"* ]]; then
+            local spec_part="${cur%%#*}"
+            local repo_part="${spec_part%%@*}"
+            local branch_part="${spec_part##*@}"
+            local owner="${repo_part%%/*}"
+            local repo="${repo_part##*/}"
+            local renv_root="${RENV_DIR:-$HOME/renv}"
+            local safe_branch="${branch_part//\//-}"
+            local branch_dir="$renv_root/$owner/$repo/$safe_branch/$repo"
+
+            if [[ -d "$branch_dir" ]]; then
+                local folders=$(find "$branch_dir" -type d -not -path "*/.git/*" -not -name ".git" | sed "s|$branch_dir/||" | grep -v "^$" | xargs)
+                local completions=""
+                for folder in $folders; do
+                    completions="$completions $spec_part#$folder"
+                done
+                COMPREPLY=( $(compgen -W "${completions}" -- ${cur}) )
+            fi
+            return 0
+        elif [[ "$cur" == *"@"* ]]; then
+            local repo_part="${cur%%@*}"
+            local owner="${repo_part%%/*}"
+            local repo="${repo_part##*/}"
+            local cache_root="$renv_root/.cache"
+            local repo_dir="$cache_root/$owner/$repo"
+            if [[ -d "$repo_dir" ]]; then
+                local branches=$(git -C "$repo_dir" branch -r 2>/dev/null | sed 's/.*origin\///' | grep -v HEAD | xargs)
+                local completions=""
+                for branch in $branches; do
+                    completions="$completions $repo_part@$branch"
+                done
+                COMPREPLY=( $(compgen -W "${completions}" -- ${cur}) )
+            fi
+            return 0
+        else
+            compopt -o nospace 2>/dev/null
+            if [[ -d "$cache_root" ]]; then
+                local repos=""
+                local users=$(find "$cache_root" -maxdepth 1 -type d -exec basename {} \; | grep -v "^\.cache$")
+                for user in $users; do
+                    if [[ -d "$cache_root/$user" ]]; then
+                        local user_repos=$(find "$cache_root/$user" -maxdepth 1 -type d -exec basename {} \; | grep -v "^$user$")
+                        for repo in $user_repos; do
+                            repos="$repos $user/$repo"
+                        done
+                    fi
+                done
+                COMPREPLY=( $(compgen -W "${repos}" -- ${cur}) )
+            fi
+            return 0
+        fi
+    fi
+
+    return 0
+}
+
+complete -F _aid_completion aid
+"""
+
+
+def generate_aid_completion(shell: str = "bash") -> str:
+    """Generate completion script for the requested shell."""
+    if shell != "bash":
+        raise ValueError("Only bash completion is currently supported for aid")
+    return _aid_bash_completion_script()
+
+
+def install_aid_completion(shell: str = "bash", rc_path: Optional[pathlib.Path] = None) -> int:
+    """Install or update aid shell completion."""
+    try:
+        completion_script = generate_aid_completion(shell)
+        completion_script = f"{completion_script}\n# end aid completion"
+    except ValueError as error:
+        logging.error("%s", error)
+        return 1
+
+    if rc_path is None:
+        if shell == "bash":
+            rc_path = pathlib.Path.home() / ".bashrc"
+        else:
+            logging.error("Do not know where to install completion for shell '%s'", shell)
+            return 1
+
+    rc_path = rc_path.expanduser()
+    rc_path.parent.mkdir(parents=True, exist_ok=True)
+
+    start_marker = "# aid completion"
+    end_marker_new = "# end aid completion"
+    end_marker_legacy = "complete -F _aid_completion aid"
+
+    try:
+        existing_content = ""
+        if rc_path.exists():
+            existing_content = rc_path.read_text(encoding="utf-8")
+
+        def _strip_existing(content: str) -> str:
+            current = content
+            while True:
+                start_idx = current.find(start_marker)
+                if start_idx == -1:
+                    break
+                end_idx = current.find(end_marker_new, start_idx)
+                if end_idx != -1:
+                    end_idx += len(end_marker_new)
+                else:
+                    end_idx = current.find(end_marker_legacy, start_idx)
+                    if end_idx == -1:
+                        current = current[:start_idx] + current[start_idx + len(start_marker) :]
+                        continue
+                    end_idx = current.find("\n", end_idx)
+                    if end_idx == -1:
+                        end_idx = len(current)
+                    else:
+                        end_idx += 1
+                before = current[:start_idx].rstrip("\n")
+                after = current[end_idx:]
+                if before and after and not before.endswith("\n"):
+                    before += "\n"
+                current = before + after
+            return current
+
+        updated_content = _strip_existing(existing_content)
+        updated_content = updated_content.rstrip("\n")
+        if updated_content:
+            updated_content = f"{updated_content}\n\n{completion_script}\n"
+        else:
+            updated_content = f"{completion_script}\n"
+
+        rc_path.write_text(updated_content, encoding="utf-8")
+        logging.info("aid completion installed to %s", rc_path)
+        logging.info("Run 'source %s' or restart your terminal to enable completion", rc_path)
+        return 0
+    except OSError as error:
+        logging.error("Failed to install aid completion: %s", error)
+        return 1
+
+
+def build_ai_command(
+    agent: str, prompt: str, *, yolo: bool = False, flash: bool = False
+) -> List[str]:
     """Build the AI CLI command for the specified agent and prompt.
 
     Args:
@@ -80,23 +246,17 @@ def build_ai_command(agent: str, prompt: str) -> List[str]:
     # Escape single quotes in prompt for shell safety
     escaped_prompt = prompt.replace("'", "'\"'\"'")
 
-    def build_gemini_cmd(yolo: bool) -> List[str]:
+    def build_gemini_cmd(yolo_flag: bool, flash_flag: bool) -> List[str]:
         cmd = ["gemini", "--prompt-interactive"]
-        if yolo:
+        if flash_flag:
+            cmd.extend(["--model", "gemini-2.5-flash"])
+        if yolo_flag:
             cmd.append("--yolo")
         cmd.append(f'"{escaped_prompt}"')
         return cmd
 
     if agent == "gemini":
-        # Use gemini CLI with --prompt-interactive and optional --yolo
-        import inspect
-        frame = inspect.currentframe()
-        outer = frame.f_back
-        parsed_args = outer.f_locals.get("parsed_args")
-        yolo = False
-        if parsed_args and hasattr(parsed_args, "yolo"):
-            yolo = parsed_args.yolo or getattr(parsed_args, "y", False)
-        return build_gemini_cmd(yolo)
+        return build_gemini_cmd(yolo, flash)
     if agent == "claude":
         # Use claude CLI - send prompt then start interactive mode
         return [
@@ -131,8 +291,18 @@ def run_aid(args: Optional[List[str]] = None) -> int:
             f"Using {parsed_args.agent} with prompt: {prompt_text[:100]}{'...' if len(prompt_text) > 100 else ''}"
         )
 
+        if parsed_args.flash and parsed_args.agent != "gemini":
+            logging.warning(
+                "--flash is only supported with Gemini; ignoring for %s", parsed_args.agent
+            )
+
         # Build AI command
-        ai_command = build_ai_command(parsed_args.agent, prompt_text)
+        ai_command = build_ai_command(
+            parsed_args.agent,
+            prompt_text,
+            yolo=getattr(parsed_args, "yolo", False),
+            flash=getattr(parsed_args, "flash", False) if parsed_args.agent == "gemini" else False,
+        )
 
         # Use renv's container management to execute the AI command
         return manage_container(

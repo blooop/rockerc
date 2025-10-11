@@ -230,8 +230,12 @@ def fuzzy_select_repo() -> Optional[str]:
     return selected
 
 
-def install_shell_completion() -> int:
-    """Install shell autocompletion for renv"""
+def install_shell_completion(shell: str = "bash", rc_path: Optional[pathlib.Path] = None) -> int:
+    """Install shell autocompletion for renv and renvvsc."""
+    if shell != "bash":
+        logging.error("Only bash completion is currently supported")
+        return 1
+
     bash_completion = r"""# renv completion
 _renv_completion() {
     local cur prev opts
@@ -320,24 +324,60 @@ complete -F _renv_completion renv
 complete -F _renv_completion renvvsc
 """
 
-    # Install to .bashrc
-    bashrc_path = pathlib.Path.home() / ".bashrc"
+    bash_completion += "\n# end renv completion\n"
 
     try:
-        # Check if already installed
+        bashrc_path = rc_path if rc_path is not None else pathlib.Path.home() / ".bashrc"
+        bashrc_path = bashrc_path.expanduser()
+        bashrc_path.parent.mkdir(parents=True, exist_ok=True)
+
+        existing_content = ""
         if bashrc_path.exists():
-            with open(bashrc_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                if "# renv completion" in content:
-                    logging.info("renv completion already installed in ~/.bashrc")
-                    return 0
+            existing_content = bashrc_path.read_text(encoding="utf-8")
 
-        # Append completion to .bashrc
-        with open(bashrc_path, "a", encoding="utf-8") as f:
-            f.write("\n" + bash_completion + "\n")
+        start_marker = "# renv completion"
+        end_marker_new = "# end renv completion"
+        end_marker_legacy = "complete -F _renv_completion renvvsc"
 
-        logging.info("Shell completion installed to ~/.bashrc")
-        logging.info("Run 'source ~/.bashrc' or restart your terminal to enable completion")
+        def _strip_existing(content: str) -> str:
+            current = content
+            while True:
+                start_idx = current.find(start_marker)
+                if start_idx == -1:
+                    break
+                end_idx = current.find(end_marker_new, start_idx)
+                if end_idx != -1:
+                    end_idx += len(end_marker_new)
+                else:
+                    end_idx = current.find(end_marker_legacy, start_idx)
+                    if end_idx != -1:
+                        end_idx = current.find("\n", end_idx)
+                        if end_idx == -1:
+                            end_idx = len(current)
+                        else:
+                            end_idx += 1
+                    else:
+                        end_idx = start_idx + len(start_marker)
+                before = current[:start_idx].rstrip("\n")
+                after = current[end_idx:].lstrip("\n")
+                if before and after:
+                    current = before + "\n\n" + after
+                elif before:
+                    current = before + "\n"
+                else:
+                    current = after
+            return current.rstrip("\n")
+
+        updated_content = _strip_existing(existing_content)
+        if updated_content:
+            updated_content = f"{updated_content}\n\n{bash_completion}\n"
+        else:
+            updated_content = f"{bash_completion}\n"
+
+        bashrc_path.write_text(updated_content, encoding="utf-8")
+
+        logging.info("renv completion installed to %s", bashrc_path)
+        logging.info("Run 'source %s' or restart your terminal to enable completion", bashrc_path)
         return 0
 
     except Exception as e:
