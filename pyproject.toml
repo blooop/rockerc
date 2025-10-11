@@ -67,6 +67,7 @@ rockerc = "rockerc.rockerc:run_rockerc"
 renv = "rockerc.renv:main"
 renvvsc = "rockerc.renvsc:main"
 rockervsc = "rockerc.rockervsc:main"
+aid = "rockerc.aid:main"
 
 # Environments
 [tool.pixi.environments]
