@@ -754,12 +754,10 @@ def run_rockerc(path: str = "."):
     6. Reuse existing container unless --force provided.
     """
 
-
     # --- Begin fix for auto extension workspace path handling ---
     cli_args = sys.argv[1:]
     vsc, force, verbose, show_dockerfile, filtered_cli = _parse_extra_flags(cli_args)
     _configure_logging(verbose)
-
 
     # Detect --auto and workspace path
     auto_idx = None
