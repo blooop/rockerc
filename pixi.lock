@@ -1152,10 +1152,10 @@ packages:
 - pypi: ./
   name: rockerc
   version: 0.15.0
-  sha256: 2daeae08bf9a7e0fcadb895a2b518b2d004b554035bf497e673ac4ace88c90ca
+  sha256: d5884549121d0c8ded100a7c7b207c9efe01af3fb9b691b2ccc7bb365959dc90
   requires_dist:
   - rocker>=0.2.19
-  - deps-rocker>=0.20
+  - deps-rocker>=0.21
   - pyyaml>=5
   - iterfzf>=1.0.0
   - pylint>=3.2.5,<=3.3.8 ; extra == 'test'
