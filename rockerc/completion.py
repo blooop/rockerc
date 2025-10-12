@@ -40,45 +40,6 @@ def _completion_file_path() -> pathlib.Path:
     return pathlib.Path.home() / ".config" / "rockerc" / "completions.sh"
 
 
-def _strip_old_completion_blocks(content: str) -> str:
-    """Remove legacy inline completion blocks from rc files."""
-    lines = content.splitlines()
-    cleaned: list[str] = []
-    skip_until: Optional[str] = None
-
-    for line in lines:
-        stripped = line.strip()
-        if skip_until is not None:
-            if stripped == skip_until:
-                skip_until = None
-            continue
-        if stripped in _LEGACY_BLOCKS:
-            skip_until = _LEGACY_BLOCKS[stripped]
-            continue
-        if stripped in _LEGACY_SINGLE_LINES:
-            continue
-        cleaned.append(line)
-
-    # Collapse duplicate blank lines and trim leading/trailing blanks.
-    collapsed: list[str] = []
-    previous_blank = False
-    for line in cleaned:
-        if line.strip():
-            collapsed.append(line)
-            previous_blank = False
-        else:
-            if not previous_blank:
-                collapsed.append(line)
-            previous_blank = True
-
-    while collapsed and not collapsed[0].strip():
-        collapsed.pop(0)
-    while collapsed and not collapsed[-1].strip():
-        collapsed.pop()
-
-    return "\n".join(collapsed)
-
-
 def install_all_completions(rc_path: Optional[pathlib.Path] = None) -> int:
     """Install or refresh completion scripts for rockerc, renv/renvvsc, and aid."""
     completion_path = _completion_file_path().expanduser()
@@ -101,19 +62,39 @@ def install_all_completions(rc_path: Optional[pathlib.Path] = None) -> int:
         if rc_target.exists():
             existing_content = rc_target.read_text(encoding="utf-8")
 
-        stripped_content = _strip_old_completion_blocks(existing_content).strip("\n")
+        # Remove any existing completion block before appending
+        def remove_block(text: str, start: str, end: str) -> str:
+            lines = text.splitlines()
+            out = []
+            skip = False
+            for line in lines:
+                if line.strip() == start:
+                    skip = True
+                    continue
+                if skip and line.strip() == end:
+                    skip = False
+                    continue
+                if not skip:
+                    out.append(line)
+            return "\n".join(out)
+
+        cleaned_content = remove_block(existing_content, _RC_BLOCK_START, _RC_BLOCK_END).strip()
         escaped_path = str(completion_path).replace('"', r"\"")
         source_line = f'source "{escaped_path}"'
         block = "\n".join([_RC_BLOCK_START, source_line, _RC_BLOCK_END])
 
-        if stripped_content:
-            new_content = f"{stripped_content}\n\n{block}\n"
+        if cleaned_content:
+            new_content = f"{cleaned_content}\n\n{block}\n"
         else:
             new_content = f"{block}\n"
 
         rc_target.write_text(new_content, encoding="utf-8")
         logging.info("Added completion source block to %s", rc_target)
         logging.info("Run 'source %s' or restart your terminal to enable completion", rc_target)
+        print(
+            "[rockerc] Autocomplete has been updated. Run 'source %s' or restart your terminal to enable completion."
+            % rc_target
+        )
         return 0
     except OSError as error:
         logging.error("Failed to install completions: %s", error)
