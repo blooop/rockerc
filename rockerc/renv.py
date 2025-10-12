@@ -331,25 +331,39 @@ def _has_upstream(branch_dir: pathlib.Path) -> bool:
 
 
 def load_renv_rockerc_config() -> dict:
-    """Load global renv rockerc configuration from ~/renv/rockerc.yaml
+    """Load global rockerc configuration from ~/.rockerc.yaml
 
-    Creates the file from template if it doesn't exist.
+    Creates the file from renv template if it doesn't exist.
+    Also checks for legacy ~/renv/rockerc.yaml for backward compatibility.
 
     Returns:
         dict: Parsed configuration dictionary, or empty dict if parsing fails.
     """
-    renv_dir = get_renv_root()
-    config_path = renv_dir / "rockerc.yaml"
-
-    # Create renv directory if it doesn't exist
-    renv_dir.mkdir(exist_ok=True)
+    config_path = pathlib.Path.home() / ".rockerc.yaml"
 
     # Copy template if config doesn't exist
     if not config_path.exists():
+        # Check for legacy location first
+        renv_dir = get_renv_root()
+        legacy_config_path = renv_dir / "rockerc.yaml"
+
+        if legacy_config_path.exists():
+            logging.info(f"Using legacy config from {legacy_config_path}")
+            try:
+                with open(legacy_config_path, "r", encoding="utf-8") as f:
+                    return yaml.safe_load(f) or {}
+            except yaml.YAMLError as e:
+                logging.warning(f"Failed to parse YAML config at {legacy_config_path}: {e}")
+                return {}
+            except Exception as e:
+                logging.warning(f"Error loading config at {legacy_config_path}: {e}")
+                return {}
+
+        # No existing config found, create from template
         template_path = pathlib.Path(__file__).parent / "renv_rockerc_template.yaml"
         if template_path.exists():
             shutil.copy2(template_path, config_path)
-            logging.info(f"Created default renv config at {config_path}")
+            logging.info(f"Created default rockerc config at {config_path}")
         else:
             logging.warning(f"Template file not found at {template_path}")
             return {}
@@ -667,32 +681,29 @@ def build_rocker_config(
     """Build rocker configuration using rockerc's config loading
 
     This loads:
-    1. Renv global config from ~/renv/rockerc.yaml (creates from template if needed)
+    1. Global config from ~/.rockerc.yaml (creates from renv template if needed)
     2. Repo-specific config from the worktree's rockerc.yaml (if it exists)
-    3. Standard global config from ~/.rockerc.yaml (if it exists)
+
+    For backward compatibility, also checks ~/renv/rockerc.yaml if ~/.rockerc.yaml doesn't exist.
 
     Precedence (highest to lowest):
     - Repo-specific config
-    - Renv global config
-    - Standard global config
+    - Global config (~/.rockerc.yaml)
     """
-    from rockerc.rockerc import (
-        load_global_config,
-        _load_and_validate_config,
-    )
+    from rockerc.rockerc import _load_and_validate_config
 
     container_name = get_container_name(repo_spec)
     branch_dir = get_worktree_dir(repo_spec)
 
     def _load_configs():
-        standard = load_global_config()
-        renv = load_renv_rockerc_config()
+        # Load global config (with template creation and legacy support)
+        global_config = load_renv_rockerc_config()
         repo = {}
         if branch_dir.exists():
             repo_config_path = branch_dir / "rockerc.yaml"
             if repo_config_path.exists():
                 repo = _load_and_validate_config(repo_config_path)
-        return standard, renv, repo
+        return global_config, repo
 
     def _merge_args(*args_lists):
         merged = []
@@ -711,19 +722,15 @@ def build_rocker_config(
                 merged.extend(bl)
         return deduplicate_extensions(merged)
 
-    standard, renv, repo = _load_configs()
-    config = standard.copy()
-    config.update(renv)
+    global_config, repo = _load_configs()
+    config = global_config.copy()
     config.update(repo)
 
     # Merge and deduplicate args
-    config["args"] = _merge_args(
-        standard.get("args", []), renv.get("args", []), repo.get("args", [])
-    )
+    config["args"] = _merge_args(global_config.get("args", []), repo.get("args", []))
     # Merge and deduplicate blacklists
     config["extension-blacklist"] = _merge_blacklists(
-        standard.get("extension-blacklist", []),
-        renv.get("extension-blacklist", []),
+        global_config.get("extension-blacklist", []),
         repo.get("extension-blacklist", []),
     )
 
@@ -762,17 +769,14 @@ def build_rocker_config(
     )
 
     meta = {
-        "original_global_args": standard.get("args", []) or None,
-        "original_project_args": (renv.get("args", []) + repo.get("args", [])) or None,
+        "original_global_args": global_config.get("args", []) or None,
+        "original_project_args": repo.get("args", []) or None,
         "merged_args_before_blacklist": config.get("args", []),
         "removed_by_blacklist": [],
         "blacklist": config.get("extension-blacklist", []),
-        "original_global_blacklist": standard.get("extension-blacklist", []) or None,
-        "original_project_blacklist": (
-            renv.get("extension-blacklist", []) + repo.get("extension-blacklist", [])
-        )
-        or None,
-        "global_config_used": bool(standard or renv),
+        "original_global_blacklist": global_config.get("extension-blacklist", []) or None,
+        "original_project_blacklist": repo.get("extension-blacklist", []) or None,
+        "global_config_used": bool(global_config),
         "project_config_used": bool(repo),
         "source_files": [],
     }

@@ -10,4 +10,6 @@ args:
   - ssh
   - ssh-client
   - fzf
+  - auto
+  - deps-devtools
   
