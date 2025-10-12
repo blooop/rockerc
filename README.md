@@ -14,27 +14,19 @@
 
 ## Installation
 
-### Recommended Method:
+To quickly install `rockerc` and its executables, follow these steps:
 
-Install [pipx](https://pypa.github.io/pipx/) (if not already installed):
+1. **Install [uv](https://github.com/astral-sh/uv):**
+	```bash
+	curl -Ls https://astral.sh/uv/install.sh | bash
+	```
 
-```
-sudo apt install pipx
-pipx ensurepath
-```
+2. **Install rockerc and executables from rocker:**
+	```bash
+	uv tool install rockerc --with-executables-from rocker
+	```
 
-Then install rockerc and its dependencies globally with:
-
-```
-pipx install --include-deps rockerc
-```
-
-to develop run
-```
-pipx install --include-deps . --force
-```
-
-This will ensure that `rockerc` and `rocker` commands are available on your PATH.
+This will install `rockerc` and make its CLI tools available in your environment.
 
 ## Architecture
 
