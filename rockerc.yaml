@@ -14,6 +14,7 @@ args:
   - pull 
   - deps
   - git 
-  - pixi
   - cwd
+  - pixi
   - uv
+  - jquery

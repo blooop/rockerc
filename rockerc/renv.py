@@ -641,7 +641,13 @@ def _filter_unavailable_extensions(args: list[str]) -> Tuple[list[str], list[str
     removed = []
     for arg in args:
         normalized = arg.replace("_", "-")
-        if normalized in ESSENTIAL_CORE_ARGS or normalized in available:
+        # Always keep 'auto' and 'auto=...' arguments
+        if (
+            normalized == "auto"
+            or (isinstance(arg, str) and arg.startswith("auto="))
+            or normalized in ESSENTIAL_CORE_ARGS
+            or normalized in available
+        ):
             kept.append(arg)
         else:
             removed.append(arg)
@@ -719,6 +725,19 @@ def build_rocker_config(
     # Remove cwd extension - we use explicit volume mounts to /{repo} instead
     if "cwd" in config["args"]:
         config["args"].remove("cwd")
+
+    # Ensure 'auto' is always present and set to correct path
+    auto_path = f"~/renv/{repo_spec.owner}/{repo_spec.repo}/{repo_spec.branch}/{repo_spec.repo}"
+    found_auto = False
+    for i, arg in enumerate(config["args"]):
+        if arg == "auto" or (isinstance(arg, str) and arg.strip() == "auto"):
+            config["args"][i] = f"auto={auto_path}"
+            found_auto = True
+        elif isinstance(arg, str) and arg.startswith("auto="):
+            config["args"][i] = f"auto={auto_path}"
+            found_auto = True
+    if not found_auto:
+        config["args"].insert(0, f"auto={auto_path}")
 
     # Filter unavailable extensions
     filtered_args, removed_args = _filter_unavailable_extensions(config.get("args", []))
