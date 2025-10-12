@@ -72,4 +72,3 @@ _aid_completion() {
 
 complete -F _aid_completion aid
 # end aid completion
-

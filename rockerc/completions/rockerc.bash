@@ -17,4 +17,3 @@ _rockerc_completion() {
 
 complete -F _rockerc_completion rockerc
 # end rockerc completion
-

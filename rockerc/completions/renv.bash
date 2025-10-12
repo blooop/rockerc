@@ -82,4 +82,3 @@ _renv_completion() {
 complete -F _renv_completion renv
 complete -F _renv_completion renvvsc
 # end renv completion
-
