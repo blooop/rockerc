@@ -727,7 +727,7 @@ def build_rocker_config(
         config["args"].remove("cwd")
 
     # Ensure 'auto' is always present and set to correct path
-    auto_path = f"/renv/{repo_spec.owner}/{repo_spec.repo}/{repo_spec.branch}/{repo_spec.repo}"
+    auto_path = f"~/renv/{repo_spec.owner}/{repo_spec.repo}/{repo_spec.branch}/{repo_spec.repo}"
     found_auto = False
     for i, arg in enumerate(config["args"]):
         if arg == "auto" or (isinstance(arg, str) and arg.strip() == "auto"):
