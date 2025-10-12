@@ -415,17 +415,21 @@ def get_container_name(repo_spec: RepoSpec) -> str:
     Uses '.' separator between repo and branch, and 'sub-' prefix for subfolder
     to prevent naming conflicts between branch names and subfolder paths.
     """
-    safe_branch = repo_spec.branch.replace("/", "-")
-    # Use '.' separator between repo and branch
-    base_name = f"{repo_spec.repo}.{safe_branch}"
+
+    def sanitise_name(name: str) -> str:
+        # Lowercase and allow only alphanumeric, dash, underscore, dot
+        return re.sub(r"[^a-z0-9_.-]", "_", name.lower())
+
+    safe_owner = sanitise_name(repo_spec.owner)
+    safe_repo = sanitise_name(repo_spec.repo)
+    safe_branch = re.sub(r"[^a-z0-9_.-]", "-", repo_spec.branch.lower())
+    base_name = f"{safe_owner}-{safe_repo}.{safe_branch}"
     if repo_spec.subfolder:
-        # Use 'sub-' prefix and sanitize subfolder path
-        safe_subfolder = repo_spec.subfolder.replace("/", "-")
+        safe_subfolder = sanitise_name(repo_spec.subfolder.replace("/", "-"))
         result = f"{base_name}-sub-{safe_subfolder}"
     else:
         result = base_name
-    # Sanitize to allow only alphanumeric, dash, underscore, dot
-    return re.sub(r"[^a-zA-Z0-9_.-]", "_", result)
+    return result
 
 
 def get_hostname(repo_spec: RepoSpec) -> str:
@@ -433,8 +437,15 @@ def get_hostname(repo_spec: RepoSpec) -> str:
 
     Returns just the repo name as hostname, without branch information.
     """
-    # Sanitize to allow only alphanumeric, dash, underscore
-    return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_spec.repo)
+
+    def sanitise_hostname(name: str) -> str:
+        # Lowercase and allow only alphanumeric, dash, underscore
+        return re.sub(r"[^a-z0-9_-]", "_", name.lower())
+
+    safe_owner = sanitise_hostname(repo_spec.owner)
+    safe_repo = sanitise_hostname(repo_spec.repo)
+    # Hostname only uses repo name, but include owner for uniqueness
+    return f"{safe_owner}-{safe_repo}"
 
 
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:

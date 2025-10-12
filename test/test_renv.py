@@ -729,17 +729,29 @@ class TestContainerAndHostnameSanitization:
                 "repo-with-dashes.branch-with-dashes",
                 "repo-with-dashes",
             ),
+            ("MyOwner", "MyRepo", "Main", "myowner-myrepo.main", "myowner-myrepo"),
+            ("OWNER", "REPO", "BRANCH", "owner-repo.branch", "owner-repo"),
+            ("owner!@#", "repo!@#", "branch!@#", "owner___-repo___.branch---", "owner___-repo___"),
             (
-                "repo$special!chars",
-                "branch@weird#chars",
-                "repo_special_chars.branch_weird_chars",
-                "repo_special_chars",
+                "owner.with.dots",
+                "repo.with.dots",
+                "branch.with.dots",
+                "owner.with.dots-repo.with.dots.branch.with.dots",
+                "owner.with.dots-repo.with.dots",
             ),
             (
-                "repo.mixed-_.chars",
-                "branch.mixed-_.chars",
-                "repo.mixed-_.chars.branch.mixed-_.chars",  # dots allowed in container names
-                "repo_mixed-__chars",  # dots replaced with underscore in hostnames
+                "owner_with_underscores",
+                "repo_with_underscores",
+                "branch_with_underscores",
+                "owner_with_underscores-repo_with_underscores.branch_with_underscores",
+                "owner_with_underscores-repo_with_underscores",
+            ),
+            (
+                "owner-with-dashes",
+                "repo-with-dashes",
+                "branch-with-dashes",
+                "owner-with-dashes-repo-with-dashes.branch-with-dashes",
+                "owner-with-dashes-repo-with-dashes",
             ),
         ]
 
