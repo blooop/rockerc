@@ -5,11 +5,13 @@ Provides streamlined AI-driven development within containerized environments.
 Reuses renv infrastructure for container management and setup.
 """
 
-import sys
 import argparse
 import logging
+import pathlib
+import sys
 from typing import List, Optional
 
+from .completion_loader import load_completion_script
 from .renv import RepoSpec, manage_container
 
 
@@ -52,6 +54,12 @@ Examples:
         action="store_true",
         help="Pass --yolo to gemini agent",
     )
+    parser.add_argument(
+        "-f",
+        "--flash",
+        action="store_true",
+        help="Use Gemini in flash mode (gemini-2.5-flash)",
+    )
 
     # Repository specification
     parser.add_argument(
@@ -67,7 +75,36 @@ Examples:
     return parser.parse_args(args)
 
 
-def build_ai_command(agent: str, prompt: str) -> List[str]:
+def generate_aid_completion(shell: str = "bash") -> str:
+    """Generate completion script for the requested shell."""
+    if shell != "bash":
+        raise ValueError("Only bash completion is currently supported for aid")
+    return load_completion_script("aid")
+
+
+def aid_completion_block(shell: str = "bash") -> str:
+    """Return the completion block for aid with standard markers."""
+    script = generate_aid_completion(shell)
+    return f"{script.rstrip()}\n"
+
+
+def install_aid_completion(shell: str = "bash", rc_path: Optional[pathlib.Path] = None) -> int:
+    """Install or update aid shell completion via centralized installer."""
+    if shell != "bash":
+        logging.error("Only bash completion is currently supported for aid")
+        return 1
+
+    try:
+        from .completion import install_all_completions
+    except ImportError as error:  # pragma: no cover - defensive
+        logging.error("Unable to load completion installer: %s", error)
+        return 1
+    return install_all_completions(rc_path)
+
+
+def build_ai_command(
+    agent: str, prompt: str, *, yolo: bool = False, flash: bool = False
+) -> List[str]:
     """Build the AI CLI command for the specified agent and prompt.
 
     Args:
@@ -80,23 +117,17 @@ def build_ai_command(agent: str, prompt: str) -> List[str]:
     # Escape single quotes in prompt for shell safety
     escaped_prompt = prompt.replace("'", "'\"'\"'")
 
-    def build_gemini_cmd(yolo: bool) -> List[str]:
+    def build_gemini_cmd(yolo_flag: bool, flash_flag: bool) -> List[str]:
         cmd = ["gemini", "--prompt-interactive"]
-        if yolo:
+        if flash_flag:
+            cmd.extend(["--model", "gemini-2.5-flash"])
+        if yolo_flag:
             cmd.append("--yolo")
         cmd.append(f'"{escaped_prompt}"')
         return cmd
 
     if agent == "gemini":
-        # Use gemini CLI with --prompt-interactive and optional --yolo
-        import inspect
-        frame = inspect.currentframe()
-        outer = frame.f_back
-        parsed_args = outer.f_locals.get("parsed_args")
-        yolo = False
-        if parsed_args and hasattr(parsed_args, "yolo"):
-            yolo = parsed_args.yolo or getattr(parsed_args, "y", False)
-        return build_gemini_cmd(yolo)
+        return build_gemini_cmd(yolo, flash)
     if agent == "claude":
         # Use claude CLI - send prompt then start interactive mode
         return [
@@ -131,8 +162,18 @@ def run_aid(args: Optional[List[str]] = None) -> int:
             f"Using {parsed_args.agent} with prompt: {prompt_text[:100]}{'...' if len(prompt_text) > 100 else ''}"
         )
 
+        if parsed_args.flash and parsed_args.agent != "gemini":
+            logging.warning(
+                "--flash is only supported with Gemini; ignoring for %s", parsed_args.agent
+            )
+
         # Build AI command
-        ai_command = build_ai_command(parsed_args.agent, prompt_text)
+        ai_command = build_ai_command(
+            parsed_args.agent,
+            prompt_text,
+            yolo=getattr(parsed_args, "yolo", False),
+            flash=getattr(parsed_args, "flash", False) if parsed_args.agent == "gemini" else False,
+        )
 
         # Use renv's container management to execute the AI command
         return manage_container(

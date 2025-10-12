@@ -24,7 +24,7 @@ You can also use renv to run commands directly in the container and branch.  The
 
 Enable shell autocompletion:
 ```bash
-renv --install
+rockerc --install
 source ~/.bashrc  # or restart your terminal
 ```
 

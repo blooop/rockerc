@@ -35,6 +35,8 @@ import re
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Tuple
 from contextlib import contextmanager
+
+from .completion_loader import load_completion_script
 from .rockerc import deduplicate_extensions
 
 
@@ -230,119 +232,25 @@ def fuzzy_select_repo() -> Optional[str]:
     return selected
 
 
-def install_shell_completion() -> int:
-    """Install shell autocompletion for renv"""
-    bash_completion = r"""# renv completion
-_renv_completion() {
-    local cur prev opts
-    COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    prev="${COMP_WORDS[COMP_CWORD-1]}"
-    
-    # Basic options
-    opts="--help --install --force --nocache --no-container"
-    
-    if [[ ${cur} == -* ]]; then
-        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
-        return 0
-    fi
-    
-    # Complete repository specifications
-    if [[ ${COMP_CWORD} -eq 1 ]]; then
-        local renv_root="${RENV_DIR:-$HOME/renv}"
-        local cache_root="$renv_root/.cache"
+def renv_completion_block(shell: str = "bash") -> str:
+    """Return the completion block for renv."""
+    if shell != "bash":
+        raise ValueError("Only bash completion is currently supported")
+    return f"{load_completion_script('renv').rstrip()}\n"
 
-        # Check if we're completing subfolders (after #)
-        if [[ "$cur" == *"#"* ]]; then
-            # Extract owner/repo@branch from before #
-            local spec_part="${cur%%#*}"
-            local subfolder_part="${cur##*#}"
-            local repo_part="${spec_part%%@*}"
-            local branch_part="${spec_part##*@}"
-            local owner="${repo_part%%/*}"
-            local repo="${repo_part##*/}"
 
-            # Try to find the branch directory in renv
-            local renv_root="${RENV_DIR:-$HOME/renv}"
-            local safe_branch="${branch_part//\//-}"
-            local branch_dir="$renv_root/$owner/$repo/$safe_branch/$repo"
-
-            if [[ -d "$branch_dir" ]]; then
-                # List directories in the branch (exclude .git)
-                local folders=$(find "$branch_dir" -type d -not -path "*/.git/*" -not -name ".git" | sed "s|$branch_dir/||" | grep -v "^$" | xargs)
-                local completions=""
-                for folder in $folders; do
-                    completions="$completions $spec_part#$folder"
-                done
-                COMPREPLY=( $(compgen -W "${completions}" -- ${cur}) )
-            fi
-        # Check if we're completing branches (after @)
-        elif [[ "$cur" == *"@"* ]]; then
-            # Extract owner/repo from before @
-            local repo_part="${cur%%@*}"
-            local branch_part="${cur##*@}"
-            local owner="${repo_part%%/*}"
-            local repo="${repo_part##*/}"
-
-            local repo_dir="$cache_root/$owner/$repo"
-            if [[ -d "$repo_dir" ]]; then
-                local branches=$(git -C "$repo_dir" branch -r 2>/dev/null | sed 's/.*origin\\///' | grep -v HEAD | xargs)
-                local completions=""
-                for branch in $branches; do
-                    completions="$completions $repo_part@$branch"
-                done
-                COMPREPLY=( $(compgen -W "${completions}" -- ${cur}) )
-            fi
-        else
-            # Complete repository names without trailing space
-            compopt -o nospace
-
-            if [[ -d "$cache_root" ]]; then
-                local repos=""
-                local users=$(find "$cache_root" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^\\.cache$")
-                for user in $users; do
-                    if [[ -d "$cache_root/$user" ]]; then
-                        local user_repos=$(find "$cache_root/$user" -maxdepth 1 -type d -exec basename {} \\; | grep -v "^$user$")
-                        for repo in $user_repos; do
-                            repos="$repos $user/$repo"
-                        done
-                    fi
-                done
-                COMPREPLY=( $(compgen -W "${repos}" -- ${cur}) )
-            fi
-        fi
-    fi
-    
-    return 0
-}
-
-complete -F _renv_completion renv
-complete -F _renv_completion renvvsc
-"""
-
-    # Install to .bashrc
-    bashrc_path = pathlib.Path.home() / ".bashrc"
+def install_shell_completion(shell: str = "bash", rc_path: Optional[pathlib.Path] = None) -> int:
+    """Install shell autocompletion via the centralized installer."""
+    if shell != "bash":
+        logging.error("Only bash completion is currently supported")
+        return 1
 
     try:
-        # Check if already installed
-        if bashrc_path.exists():
-            with open(bashrc_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                if "# renv completion" in content:
-                    logging.info("renv completion already installed in ~/.bashrc")
-                    return 0
-
-        # Append completion to .bashrc
-        with open(bashrc_path, "a", encoding="utf-8") as f:
-            f.write("\n" + bash_completion + "\n")
-
-        logging.info("Shell completion installed to ~/.bashrc")
-        logging.info("Run 'source ~/.bashrc' or restart your terminal to enable completion")
-        return 0
-
-    except Exception as e:
-        logging.error(f"Failed to install shell completion: {e}")
+        from .completion import install_all_completions
+    except ImportError as error:  # pragma: no cover - defensive
+        logging.error("Unable to load completion installer: %s", error)
         return 1
+    return install_all_completions(rc_path)
 
 
 def get_repo_dir(repo_spec: RepoSpec) -> pathlib.Path:
@@ -1439,14 +1347,9 @@ def run_renv(args: Optional[List[str]] = None) -> int:
 
     parser.add_argument("--nocache", action="store_true", help="Rebuild container with no cache")
 
-    parser.add_argument("--install", action="store_true", help="Install shell autocompletion")
-
     parser.add_argument("--vsc", action="store_true", help="Launch with VS Code integration")
 
     parsed_args = parser.parse_args(args)
-
-    if parsed_args.install:
-        return install_shell_completion()
 
     # Interactive fuzzy finder if no repo_spec provided
     if not parsed_args.repo_spec:
