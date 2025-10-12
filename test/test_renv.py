@@ -1,6 +1,5 @@
 import pathlib
 from unittest.mock import Mock, patch
-
 import pytest
 from rockerc.renv import (
     RepoSpec,
@@ -15,6 +14,8 @@ from rockerc.renv import (
     manage_container,
     run_renv,
     _verify_sparse_checkout_path,
+    get_container_name,
+    get_hostname,
 )
 
 
@@ -703,8 +704,6 @@ class TestRockerCommandWorkingDirectory:
 
 class TestContainerAndHostnameSanitization:
     def test_repo_owner_and_name_lowercase(self):
-        from rockerc.renv import RepoSpec, get_container_name, get_hostname
-
         # Mixed-case owner and repo
         spec = RepoSpec.parse("MiXeDOwner/MiXeDRepo@MainBranch")
         # Owner and repo should be lowercased
@@ -719,8 +718,6 @@ class TestContainerAndHostnameSanitization:
         assert hostname == "mixedrepo", f"Hostname not lowercased: {hostname}"
 
     def test_container_and_hostname_sanitization(self):
-        from rockerc.renv import get_container_name, get_hostname
-
         # Edge cases for repo and branch names
         # Container names allow: alphanumeric, dash, underscore, dot
         # Hostnames allow: alphanumeric, dash, underscore (no dots)
@@ -771,16 +768,12 @@ class TestContainerAndHostnameSanitization:
             )
 
     def test_get_hostname_empty_repo(self):
-        from rockerc.renv import get_hostname
-
         repo_spec = RepoSpec("owner", "", "main")
         # Empty repo name should still work (returns empty string after sanitization)
         hostname = get_hostname(repo_spec)
         assert hostname == ""
 
     def test_get_hostname_special_characters(self):
-        from rockerc.renv import get_hostname
-
         repo_spec = RepoSpec("owner", "test!@#repo", "main")
         # Should sanitize special characters
         hostname = get_hostname(repo_spec)
@@ -790,8 +783,6 @@ class TestContainerAndHostnameSanitization:
         assert hostname == "test___repo", f"Expected 'test___repo', got '{hostname}'"
 
     def test_get_hostname_excessively_long_name(self):
-        from rockerc.renv import get_hostname
-
         long_repo_name = "a" * 300
         repo_spec = RepoSpec("owner", long_repo_name, "main")
         hostname = get_hostname(repo_spec)
@@ -803,16 +794,12 @@ class TestContainerAndHostnameSanitization:
         )
 
     def test_container_name_with_subfolder(self):
-        from rockerc.renv import get_container_name
-
         repo_spec = RepoSpec("owner", "repo", "main", "src/core")
         container_name = get_container_name(repo_spec)
         # Should include subfolder with sub- prefix
         assert container_name == "repo.main-sub-src-core"
 
     def test_container_name_special_chars_in_subfolder(self):
-        from rockerc.renv import get_container_name
-
         repo_spec = RepoSpec("owner", "repo", "main", "src/core@v2")
         container_name = get_container_name(repo_spec)
         # Special characters in subfolder should be sanitized
