@@ -62,7 +62,7 @@ def install_all_completions(rc_path: Optional[pathlib.Path] = None) -> int:
         if rc_target.exists():
             existing_content = rc_target.read_text(encoding="utf-8")
 
-        # Remove any existing completion block before appending
+        # Remove any existing completion block and legacy blocks before appending
         def remove_block(text: str, start: str, end: str) -> str:
             lines = text.splitlines()
             out = []
@@ -78,7 +78,17 @@ def install_all_completions(rc_path: Optional[pathlib.Path] = None) -> int:
                     out.append(line)
             return "\n".join(out)
 
-        cleaned_content = remove_block(existing_content, _RC_BLOCK_START, _RC_BLOCK_END).strip()
+        # Remove main block
+        cleaned_content = remove_block(existing_content, _RC_BLOCK_START, _RC_BLOCK_END)
+        # Remove legacy blocks
+        for block_start, block_end in _LEGACY_BLOCKS.items():
+            cleaned_content = remove_block(cleaned_content, block_start, block_end)
+        # Remove legacy single lines
+        cleaned_lines = []
+        for line in cleaned_content.splitlines():
+            if not any(line.strip().startswith(single) for single in _LEGACY_SINGLE_LINES):
+                cleaned_lines.append(line)
+        cleaned_content = "\n".join(cleaned_lines).strip()
         escaped_path = str(completion_path).replace('"', r"\"")
         source_line = f'source "{escaped_path}"'
         block = "\n".join([_RC_BLOCK_START, source_line, _RC_BLOCK_END])
