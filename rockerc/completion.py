@@ -7,6 +7,8 @@ import os
 import pathlib
 from typing import Optional
 
+from .completion_loader import load_completion_script
+
 _RC_BLOCK_START = "# >>> rockerc completions >>>"
 _RC_BLOCK_END = "# <<< rockerc completions <<<"
 
@@ -27,26 +29,7 @@ _LEGACY_SINGLE_LINES = {
 
 def _rockerc_bash_completion_script() -> str:
     """Return bash completion script for the rockerc CLI."""
-    return r"""# rockerc completion
-_rockerc_completion() {
-    local cur prev opts
-    COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    prev="${COMP_WORDS[COMP_CWORD-1]}"
-
-    opts="--help --vsc --force -f --verbose -v --show-dockerfile --install --rc-file --auto"
-
-    if [[ ${cur} == -* ]]; then
-        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
-        return 0
-    fi
-
-    return 0
-}
-
-complete -F _rockerc_completion rockerc
-# end rockerc completion
-"""
+    return load_completion_script("rockerc")
 
 
 def _completion_file_path() -> pathlib.Path:
@@ -103,13 +86,11 @@ def install_all_completions(rc_path: Optional[pathlib.Path] = None) -> int:
 
     try:
         completion_path.parent.mkdir(parents=True, exist_ok=True)
-        from .aid import aid_completion_block
-        from .renv import renv_completion_block
 
         combined_script_parts = [
             _rockerc_bash_completion_script().rstrip(),
-            renv_completion_block().rstrip(),
-            aid_completion_block().rstrip(),
+            load_completion_script("renv").rstrip(),
+            load_completion_script("aid").rstrip(),
         ]
         combined_script = "\n\n".join(combined_script_parts) + "\n"
         completion_path.write_text(combined_script, encoding="utf-8")

@@ -28,6 +28,8 @@ def test_install_shell_completion_refreshes(tmp_path, monkeypatch):
     assert completions_content.count("# renv completion") == 1
     assert completions_content.count("# rockerc completion") == 1
     assert completions_content.count("# aid completion") == 1
+    assert "-exec basename {} \\;" in completions_content
+    assert "\\\\;" not in completions_content
 
 
 def test_install_all_completions_idempotent(tmp_path, monkeypatch):
@@ -59,3 +61,5 @@ def test_install_all_completions_idempotent(tmp_path, monkeypatch):
     assert second_completion.count("# rockerc completion") == 1
     assert second_completion.count("# renv completion") == 1
     assert second_completion.count("# aid completion") == 1
+    assert "-exec basename {} \\;" in second_completion
+    assert "\\\\;" not in second_completion
