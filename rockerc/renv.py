@@ -230,27 +230,23 @@ def fuzzy_select_repo() -> Optional[str]:
     return selected
 
 
-def install_shell_completion(shell: str = "bash", rc_path: Optional[pathlib.Path] = None) -> int:
-    """Install shell autocompletion for renv and renvvsc."""
-    if shell != "bash":
-        logging.error("Only bash completion is currently supported")
-        return 1
-
-    bash_completion = r"""# renv completion
+def _renv_bash_completion_script() -> str:
+    """Return the bash completion script for renv and renvvsc."""
+    return r"""# renv completion
 _renv_completion() {
     local cur prev opts
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    
+
     # Basic options
-    opts="--help --install --force --nocache --no-container"
-    
+    opts="--help --force --nocache --no-container"
+
     if [[ ${cur} == -* ]]; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
         return 0
     fi
-    
+
     # Complete repository specifications
     if [[ ${COMP_CWORD} -eq 1 ]]; then
         local renv_root="${RENV_DIR:-$HOME/renv}"
@@ -260,14 +256,12 @@ _renv_completion() {
         if [[ "$cur" == *"#"* ]]; then
             # Extract owner/repo@branch from before #
             local spec_part="${cur%%#*}"
-            local subfolder_part="${cur##*#}"
             local repo_part="${spec_part%%@*}"
             local branch_part="${spec_part##*@}"
             local owner="${repo_part%%/*}"
             local repo="${repo_part##*/}"
 
             # Try to find the branch directory in renv
-            local renv_root="${RENV_DIR:-$HOME/renv}"
             local safe_branch="${branch_part//\//-}"
             local branch_dir="$renv_root/$owner/$repo/$safe_branch/$repo"
 
@@ -284,7 +278,6 @@ _renv_completion() {
         elif [[ "$cur" == *"@"* ]]; then
             # Extract owner/repo from before @
             local repo_part="${cur%%@*}"
-            local branch_part="${cur##*@}"
             local owner="${repo_part%%/*}"
             local repo="${repo_part##*/}"
 
@@ -316,73 +309,35 @@ _renv_completion() {
             fi
         fi
     fi
-    
+
     return 0
 }
 
 complete -F _renv_completion renv
 complete -F _renv_completion renvvsc
+# end renv completion
 """
 
-    bash_completion += "\n# end renv completion\n"
+
+def renv_completion_block(shell: str = "bash") -> str:
+    """Return the completion block for renv."""
+    if shell != "bash":
+        raise ValueError("Only bash completion is currently supported")
+    return f"{_renv_bash_completion_script().rstrip()}\n"
+
+
+def install_shell_completion(shell: str = "bash", rc_path: Optional[pathlib.Path] = None) -> int:
+    """Install shell autocompletion via the centralized installer."""
+    if shell != "bash":
+        logging.error("Only bash completion is currently supported")
+        return 1
 
     try:
-        bashrc_path = rc_path if rc_path is not None else pathlib.Path.home() / ".bashrc"
-        bashrc_path = bashrc_path.expanduser()
-        bashrc_path.parent.mkdir(parents=True, exist_ok=True)
-
-        existing_content = ""
-        if bashrc_path.exists():
-            existing_content = bashrc_path.read_text(encoding="utf-8")
-
-        start_marker = "# renv completion"
-        end_marker_new = "# end renv completion"
-        end_marker_legacy = "complete -F _renv_completion renvvsc"
-
-        def _strip_existing(content: str) -> str:
-            current = content
-            while True:
-                start_idx = current.find(start_marker)
-                if start_idx == -1:
-                    break
-                end_idx = current.find(end_marker_new, start_idx)
-                if end_idx != -1:
-                    end_idx += len(end_marker_new)
-                else:
-                    end_idx = current.find(end_marker_legacy, start_idx)
-                    if end_idx != -1:
-                        end_idx = current.find("\n", end_idx)
-                        if end_idx == -1:
-                            end_idx = len(current)
-                        else:
-                            end_idx += 1
-                    else:
-                        end_idx = start_idx + len(start_marker)
-                before = current[:start_idx].rstrip("\n")
-                after = current[end_idx:].lstrip("\n")
-                if before and after:
-                    current = before + "\n\n" + after
-                elif before:
-                    current = before + "\n"
-                else:
-                    current = after
-            return current.rstrip("\n")
-
-        updated_content = _strip_existing(existing_content)
-        if updated_content:
-            updated_content = f"{updated_content}\n\n{bash_completion}\n"
-        else:
-            updated_content = f"{bash_completion}\n"
-
-        bashrc_path.write_text(updated_content, encoding="utf-8")
-
-        logging.info("renv completion installed to %s", bashrc_path)
-        logging.info("Run 'source %s' or restart your terminal to enable completion", bashrc_path)
-        return 0
-
-    except Exception as e:
-        logging.error(f"Failed to install shell completion: {e}")
+        from .completion import install_all_completions
+    except ImportError as error:  # pragma: no cover - defensive
+        logging.error("Unable to load completion installer: %s", error)
         return 1
+    return install_all_completions(rc_path)
 
 
 def get_repo_dir(repo_spec: RepoSpec) -> pathlib.Path:
@@ -1479,14 +1434,9 @@ def run_renv(args: Optional[List[str]] = None) -> int:
 
     parser.add_argument("--nocache", action="store_true", help="Rebuild container with no cache")
 
-    parser.add_argument("--install", action="store_true", help="Install shell autocompletion")
-
     parser.add_argument("--vsc", action="store_true", help="Launch with VS Code integration")
 
     parsed_args = parser.parse_args(args)
-
-    if parsed_args.install:
-        return install_shell_completion()
 
     # Interactive fuzzy finder if no repo_spec provided
     if not parsed_args.repo_spec:

@@ -126,8 +126,11 @@ def test_generate_aid_completion_only_bash():
         generate_aid_completion("zsh")
 
 
-def test_install_aid_completion_overwrites_existing(tmp_path):
+def test_install_aid_completion_overwrites_existing(tmp_path, monkeypatch):
     """Ensure install overwrites previous installation."""
+    completion_file = tmp_path / "completions.sh"
+    monkeypatch.setenv("ROCKERC_COMPLETION_FILE", str(completion_file))
+
     rc_file = tmp_path / "bashrc"
     rc_file.write_text(
         "# aid completion\nold content\ncomplete -F _aid_completion aid\n",
@@ -136,18 +139,27 @@ def test_install_aid_completion_overwrites_existing(tmp_path):
     result = install_aid_completion(rc_path=rc_file)
     assert result == 0
     written = rc_file.read_text(encoding="utf-8")
-    assert "old content" not in written
-    assert written.count("# aid completion") == 1
-    assert "complete -F _aid_completion aid" in written
-    assert written.strip().endswith("# end aid completion")
+    assert "# aid completion" not in written
+    assert "complete -F _aid_completion aid" not in written
+    assert "# >>> rockerc completions >>>" in written
+    assert str(completion_file) in written
+
+    completions_content = completion_file.read_text(encoding="utf-8")
+    assert completions_content.count("# aid completion") == 1
+    assert "old content" not in completions_content
 
 
-def test_install_aid_completion_creates_file(tmp_path):
+def test_install_aid_completion_creates_file(tmp_path, monkeypatch):
     """Install should create rc file when missing."""
+    completion_file = tmp_path / "completions.sh"
+    monkeypatch.setenv("ROCKERC_COMPLETION_FILE", str(completion_file))
+
     rc_file = tmp_path / "bashrc"
     result = install_aid_completion(rc_path=rc_file)
     assert result == 0
     assert rc_file.exists()
     content = rc_file.read_text(encoding="utf-8")
-    assert "# aid completion" in content
-    assert content.strip().endswith("# end aid completion")
+    assert "# >>> rockerc completions >>>" in content
+    assert str(completion_file) in content
+    completions_content = completion_file.read_text(encoding="utf-8")
+    assert "# aid completion" in completions_content

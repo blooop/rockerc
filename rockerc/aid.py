@@ -151,6 +151,7 @@ _aid_completion() {
 }
 
 complete -F _aid_completion aid
+# end aid completion
 """
 
 
@@ -161,74 +162,24 @@ def generate_aid_completion(shell: str = "bash") -> str:
     return _aid_bash_completion_script()
 
 
+def aid_completion_block(shell: str = "bash") -> str:
+    """Return the completion block for aid with standard markers."""
+    script = generate_aid_completion(shell)
+    return f"{script.rstrip()}\n"
+
+
 def install_aid_completion(shell: str = "bash", rc_path: Optional[pathlib.Path] = None) -> int:
-    """Install or update aid shell completion."""
-    try:
-        completion_script = generate_aid_completion(shell)
-        completion_script = f"{completion_script}\n# end aid completion"
-    except ValueError as error:
-        logging.error("%s", error)
+    """Install or update aid shell completion via centralized installer."""
+    if shell != "bash":
+        logging.error("Only bash completion is currently supported for aid")
         return 1
 
-    if rc_path is None:
-        if shell == "bash":
-            rc_path = pathlib.Path.home() / ".bashrc"
-        else:
-            logging.error("Do not know where to install completion for shell '%s'", shell)
-            return 1
-
-    rc_path = rc_path.expanduser()
-    rc_path.parent.mkdir(parents=True, exist_ok=True)
-
-    start_marker = "# aid completion"
-    end_marker_new = "# end aid completion"
-    end_marker_legacy = "complete -F _aid_completion aid"
-
     try:
-        existing_content = ""
-        if rc_path.exists():
-            existing_content = rc_path.read_text(encoding="utf-8")
-
-        def _strip_existing(content: str) -> str:
-            current = content
-            while True:
-                start_idx = current.find(start_marker)
-                if start_idx == -1:
-                    break
-                end_idx = current.find(end_marker_new, start_idx)
-                if end_idx != -1:
-                    end_idx += len(end_marker_new)
-                else:
-                    end_idx = current.find(end_marker_legacy, start_idx)
-                    if end_idx == -1:
-                        current = current[:start_idx] + current[start_idx + len(start_marker) :]
-                        continue
-                    end_idx = current.find("\n", end_idx)
-                    if end_idx == -1:
-                        end_idx = len(current)
-                    else:
-                        end_idx += 1
-                before = current[:start_idx].rstrip("\n")
-                after = current[end_idx:]
-                if before and after and not before.endswith("\n"):
-                    before += "\n"
-                current = before + after
-            return current
-
-        updated_content = _strip_existing(existing_content)
-        updated_content = updated_content.rstrip("\n")
-        if updated_content:
-            updated_content = f"{updated_content}\n\n{completion_script}\n"
-        else:
-            updated_content = f"{completion_script}\n"
-
-        rc_path.write_text(updated_content, encoding="utf-8")
-        logging.info("aid completion installed to %s", rc_path)
-        logging.info("Run 'source %s' or restart your terminal to enable completion", rc_path)
-        return 0
-    except OSError as error:
-        logging.error("Failed to install aid completion: %s", error)
+        from .completion import install_all_completions
+    except ImportError as error:  # pragma: no cover - defensive
+        logging.error("Unable to load completion installer: %s", error)
         return 1
+    return install_all_completions(rc_path)
 
 
 def build_ai_command(

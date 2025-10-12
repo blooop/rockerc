@@ -1,11 +1,28 @@
-# pylint: disable=too-many-return-statements
 """Utilities for installing shell autocompletion scripts."""
 
 from __future__ import annotations
 
 import logging
+import os
 import pathlib
-from typing import Callable, Optional
+from typing import Optional
+
+_RC_BLOCK_START = "# >>> rockerc completions >>>"
+_RC_BLOCK_END = "# <<< rockerc completions <<<"
+
+_LEGACY_BLOCKS = {
+    "# rockerc completion": "# end rockerc completion",
+    "# renv completion": "# end renv completion",
+    "# aid completion": "# end aid completion",
+    _RC_BLOCK_START: _RC_BLOCK_END,
+}
+
+_LEGACY_SINGLE_LINES = {
+    "complete -F _rockerc_completion rockerc",
+    "complete -F _renv_completion renv",
+    "complete -F _renv_completion renvvsc",
+    "complete -F _aid_completion aid",
+}
 
 
 def _rockerc_bash_completion_script() -> str:
@@ -32,94 +49,91 @@ complete -F _rockerc_completion rockerc
 """
 
 
-def _write_completion_block(
-    *,
-    script: str,
-    rc_path: Optional[pathlib.Path],
-    start_marker: str,
-    end_marker: str,
-) -> int:
-    """Write (and replace) a completion block inside rc file."""
-    try:
-        target_path = rc_path if rc_path is not None else pathlib.Path.home() / ".bashrc"
-        target_path = target_path.expanduser()
-        target_path.parent.mkdir(parents=True, exist_ok=True)
+def _completion_file_path() -> pathlib.Path:
+    """Return the path where aggregated completion scripts should be stored."""
+    override = os.environ.get("ROCKERC_COMPLETION_FILE")
+    if override:
+        return pathlib.Path(override).expanduser()
+    return pathlib.Path.home() / ".config" / "rockerc" / "completions.sh"
 
-        existing_content = ""
-        if target_path.exists():
-            existing_content = target_path.read_text(encoding="utf-8")
 
-        def _strip_existing(content: str) -> str:
-            current = content
-            while True:
-                start_idx = current.find(start_marker)
-                if start_idx == -1:
-                    break
-                end_idx = current.find(end_marker, start_idx)
-                if end_idx != -1:
-                    end_idx += len(end_marker)
-                else:
-                    end_idx = current.find("\n", start_idx + len(start_marker))
-                    if end_idx == -1:
-                        end_idx = len(current)
-                    else:
-                        end_idx += 1
-                before = current[:start_idx].rstrip("\n")
-                after = current[end_idx:].lstrip("\n")
-                if before and after:
-                    current = before + "\n\n" + after
-                elif before:
-                    current = before + "\n"
-                else:
-                    current = after
-            return current.rstrip("\n")
+def _strip_old_completion_blocks(content: str) -> str:
+    """Remove legacy inline completion blocks from rc files."""
+    lines = content.splitlines()
+    cleaned: list[str] = []
+    skip_until: Optional[str] = None
 
-        updated_content = _strip_existing(existing_content)
-        if updated_content:
-            updated_content = f"{updated_content}\n\n{script}\n"
+    for line in lines:
+        stripped = line.strip()
+        if skip_until is not None:
+            if stripped == skip_until:
+                skip_until = None
+            continue
+        if stripped in _LEGACY_BLOCKS:
+            skip_until = _LEGACY_BLOCKS[stripped]
+            continue
+        if stripped in _LEGACY_SINGLE_LINES:
+            continue
+        cleaned.append(line)
+
+    # Collapse duplicate blank lines and trim leading/trailing blanks.
+    collapsed: list[str] = []
+    previous_blank = False
+    for line in cleaned:
+        if line.strip():
+            collapsed.append(line)
+            previous_blank = False
         else:
-            updated_content = f"{script}\n"
+            if not previous_blank:
+                collapsed.append(line)
+            previous_blank = True
 
-        target_path.write_text(updated_content, encoding="utf-8")
-        logging.info("rockerc completion installed to %s", target_path)
-        logging.info("Run 'source %s' or restart your terminal to enable completion", target_path)
-        return 0
-    except OSError as error:
-        logging.error("Failed to install rockerc completion: %s", error)
-        return 1
+    while collapsed and not collapsed[0].strip():
+        collapsed.pop(0)
+    while collapsed and not collapsed[-1].strip():
+        collapsed.pop()
 
-
-def install_rockerc_completion(rc_path: Optional[pathlib.Path] = None) -> int:
-    """Install bash completion for the rockerc CLI."""
-    script = _rockerc_bash_completion_script()
-    return _write_completion_block(
-        script=script,
-        rc_path=rc_path,
-        start_marker="# rockerc completion",
-        end_marker="# end rockerc completion",
-    )
+    return "\n".join(collapsed)
 
 
 def install_all_completions(rc_path: Optional[pathlib.Path] = None) -> int:
     """Install or refresh completion scripts for rockerc, renv/renvvsc, and aid."""
-    from .aid import install_aid_completion
-    from .renv import install_shell_completion
+    completion_path = _completion_file_path().expanduser()
+    rc_target = (rc_path if rc_path is not None else pathlib.Path.home() / ".bashrc").expanduser()
 
-    success = True
-    installers: list[tuple[str, Callable[[Optional[pathlib.Path]], int]]] = [
-        ("rockerc", install_rockerc_completion),
-        (
-            "renv",
-            lambda path, installer=install_shell_completion: installer(rc_path=path),
-        ),
-        (
-            "aid",
-            lambda path, installer=install_aid_completion: installer(rc_path=path),
-        ),
-    ]
-    for name, installer in installers:
-        result = installer(rc_path)
-        if result != 0:
-            logging.error("Completion installer for %s failed with exit code %s", name, result)
-            success = False
-    return 0 if success else 1
+    try:
+        completion_path.parent.mkdir(parents=True, exist_ok=True)
+        from .aid import aid_completion_block
+        from .renv import renv_completion_block
+
+        combined_script_parts = [
+            _rockerc_bash_completion_script().rstrip(),
+            renv_completion_block().rstrip(),
+            aid_completion_block().rstrip(),
+        ]
+        combined_script = "\n\n".join(combined_script_parts) + "\n"
+        completion_path.write_text(combined_script, encoding="utf-8")
+        logging.info("Wrote completion scripts to %s", completion_path)
+
+        rc_target.parent.mkdir(parents=True, exist_ok=True)
+        existing_content = ""
+        if rc_target.exists():
+            existing_content = rc_target.read_text(encoding="utf-8")
+
+        stripped_content = _strip_old_completion_blocks(existing_content).strip("\n")
+        escaped_path = str(completion_path).replace('"', r"\"")
+        source_line = f'source "{escaped_path}"'
+        block = "\n".join([_RC_BLOCK_START, source_line, _RC_BLOCK_END])
+
+        if stripped_content:
+            new_content = f"{stripped_content}\n\n{block}\n"
+        else:
+            new_content = f"{block}\n"
+
+        rc_target.write_text(new_content, encoding="utf-8")
+        logging.info("Added completion source block to %s", rc_target)
+        logging.info("Run 'source %s' or restart your terminal to enable completion", rc_target)
+        return 0
+    except OSError as error:
+        logging.error("Failed to install completions: %s", error)
+        return 1
