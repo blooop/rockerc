@@ -84,8 +84,8 @@ class TestRockerConfig:
         assert "nocleanup" not in config["args"]  # Removed to let rocker manage security properly
         # cwd extension removed - we use explicit volume mounts to /{repo} instead
         assert "cwd" not in config["args"]
-        assert config["name"] == "test_renv.main"
-        assert config["hostname"] == "test_renv"
+        assert config["name"] == "blooop-test_renv.main"
+        assert config["hostname"] == "blooop-test_renv"
         # Volume is NOT in config - it's added by prepare_launch_plan via build_rocker_arg_injections
         assert "volume" not in config
         # cwd extension picks up working directory, no explicit config needed
@@ -518,7 +518,7 @@ class TestManageContainer:
             "exec",
             "-w",
             "/test_renv",
-            "test_renv.main",
+            "blooop-test_renv.main",
             "git",
             "status",
         ]
@@ -710,48 +710,45 @@ class TestContainerAndHostnameSanitization:
         # Hostnames allow: alphanumeric, dash, underscore (no dots)
         cases = [
             # (repo, branch, expected_container_name, expected_hostname)
-            ("my-repo", "feature/awesome", "my-repo.feature-awesome", "my-repo"),
+            ("my-repo", "feature/awesome", "owner-my-repo.feature-awesome", "owner-my-repo"),
             (
                 "repo.with.dots",
                 "branch.with.dots",
-                "repo.with.dots.branch.with.dots",  # dots allowed in container names
-                "repo_with_dots",  # dots replaced with underscore in hostnames
+                "owner-repo.with.dots.branch.with.dots",
+                "owner-repo_with_dots",
             ),
             (
                 "repo_with_underscores",
                 "branch_with_underscores",
-                "repo_with_underscores.branch_with_underscores",
-                "repo_with_underscores",
+                "owner-repo_with_underscores.branch_with_underscores",
+                "owner-repo_with_underscores",
             ),
             (
                 "repo-with-dashes",
                 "branch-with-dashes",
-                "repo-with-dashes.branch-with-dashes",
-                "repo-with-dashes",
+                "owner-repo-with-dashes.branch-with-dashes",
+                "owner-repo-with-dashes",
             ),
-            ("MyOwner", "MyRepo", "Main", "myowner-myrepo.main", "myowner-myrepo"),
-            ("OWNER", "REPO", "BRANCH", "owner-repo.branch", "owner-repo"),
-            ("owner!@#", "repo!@#", "branch!@#", "owner___-repo___.branch---", "owner___-repo___"),
+            ("MyRepo", "Main", "owner-myrepo.main", "owner-myrepo"),
+            ("REPO", "BRANCH", "owner-repo.branch", "owner-repo"),
+            ("repo!@#", "branch!@#", "owner-repo___.branch---", "owner-repo___"),
             (
-                "owner.with.dots",
                 "repo.with.dots",
                 "branch.with.dots",
-                "owner.with.dots-repo.with.dots.branch.with.dots",
-                "owner.with.dots-repo.with.dots",
+                "owner-repo.with.dots.branch.with.dots",
+                "owner-repo_with_dots",
             ),
             (
-                "owner_with_underscores",
                 "repo_with_underscores",
                 "branch_with_underscores",
-                "owner_with_underscores-repo_with_underscores.branch_with_underscores",
-                "owner_with_underscores-repo_with_underscores",
+                "owner-repo_with_underscores.branch_with_underscores",
+                "owner-repo_with_underscores",
             ),
             (
-                "owner-with-dashes",
                 "repo-with-dashes",
                 "branch-with-dashes",
-                "owner-with-dashes-repo-with-dashes.branch-with-dashes",
-                "owner-with-dashes-repo-with-dashes",
+                "owner-repo-with-dashes.branch-with-dashes",
+                "owner-repo-with-dashes",
             ),
         ]
 
@@ -772,7 +769,7 @@ class TestContainerAndHostnameSanitization:
         repo_spec = RepoSpec("owner", "", "main")
         # Empty repo name should still work (returns empty string after sanitization)
         hostname = get_hostname(repo_spec)
-        assert hostname == ""
+        assert hostname == "owner-"
 
     def test_get_hostname_special_characters(self):
         from rockerc.renv import get_hostname
@@ -783,7 +780,7 @@ class TestContainerAndHostnameSanitization:
         assert all(c.isalnum() or c in ["-", "_"] for c in hostname), (
             f"Hostname '{hostname}' contains invalid characters"
         )
-        assert hostname == "test___repo", f"Expected 'test___repo', got '{hostname}'"
+        assert hostname == "owner-test___repo", f"Expected 'owner-test___repo', got '{hostname}'"
 
     def test_get_hostname_excessively_long_name(self):
         from rockerc.renv import get_hostname
@@ -794,7 +791,7 @@ class TestContainerAndHostnameSanitization:
         # Hostname length should be at most 255 characters (DNS limit)
         # However, current implementation doesn't enforce this, so it returns the full sanitized name
         # This test documents the current behavior
-        assert len(hostname) == 300, (
+        assert len(hostname) == 306, (
             f"Hostname length is {len(hostname)}, current implementation doesn't truncate"
         )
 
@@ -804,7 +801,7 @@ class TestContainerAndHostnameSanitization:
         repo_spec = RepoSpec("owner", "repo", "main", "src/core")
         container_name = get_container_name(repo_spec)
         # Should include subfolder with sub- prefix
-        assert container_name == "repo.main-sub-src-core"
+        assert container_name == "owner-repo.main-sub-src-core"
 
     def test_container_name_special_chars_in_subfolder(self):
         from rockerc.renv import get_container_name
@@ -812,4 +809,4 @@ class TestContainerAndHostnameSanitization:
         repo_spec = RepoSpec("owner", "repo", "main", "src/core@v2")
         container_name = get_container_name(repo_spec)
         # Special characters in subfolder should be sanitized
-        assert container_name == "repo.main-sub-src-core_v2"
+        assert container_name == "owner-repo.main-sub-src-core_v2"

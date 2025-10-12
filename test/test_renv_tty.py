@@ -66,7 +66,7 @@ def test_docker_exec_interactive_flags(
         + [
             "-w",
             "/test_renv",
-            "test_renv.main",
+            "blooop-test_renv.main",
             "/bin/bash",
         ]
     )
