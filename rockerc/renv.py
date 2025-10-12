@@ -341,42 +341,39 @@ def load_renv_rockerc_config() -> dict:
     """
     config_path = pathlib.Path.home() / ".rockerc.yaml"
 
+    config = {}
     # Copy template if config doesn't exist
     if not config_path.exists():
         # Check for legacy location first
         renv_dir = get_renv_root()
         legacy_config_path = renv_dir / "rockerc.yaml"
-
         if legacy_config_path.exists():
             logging.info(f"Using legacy config from {legacy_config_path}")
             try:
                 with open(legacy_config_path, "r", encoding="utf-8") as f:
-                    return yaml.safe_load(f) or {}
+                    config = yaml.safe_load(f) or {}
             except yaml.YAMLError as e:
                 logging.warning(f"Failed to parse YAML config at {legacy_config_path}: {e}")
-                return {}
             except Exception as e:
                 logging.warning(f"Error loading config at {legacy_config_path}: {e}")
-                return {}
-
-        # No existing config found, create from template
-        template_path = pathlib.Path(__file__).parent / "renv_rockerc_template.yaml"
-        if template_path.exists():
-            shutil.copy2(template_path, config_path)
-            logging.info(f"Created default rockerc config at {config_path}")
         else:
-            logging.warning(f"Template file not found at {template_path}")
-            return {}
-
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    except yaml.YAMLError as e:
-        logging.warning(f"Failed to parse YAML config at {config_path}: {e}")
-        return {}
-    except Exception as e:
-        logging.warning(f"Error loading config at {config_path}: {e}")
-        return {}
+            # No existing config found, create from template
+            template_path = pathlib.Path(__file__).parent / "renv_rockerc_template.yaml"
+            if template_path.exists():
+                shutil.copy2(template_path, config_path)
+                logging.info(f"Created default rockerc config at {config_path}")
+            else:
+                logging.warning(f"Template file not found at {template_path}")
+                config = {}
+    if not config:
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            logging.warning(f"Failed to parse YAML config at {config_path}: {e}")
+        except Exception as e:
+            logging.warning(f"Error loading config at {config_path}: {e}")
+    return config
 
 
 def load_repo_rockerc_config(worktree_dir: pathlib.Path) -> dict:
