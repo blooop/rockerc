@@ -702,6 +702,22 @@ class TestRockerCommandWorkingDirectory:
 
 
 class TestContainerAndHostnameSanitization:
+    def test_repo_owner_and_name_lowercase(self):
+        from rockerc.renv import RepoSpec, get_container_name, get_hostname
+
+        # Mixed-case owner and repo
+        spec = RepoSpec.parse("MiXeDOwner/MiXeDRepo@MainBranch")
+        # Owner and repo should be lowercased
+        assert spec.owner == "mixedowner"
+        assert spec.repo == "mixedrepo"
+        # Container name and hostname should also be lowercased
+        container_name = get_container_name(spec)
+        hostname = get_hostname(spec)
+        assert container_name.startswith("mixedrepo."), (
+            f"Container name not lowercased: {container_name}"
+        )
+        assert hostname == "mixedrepo", f"Hostname not lowercased: {hostname}"
+
     def test_container_and_hostname_sanitization(self):
         from rockerc.renv import get_container_name, get_hostname
 
