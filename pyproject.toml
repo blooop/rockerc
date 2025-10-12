@@ -8,7 +8,7 @@ license = "MIT"
 
 dependencies = [
   "rocker>=0.2.19",
-  "deps-rocker>=0.20",
+  "deps-rocker>=0.21",
   "pyyaml>=5",
   "iterfzf>=1.0.0",
 ]

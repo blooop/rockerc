@@ -96,7 +96,9 @@ class RepoSpec:
 
         # Split by / for owner/repo
         owner, repo = owner_repo.split("/", 1)
-
+        # Always lowercase owner and repo
+        owner = owner.lower()
+        repo = repo.lower()
         return cls(owner=owner, repo=repo, branch=branch, subfolder=subfolder)
 
     def __str__(self) -> str:
@@ -416,8 +418,9 @@ def get_container_name(repo_spec: RepoSpec) -> str:
     to prevent naming conflicts between branch names and subfolder paths.
     """
     safe_branch = repo_spec.branch.replace("/", "-")
-    # Use '.' separator between repo and branch
-    base_name = f"{repo_spec.repo}.{safe_branch}"
+    # Always lowercase repo name
+    repo_name = repo_spec.repo.lower()
+    base_name = f"{repo_name}.{safe_branch}"
     if repo_spec.subfolder:
         # Use 'sub-' prefix and sanitize subfolder path
         safe_subfolder = repo_spec.subfolder.replace("/", "-")
@@ -433,8 +436,10 @@ def get_hostname(repo_spec: RepoSpec) -> str:
 
     Returns just the repo name as hostname, without branch information.
     """
+    # Always lowercase repo name
+    repo_name = repo_spec.repo.lower()
     # Sanitize to allow only alphanumeric, dash, underscore
-    return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_spec.repo)
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_name)
 
 
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
