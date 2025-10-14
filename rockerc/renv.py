@@ -448,11 +448,18 @@ def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
         repo_dir.parent.mkdir(parents=True, exist_ok=True)
         # repo_url and repo_dir are constructed, not user input
         subprocess.run(
-            ["git", "clone", repo_url, str(repo_dir)], check=True, cwd=str(repo_dir.parent)
+            ["git", "clone", "--recurse-submodules", repo_url, str(repo_dir)],
+            check=True,
+            cwd=str(repo_dir.parent),
         )
     else:
-        logging.info(f"Fetching updates for cache: {repo_url}")
-        subprocess.run(["git", "-C", str(repo_dir), "fetch", "--all"], check=True)
+        logging.info(f"Updating cache repository: {repo_url}")
+        subprocess.run(["git", "-C", str(repo_dir), "pull"], check=True)
+        # Update submodules recursively
+        subprocess.run(
+            ["git", "-C", str(repo_dir), "submodule", "update", "--recursive", "--init"],
+            check=True,
+        )
 
     return repo_dir
 
