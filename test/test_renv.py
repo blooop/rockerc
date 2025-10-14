@@ -174,6 +174,7 @@ class TestGitOperations:
         assert clone_call is not None
         assert "git" in clone_call[0][0]
         assert "clone" in clone_call[0][0]
+        assert "--recurse-submodules" in clone_call[0][0]  # Should clone submodules
         assert "--bare" not in clone_call[0][0]  # Should NOT be bare
         assert "git@github.com:blooop/test_renv.git" in clone_call[0][0]
 
@@ -185,17 +186,30 @@ class TestGitOperations:
 
         setup_cache_repo(spec)
 
-        # Check git fetch was called
-        fetch_call = None
+        # Check git pull was called
+        pull_call = None
         for call in mock_run.call_args_list:
-            if "fetch" in call[0][0]:
-                fetch_call = call
+            if "pull" in call[0][0]:
+                pull_call = call
                 break
 
-        assert fetch_call is not None
-        assert "git" in fetch_call[0][0]
-        assert "fetch" in fetch_call[0][0]
-        assert "--all" in fetch_call[0][0]
+        assert pull_call is not None
+        assert "git" in pull_call[0][0]
+        assert "pull" in pull_call[0][0]
+
+        # Check git submodule update was called
+        submodule_call = None
+        for call in mock_run.call_args_list:
+            if "submodule" in call[0][0]:
+                submodule_call = call
+                break
+
+        assert submodule_call is not None
+        assert "git" in submodule_call[0][0]
+        assert "submodule" in submodule_call[0][0]
+        assert "update" in submodule_call[0][0]
+        assert "--recursive" in submodule_call[0][0]
+        assert "--init" in submodule_call[0][0]
 
     @patch("rockerc.renv._verify_sparse_checkout_path")
     @patch("rockerc.renv._has_upstream", return_value=False)
