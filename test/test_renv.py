@@ -155,38 +155,20 @@ class TestContainerHelpers:
 class TestGitOperations:
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
-    def test_setup_cache_repo_clone(self, mock_exists, mock_run):
-        mock_exists.return_value = False
-        spec = RepoSpec("blooop", "test_renv", "main")
-
-        result = setup_cache_repo(spec)
-
-        expected_dir = get_repo_dir(spec)
-        assert result == expected_dir
-
-        # Check git clone was called (not bare)
-        clone_call = None
-        for call in mock_run.call_args_list:
-            if "clone" in call[0][0]:
-                clone_call = call
-                break
-
-        assert clone_call is not None
-        assert "git" in clone_call[0][0]
-        assert "clone" in clone_call[0][0]
-        assert "--recurse-submodules" in clone_call[0][0]  # Should clone submodules
-        assert "--bare" not in clone_call[0][0]  # Should NOT be bare
-        assert "git@github.com:blooop/test_renv.git" in clone_call[0][0]
-
-    @patch("subprocess.run")
-    @patch("pathlib.Path.exists")
-    def test_setup_cache_repo_fetch(self, mock_exists, mock_run):
+    def test_setup_cache_repo_no_submodules(self, mock_exists, mock_run):
+        """
+        Test that git submodule update is not called when there are no submodules.
+        """
         mock_exists.return_value = True
         spec = RepoSpec("blooop", "test_renv", "main")
 
+        # Simulate only git pull, no submodule update
+        mock_run.call_args_list = [
+            (["git", "-C", str(get_repo_dir(spec)), "pull"],),
+        ]
+
         setup_cache_repo(spec)
 
-        # Check git pull was called
         pull_call = None
         for call in mock_run.call_args_list:
             if "pull" in call[0][0]:
@@ -197,12 +179,106 @@ class TestGitOperations:
         assert "git" in pull_call[0][0]
         assert "pull" in pull_call[0][0]
 
-        # Check git submodule update was called
+        # Ensure submodule update was NOT called
         submodule_call = None
         for call in mock_run.call_args_list:
             if "submodule" in call[0][0]:
                 submodule_call = call
                 break
+
+        assert submodule_call is None
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.stat")
+    @patch("pathlib.Path.exists")
+    def test_setup_cache_repo_nested_submodules(self, mock_exists, mock_stat, mock_run):
+        """
+        Test that nested (multi-level) submodules are initialized with --recursive.
+        """
+        mock_exists.return_value = True
+        mock_stat.return_value.st_size = 100  # Non-empty .gitmodules file
+        spec = RepoSpec("blooop", "test_renv", "main")
+
+        # Simulate subprocess calls for pull and submodule update
+        mock_run.call_args_list = [
+            (["git", "-C", str(get_repo_dir(spec)), "pull"],),
+            (
+                [
+                    "git",
+                    "-C",
+                    str(get_repo_dir(spec)),
+                    "submodule",
+                    "update",
+                    "--recursive",
+                    "--init",
+                ],
+            ),
+        ]
+
+        setup_cache_repo(spec)
+
+        # Check submodule update was called with --recursive
+        submodule_call = None
+        for call in mock_run.call_args_list:
+            if "submodule" in call[0][0]:
+                submodule_call = call
+                break
+
+        assert submodule_call is not None
+        assert "git" in submodule_call[0][0]
+        assert "submodule" in submodule_call[0][0]
+        assert "update" in submodule_call[0][0]
+        assert "--recursive" in submodule_call[0][0]
+        assert "--init" in submodule_call[0][0]
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.exists")
+    def test_setup_cache_repo_clone(self, mock_exists, mock_run):
+        mock_exists.return_value = False
+        spec = RepoSpec("blooop", "test_renv", "main")
+
+        result = setup_cache_repo(spec)
+
+        expected_dir = get_repo_dir(spec)
+        assert result == expected_dir
+
+        def get_call_with_arg(arg):
+            for call in mock_run.call_args_list:
+                if arg in call[0][0]:
+                    return call
+            return None
+
+        clone_call = get_call_with_arg("clone")
+
+        assert clone_call is not None
+        assert "git" in clone_call[0][0]
+        assert "clone" in clone_call[0][0]
+        assert "--recurse-submodules" in clone_call[0][0]  # Should clone submodules
+        assert "--bare" not in clone_call[0][0]  # Should NOT be bare
+        assert "git@github.com:blooop/test_renv.git" in clone_call[0][0]
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.stat")
+    @patch("pathlib.Path.exists")
+    def test_setup_cache_repo_fetch(self, mock_exists, mock_stat, mock_run):
+        mock_exists.return_value = True
+        mock_stat.return_value.st_size = 100  # Non-empty .gitmodules file
+        spec = RepoSpec("blooop", "test_renv", "main")
+
+        setup_cache_repo(spec)
+
+        def get_call_with_arg(arg):
+            for call in mock_run.call_args_list:
+                if arg in call[0][0]:
+                    return call
+            return None
+
+        pull_call = get_call_with_arg("pull")
+        submodule_call = get_call_with_arg("submodule")
+
+        assert pull_call is not None
+        assert "git" in pull_call[0][0]
+        assert "pull" in pull_call[0][0]
 
         assert submodule_call is not None
         assert "git" in submodule_call[0][0]

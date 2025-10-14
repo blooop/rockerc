@@ -24,7 +24,6 @@ import sys
 import subprocess
 import importlib.metadata
 import pathlib
-import logging
 import argparse
 import time
 import yaml
@@ -32,6 +31,7 @@ import shutil
 import shlex
 import os
 import re
+import logging
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Tuple
 from contextlib import contextmanager
@@ -454,12 +454,19 @@ def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
         )
     else:
         logging.info(f"Updating cache repository: {repo_url}")
-        subprocess.run(["git", "-C", str(repo_dir), "pull"], check=True)
-        # Update submodules recursively
-        subprocess.run(
-            ["git", "-C", str(repo_dir), "submodule", "update", "--recursive", "--init"],
-            check=True,
-        )
+        git_run(["-C", str(repo_dir), "pull"])
+        # Only update submodules if .gitmodules exists and is non-empty
+        gitmodules_path = pathlib.Path(repo_dir) / ".gitmodules"
+        try:
+            gitmodules_has_content = gitmodules_path.exists() and gitmodules_path.stat().st_size > 0
+        except (FileNotFoundError, OSError):
+            gitmodules_has_content = False
+
+        if gitmodules_has_content:
+            try:
+                git_run(["-C", str(repo_dir), "submodule", "update", "--recursive", "--init"])
+            except Exception as e:
+                logging.error(f"Submodule update failed for {repo_dir}: {e}")
 
     return repo_dir
 
