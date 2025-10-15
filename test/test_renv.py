@@ -290,14 +290,12 @@ class TestGitOperations:
     @patch("rockerc.renv._verify_sparse_checkout_path")
     @patch("rockerc.renv._has_upstream", return_value=False)
     @patch("rockerc.renv.setup_cache_repo")
-    @patch("shutil.copytree")
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
     def test_setup_branch_copy_create(
         self,
         mock_exists,
         mock_run,
-        mock_copytree,
         mock_setup_cache,
         _mock_has_upstream,
         _mock_verify_subfolder,
@@ -313,8 +311,9 @@ class TestGitOperations:
 
         mock_setup_cache.assert_called_once_with(spec)
 
-        # Check that copytree was called to copy cache to branch directory
-        mock_copytree.assert_called_once()
+        # Check that git clone was called to copy cache to branch directory
+        clone_calls = [call for call in mock_run.call_args_list if "clone" in str(call)]
+        assert len(clone_calls) >= 1
 
         # The branch copy should fetch to ensure remote refs are current
         fetch_calls = [call for call in mock_run.call_args_list if "fetch" in call[0][0]]
