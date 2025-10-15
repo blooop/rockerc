@@ -24,7 +24,6 @@ import sys
 import subprocess
 import importlib.metadata
 import pathlib
-import logging
 import argparse
 import time
 import yaml
@@ -32,6 +31,7 @@ import shutil
 import shlex
 import os
 import re
+import logging
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Tuple
 from contextlib import contextmanager
@@ -448,11 +448,35 @@ def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
         repo_dir.parent.mkdir(parents=True, exist_ok=True)
         # repo_url and repo_dir are constructed, not user input
         subprocess.run(
-            ["git", "clone", repo_url, str(repo_dir)], check=True, cwd=str(repo_dir.parent)
+            ["git", "clone", "--recurse-submodules", repo_url, str(repo_dir)],
+            check=True,
+            cwd=str(repo_dir.parent),
         )
     else:
-        logging.info(f"Fetching updates for cache: {repo_url}")
-        subprocess.run(["git", "-C", str(repo_dir), "fetch", "--all"], check=True)
+        logging.info(f"Updating cache repository: {repo_url}")
+
+        # Get the default branch name
+        default_branch = get_default_branch(repo_spec)
+
+        # Fetch all latest changes from remote
+        git_run(["-C", str(repo_dir), "fetch", "--all", "--prune"])
+
+        # Ensure we're on the default branch and it's up to date
+        git_run(["-C", str(repo_dir), "checkout", default_branch])
+        git_run(["-C", str(repo_dir), "pull", "origin", default_branch])
+
+        # Only update submodules if .gitmodules exists and is non-empty
+        gitmodules_path = pathlib.Path(repo_dir) / ".gitmodules"
+        try:
+            gitmodules_has_content = gitmodules_path.exists() and gitmodules_path.stat().st_size > 0
+        except (FileNotFoundError, OSError):
+            gitmodules_has_content = False
+
+        if gitmodules_has_content:
+            try:
+                git_run(["-C", str(repo_dir), "submodule", "update", "--recursive", "--init"])
+            except Exception as e:
+                logging.error(f"Submodule update failed for {repo_dir}: {e}")
 
     return repo_dir
 
@@ -493,8 +517,13 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
     if not branch_dir.exists():
         logging.info(f"Creating branch copy for: {repo_spec.branch}")
 
-        # Copy entire cache directory to branch directory
-        shutil.copytree(cache_dir, branch_dir)
+        # Create the branch directory and clone from cache (this properly handles submodules)
+        branch_dir.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["git", "clone", str(cache_dir), str(branch_dir)],
+            check=True,
+            cwd=str(branch_dir.parent),
+        )
         # Ensure remote references are up to date in the new working tree
         subprocess.run(
             ["git", "-C", str(branch_dir), "fetch", "--all"],
@@ -510,7 +539,14 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
             if local:
                 logging.info(f"Checking out local branch: {repo_spec.branch}")
                 subprocess.run(
-                    ["git", "-C", str(branch_dir), "checkout", repo_spec.branch],
+                    [
+                        "git",
+                        "-C",
+                        str(branch_dir),
+                        "checkout",
+                        "--no-recurse-submodules",
+                        repo_spec.branch,
+                    ],
                     check=True,
                 )
             elif remote:
@@ -521,6 +557,7 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
                         "-C",
                         str(branch_dir),
                         "checkout",
+                        "--no-recurse-submodules",
                         "-b",
                         repo_spec.branch,
                         f"origin/{repo_spec.branch}",
@@ -537,6 +574,7 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
                         "-C",
                         str(branch_dir),
                         "checkout",
+                        "--no-recurse-submodules",
                         "--no-track",
                         "-b",
                         repo_spec.branch,
@@ -553,6 +591,23 @@ def setup_branch_copy(repo_spec: RepoSpec) -> pathlib.Path:
                 ["git", "-C", str(branch_dir), "branch", "--unset-upstream"],
                 check=False,
             )
+
+        # Reinitialize submodules for the branch copy if .gitmodules exists
+        gitmodules_path = pathlib.Path(branch_dir) / ".gitmodules"
+        try:
+            gitmodules_has_content = gitmodules_path.exists() and gitmodules_path.stat().st_size > 0
+        except (FileNotFoundError, OSError):
+            gitmodules_has_content = False
+
+        if gitmodules_has_content:
+            try:
+                logging.info("Reinitializing submodules for branch copy")
+                subprocess.run(
+                    ["git", "-C", str(branch_dir), "submodule", "update", "--recursive", "--init"],
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Submodule reinitialization failed for {branch_dir}: {e}")
 
         # Enable sparse checkout if subfolder specified
         if repo_spec.subfolder:
