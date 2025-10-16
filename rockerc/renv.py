@@ -414,9 +414,8 @@ def get_container_name(repo_spec: RepoSpec) -> str:
     to prevent naming conflicts between branch names and subfolder paths.
     """
     safe_branch = repo_spec.branch.replace("/", "-")
-    # Always lowercase repo name
-    repo_name = repo_spec.repo.lower()
-    base_name = f"{repo_name}.{safe_branch}"
+    # repo_spec.repo is already lowercase from RepoSpec.parse()
+    base_name = f"{repo_spec.repo}.{safe_branch}"
     if repo_spec.subfolder:
         # Use 'sub-' prefix and sanitize subfolder path
         safe_subfolder = repo_spec.subfolder.replace("/", "-")
@@ -432,10 +431,9 @@ def get_hostname(repo_spec: RepoSpec) -> str:
 
     Returns just the repo name as hostname, without branch information.
     """
-    # Always lowercase repo name
-    repo_name = repo_spec.repo.lower()
+    # repo_spec.repo is already lowercase from RepoSpec.parse()
     # Sanitize to allow only alphanumeric, dash, underscore
-    return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_name)
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_spec.repo)
 
 
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
@@ -1123,7 +1121,9 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     mount_target=mount_target,
                 )
 
+                # Add keep-alive command so container stays running until shell attaches
                 if plan.rocker_cmd:
+                    plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
                     ret = launch_rocker(plan.rocker_cmd)
                     if ret != 0:
                         return ret
@@ -1195,15 +1195,48 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     launch_vscode(plan.container_name, plan.container_hex, vsc_folder)
 
                 # Open interactive shell with correct working directory
-                # Working directory is always /{repo} at root
+                # Since core.py's interactive_shell doesn't support -w flag, we use our own exec
+                # but follow the same pattern as core.py for better compatibility
                 workdir = f"/{repo_spec.repo}"
-                if sys.stdin.isatty() and sys.stdout.isatty():
-                    exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"]
-                else:
-                    exec_cmd = ["docker", "exec", "-w", workdir, container_name, "/bin/bash"]
 
-                logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
-                return subprocess.run(exec_cmd, check=False).returncode
+                # Get shell from environment, validate it's safe and exists in container
+                requested_shell = os.environ.get("SHELL", "/bin/bash")
+
+                # Whitelist of allowed shells to prevent command injection
+                allowed_shells = {
+                    "/bin/bash",
+                    "/bin/sh",
+                    "/bin/zsh",
+                    "/bin/fish",
+                    "/usr/bin/bash",
+                    "/usr/bin/zsh",
+                }
+
+                # Use safe default if requested shell is not in whitelist
+                if requested_shell not in allowed_shells:
+                    shell = "/bin/bash"
+                else:
+                    # Validate shell exists in container to prevent execution errors
+                    shell_check_cmd = ["docker", "exec", container_name, "which", requested_shell]
+                    try:
+                        subprocess.run(shell_check_cmd, check=True, capture_output=True)
+                        shell = requested_shell
+                    except subprocess.CalledProcessError:
+                        # Shell doesn't exist in container, default to /bin/bash
+                        shell = "/bin/bash"
+
+                # Use the same TTY detection logic as core.py's interactive_shell
+                if sys.stdin.isatty() and sys.stdout.isatty():
+                    exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, shell]
+                else:
+                    exec_cmd = ["docker", "exec", "-w", workdir, container_name, shell]
+
+                logging.info(
+                    f"Attaching interactive shell: {' '.join(shlex.quote(arg) for arg in exec_cmd)}"
+                )
+
+                # Use subprocess.call like core.py's interactive_shell for consistency
+                return subprocess.call(exec_cmd)
 
             # Terminal mode: use detached workflow (same as rockerc)
         # For renv, mount to /{repo} at root, not /workspaces/{container_name}
