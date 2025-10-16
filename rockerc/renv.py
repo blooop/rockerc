@@ -1193,15 +1193,17 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     launch_vscode(plan.container_name, plan.container_hex, vsc_folder)
 
                 # Open interactive shell with correct working directory
-                # Working directory is always /{repo} at root
+                # Since core.py's interactive_shell doesn't support -w flag, we use our own exec
+                # but follow the same pattern as core.py for better compatibility
                 workdir = f"/{repo_spec.repo}"
-                if sys.stdin.isatty() and sys.stdout.isatty():
-                    exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"]
-                else:
-                    exec_cmd = ["docker", "exec", "-w", workdir, container_name, "/bin/bash"]
+                shell = os.environ.get("SHELL", "/bin/bash")
 
+                # Use the same TTY detection logic as core.py's interactive_shell
+                exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, shell]
                 logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
-                return subprocess.run(exec_cmd, check=False).returncode
+
+                # Use subprocess.call like core.py's interactive_shell for consistency
+                return subprocess.call(exec_cmd)
 
             # Terminal mode: use detached workflow (same as rockerc)
         # For renv, mount to /{repo} at root, not /workspaces/{container_name}
