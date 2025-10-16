@@ -1198,10 +1198,31 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 # Since core.py's interactive_shell doesn't support -w flag, we use our own exec
                 # but follow the same pattern as core.py for better compatibility
                 workdir = f"/{repo_spec.repo}"
-                shell = os.environ.get("SHELL", "/bin/bash")
+
+                # Get shell from environment, validate it exists in container, or default to /bin/bash
+                requested_shell = os.environ.get("SHELL", "/bin/bash")
+
+                # Validate shell exists in container to prevent execution errors
+                shell_check_cmd = [
+                    "docker",
+                    "exec",
+                    container_name,
+                    "which",
+                    shlex.quote(requested_shell),
+                ]
+                try:
+                    subprocess.run(shell_check_cmd, check=True, capture_output=True)
+                    shell = requested_shell
+                except subprocess.CalledProcessError:
+                    # Shell doesn't exist in container, default to /bin/bash
+                    shell = "/bin/bash"
 
                 # Use the same TTY detection logic as core.py's interactive_shell
-                exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, shell]
+                if sys.stdin.isatty() and sys.stdout.isatty():
+                    exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, shell]
+                else:
+                    exec_cmd = ["docker", "exec", "-w", workdir, container_name, shell]
+
                 logging.info(f"Attaching interactive shell: {' '.join(exec_cmd)}")
 
                 # Use subprocess.call like core.py's interactive_shell for consistency
