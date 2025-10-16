@@ -414,9 +414,8 @@ def get_container_name(repo_spec: RepoSpec) -> str:
     to prevent naming conflicts between branch names and subfolder paths.
     """
     safe_branch = repo_spec.branch.replace("/", "-")
-    # Always lowercase repo name
-    repo_name = repo_spec.repo.lower()
-    base_name = f"{repo_name}.{safe_branch}"
+    # repo_spec.repo is already lowercase from RepoSpec.parse()
+    base_name = f"{repo_spec.repo}.{safe_branch}"
     if repo_spec.subfolder:
         # Use 'sub-' prefix and sanitize subfolder path
         safe_subfolder = repo_spec.subfolder.replace("/", "-")
@@ -432,10 +431,9 @@ def get_hostname(repo_spec: RepoSpec) -> str:
 
     Returns just the repo name as hostname, without branch information.
     """
-    # Always lowercase repo name
-    repo_name = repo_spec.repo.lower()
+    # repo_spec.repo is already lowercase from RepoSpec.parse()
     # Sanitize to allow only alphanumeric, dash, underscore
-    return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_name)
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_spec.repo)
 
 
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
