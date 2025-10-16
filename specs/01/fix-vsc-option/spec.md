@@ -9,39 +9,28 @@ The --vsc option in renv has broken. Previously, running `renv --vsc` or `renvvs
 Currently, regular renv works but passing --vsc causes the container to crash.
 
 ## Root Cause
-The real issue is in the VSCode workflow execution flow in renv. The problem is NOT the lowercase changes - that was a red herring.
+The container crashes in VSCode mode because it lacks a keep-alive process.
 
-**Working `rockervsc` flow:**
-```python
-if plan.vscode:
-    launch_vscode(plan.container_name, plan.container_hex)
-return interactive_shell(plan.container_name)
-```
+**Container lifecycle issue:**
+- **Regular renv**: Adds `["tail", "-f", "/dev/null"]` to keep container alive
+- **VSCode renv**: No keep-alive command → container exits immediately after launch
+- **rockervsc**: Works because `interactive_shell()` immediately attaches and keeps container alive
 
-**Broken `renv --vsc` flow:**
-```python
-if plan.vscode:
-    launch_vscode(plan.container_name, plan.container_hex, vsc_folder)
-# Manual docker exec with working directory
-exec_cmd = ["docker", "exec", "-it", "-w", workdir, container_name, "/bin/bash"]
-return subprocess.run(exec_cmd, check=False).returncode
-```
-
-The issues:
-1. `renv --vsc` doesn't use the robust `interactive_shell()` function
-2. Manual `docker exec` construction may have TTY/interaction problems
-3. Working directory handling with `-w` flag may not work properly
-4. VSCode and terminal attachment both fail due to execution flow issues
+**Timeline of failure:**
+1. Container launches successfully with rocker
+2. Container immediately exits (no process to keep it running)
+3. VSCode attachment fails (container is dead)
+4. Terminal attachment fails (container is dead)
 
 ## Solution
-Fix the VSCode workflow in renv to follow the same patterns as `interactive_shell()` from core.py while maintaining the required working directory functionality.
+Add the missing keep-alive command to VSCode mode so containers don't exit immediately after launch.
 
 ## Changes Made
-1. **Use `subprocess.call()` instead of `subprocess.run()`** - matches core.py's `interactive_shell()`
-2. **Use `os.environ.get("SHELL", "/bin/bash")` for shell detection** - matches core.py behavior
-3. **Simplify TTY handling** - always use `-it` flags like core.py
-4. **Keep working directory support** - renv needs `-w` flag that core.py doesn't support
-5. **Update comments** - clarify why manual docker exec is needed vs using core.py's function
+1. **Add keep-alive command in VSCode mode** - `plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])`
+2. **Match regular renv behavior** - both modes now use the same container lifecycle
+3. **Improve shell handling** - use `subprocess.call()` and proper shell detection for consistency
+
+This ensures the container stays running until the interactive shell attaches, preventing the crash.
 
 ## Expected Outcome
 - --vsc option works as before

@@ -1121,7 +1121,9 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     mount_target=mount_target,
                 )
 
+                # Add keep-alive command so container stays running until shell attaches
                 if plan.rocker_cmd:
+                    plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
                     ret = launch_rocker(plan.rocker_cmd)
                     if ret != 0:
                         return ret
