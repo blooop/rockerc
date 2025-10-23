@@ -85,25 +85,19 @@ def test_execute_plan_attachment_failure():
 
 
 def test_container_running_status_check_needed():
-    """Test demonstrating the need for a container_is_running check function."""
-    # This test documents the missing functionality we need to implement
-
-    # We need a function that checks if container is actually running, not just existing
-    # Currently there's no such function in the codebase
+    """Test demonstrating that container_is_running function now exists and works."""
+    # This test documents that we now have the functionality to check running status
 
     # Mock docker ps (without -a) to check only running containers
     mock_result = MagicMock()
     mock_result.stdout = ""  # Empty output = container not running
 
-    with patch("subprocess.run", return_value=mock_result) as mock_run:
-        # This function doesn't exist yet, but we need it
-        from rockerc.core import container_exists
+    with patch("subprocess.run", return_value=mock_result):
+        # container_is_running function now exists and works correctly
+        result = container_is_running("test_container")
 
-        # Call container_exists with our mock
-        result = container_exists("test_container")
-
-    # This will fail because container_exists uses 'docker ps -a'
-    # We need a separate function for checking running status
+    # Should return False since mock returns empty output
+    assert result is False
 
 
 def test_container_is_running_checks_only_running_containers():

@@ -89,7 +89,15 @@ def container_exists(container_name: str) -> bool:
 
 
 def container_is_running(container_name: str) -> bool:
-    """Return True if a container with this name is currently running."""
+    """Return True if a container with this name is currently RUNNING.
+
+    CRITICAL: This function distinguishes between existing containers (docker ps -a)
+    and running containers (docker ps). This distinction is essential for proper
+    container lifecycle management and preventing attachment errors.
+
+    Use this instead of container_exists() when you need to verify the container
+    can accept docker exec commands.
+    """
     try:
         result = subprocess.run(
             [
@@ -409,7 +417,15 @@ def wait_for_container(
     timeout: float = DEFAULT_WAIT_TIMEOUT,
     interval: float = DEFAULT_WAIT_INTERVAL,
 ) -> bool:
-    """Poll until container is running or timeout expires."""
+    """Poll until container is RUNNING (not just existing) or timeout expires.
+
+    CRITICAL: This function waits for containers to be in RUNNING state, which is
+    essential for docker exec attachment. Containers that exist but are stopped
+    will cause "container is not running" errors.
+
+    This change fixes a core architectural issue where wait_for_container() was
+    checking existence (docker ps -a) instead of running state (docker ps).
+    """
     deadline = time.time() + timeout
     while time.time() < deadline:
         if container_is_running(container_name):
