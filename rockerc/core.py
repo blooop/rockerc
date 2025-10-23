@@ -88,6 +88,28 @@ def container_exists(container_name: str) -> bool:
     return container_name in result.stdout.splitlines()
 
 
+def container_is_running(container_name: str) -> bool:
+    """Return True if a container with this name is currently running."""
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "--filter",
+                f"name={container_name}",
+                "--format",
+                "{{.Names}}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except Exception as exc:  # pragma: no cover - unexpected system failure
+        LOGGER.error("Failed to query docker for running container: %s", exc)
+        return False
+    return container_name in result.stdout.splitlines()
+
+
 def get_container_extensions(container_name: str) -> list[str] | None:
     """Retrieve the stored extension list from a container's environment variables.
 
@@ -186,6 +208,25 @@ def render_extension_comparison_table(current: list[str], stored: list[str] | No
             headers = [col.style(h, "CYAN", bold=True) for h in headers]
         return _format_table(rows, headers)
     return ""
+
+
+def start_container(container_name: str) -> bool:
+    """Start an existing stopped container.
+
+    Returns True if container started successfully, False otherwise.
+    """
+    LOGGER.info("Starting existing container '%s'...", container_name)
+    try:
+        subprocess.run(["docker", "start", container_name], check=True, capture_output=True)
+        LOGGER.info("Started existing container '%s'", container_name)
+        return True
+    except subprocess.CalledProcessError as exc:  # pragma: no cover (hard to simulate reliably)
+        LOGGER.warning(
+            "Failed to start existing container '%s': %s",
+            container_name,
+            exc,
+        )
+        return False
 
 
 def stop_and_remove_container(container_name: str) -> None:
@@ -368,10 +409,10 @@ def wait_for_container(
     timeout: float = DEFAULT_WAIT_TIMEOUT,
     interval: float = DEFAULT_WAIT_INTERVAL,
 ) -> bool:
-    """Poll until container exists or timeout expires."""
+    """Poll until container is running or timeout expires."""
     deadline = time.time() + timeout
     while time.time() < deadline:
-        if container_exists(container_name):
+        if container_is_running(container_name):
             return True
         time.sleep(interval)
     return False
@@ -469,6 +510,17 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
                 print(comparison_table)
             stop_and_remove_container(container_name)
             exists = False
+        elif not container_is_running(container_name):
+            # Container exists with correct extensions but is not running - try to start it
+            LOGGER.info(
+                "Container '%s' exists but is not running. Attempting to start...", container_name
+            )
+            if not start_container(container_name):
+                LOGGER.warning(
+                    "Failed to start existing container '%s'. Rebuilding...", container_name
+                )
+                stop_and_remove_container(container_name)
+                exists = False
 
     if exists and force:
         stop_and_remove_container(container_name)
@@ -536,6 +588,8 @@ def execute_plan(plan: LaunchPlan) -> int:
 __all__ = [
     "derive_container_name",
     "container_exists",
+    "container_is_running",
+    "start_container",
     "prepare_launch_plan",
     "execute_plan",
     "LaunchPlan",

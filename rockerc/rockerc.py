@@ -309,6 +309,36 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     if image:
         cmd_str += f" -- {image}"
 
+        # Add keep-alive command for detached containers only
+        if "--detach" in cmd_str:
+            # Check if extra_args contains any non-flag commands that would keep container alive
+            has_command = False
+            if extra_args:
+                import shlex
+                try:
+                    tokens = shlex.split(extra_args)
+                    # Find command arguments (non-flag tokens that aren't flag values)
+                    skip_next = False
+                    for i, token in enumerate(tokens):
+                        if skip_next:
+                            skip_next = False
+                            continue
+                        if token.startswith("--"):
+                            # Check if this flag takes a value (next token doesn't start with --)
+                            if i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
+                                skip_next = True
+                        else:
+                            # Found a command
+                            has_command = True
+                            break
+                except ValueError:
+                    # If shlex parsing fails, assume no command
+                    has_command = False
+
+            # If no explicit command found, add keep-alive for detached mode
+            if not has_command:
+                cmd_str += " tail -f /dev/null"
+
     return cmd_str
 
 
