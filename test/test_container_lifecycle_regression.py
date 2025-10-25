@@ -217,7 +217,7 @@ class TestRegressionScenarios:
         assert base_cmd.count("tail -f /dev/null") == 1
 
         # Manual addition would create duplication (BAD)
-        manual_addition = base_cmd + " tail -f /dev/null"
+        manual_addition = f"{base_cmd} tail -f /dev/null"
         assert manual_addition.count("tail -f /dev/null") == 2  # This is what we prevent
 
     def test_attachment_failure_symptoms(self):
