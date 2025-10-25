@@ -12,9 +12,11 @@ def test_prepare_launch_plan_reuse_existing_container():
     with patch("rockerc.core.container_exists", return_value=True):
         # Mock get_container_extensions to return matching extensions
         with patch("rockerc.core.get_container_extensions", return_value=["user"]):
-            plan = prepare_launch_plan(
-                _base_args(), "", name, vscode=False, force=False, path=pathlib.Path(".")
-            )
+            # Mock container is already running
+            with patch("rockerc.core.container_is_running", return_value=True):
+                plan = prepare_launch_plan(
+                    _base_args(), "", name, vscode=False, force=False, path=pathlib.Path(".")
+                )
     assert plan.container_name == name
     assert plan.rocker_cmd == []  # reuse means no rocker invocation
     assert plan.created is False
@@ -85,3 +87,49 @@ def test_prepare_launch_plan_rebuild_on_extension_change():
     mock_stop.assert_called_once_with(name)
     assert plan.created is True
     assert plan.rocker_cmd  # Should have rocker command (not empty)
+
+
+def test_prepare_launch_plan_starts_stopped_container():
+    """Test that prepare_launch_plan starts a stopped container with matching extensions."""
+    name = derive_container_name("example")
+    with patch("rockerc.core.container_exists", return_value=True):
+        # Mock get_container_extensions to return matching extensions
+        with patch("rockerc.core.get_container_extensions", return_value=["user"]):
+            # Mock container is not running
+            with patch("rockerc.core.container_is_running", return_value=False):
+                # Mock successful start
+                with patch("rockerc.core.start_container", return_value=True) as mock_start:
+                    plan = prepare_launch_plan(
+                        _base_args(), "", name, vscode=False, force=False, path=pathlib.Path(".")
+                    )
+
+    # Should attempt to start the existing container
+    mock_start.assert_called_once_with(name)
+    assert plan.created is False  # Not created, just started
+    assert plan.rocker_cmd == []  # No rocker command needed
+
+
+def test_prepare_launch_plan_rebuilds_when_start_fails():
+    """Test that prepare_launch_plan rebuilds container when start fails."""
+    name = derive_container_name("example")
+    with patch("rockerc.core.container_exists", side_effect=[True, False]):  # exists, then removed
+        # Mock get_container_extensions to return matching extensions
+        with patch("rockerc.core.get_container_extensions", return_value=["user"]):
+            # Mock container is not running
+            with patch("rockerc.core.container_is_running", return_value=False):
+                # Mock failed start
+                with patch("rockerc.core.start_container", return_value=False):
+                    with patch("rockerc.core.stop_and_remove_container") as mock_remove:
+                        plan = prepare_launch_plan(
+                            _base_args(),
+                            "",
+                            name,
+                            vscode=False,
+                            force=False,
+                            path=pathlib.Path("."),
+                        )
+
+    # Should remove container when start fails
+    mock_remove.assert_called_once_with(name)
+    assert plan.created is True  # Should create new container
+    assert plan.rocker_cmd  # Should have rocker command

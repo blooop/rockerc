@@ -161,6 +161,44 @@ def _expand_aggregates(ext_list: list[str]) -> list[str]:
     return expanded
 
 
+def _has_explicit_command_in_args(extra_args: str) -> bool:
+    """Check if extra_args contains explicit commands (not just flags).
+
+    This helper function reduces nesting in yaml_dict_to_args by extracting
+    the command detection logic.
+
+    Args:
+        extra_args: Command line arguments string
+
+    Returns:
+        True if explicit commands are found, False otherwise
+    """
+    if not extra_args:
+        return False
+
+    import shlex
+
+    try:
+        tokens = shlex.split(extra_args)
+        # Find command arguments (non-flag tokens that aren't flag values)
+        skip_next = False
+        for i, token in enumerate(tokens):
+            if skip_next:
+                skip_next = False
+                continue
+            if token.startswith("--"):
+                # Check if this flag takes a value (next token doesn't start with --)
+                if i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
+                    skip_next = True
+            else:
+                # Found a command
+                return True
+        return False
+    except ValueError:
+        # If shlex parsing fails, assume no command
+        return False
+
+
 def render_extension_table(
     final_args: list[str],
     *,
@@ -277,14 +315,29 @@ def render_extension_table(
 
 
 def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
-    """Given a dictionary of arguments turn it into an argument string to pass to rocker
+    """Given a dictionary of arguments turn it into an argument string to pass to rocker.
+
+    CRITICAL: This function automatically adds 'tail -f /dev/null' to detached containers
+    to ensure they stay running for docker exec attachment. This is a core architectural
+    requirement for rockerc/renv container lifecycle consistency.
 
     Args:
         d (dict): rocker arguments dictionary
         extra_args (str): additional command line arguments to insert before the image
 
     Returns:
-        str: rocker arguments string
+        str: rocker arguments string with automatic keep-alive for detached containers
+
+    Container Lifecycle:
+        - When --detach is present: Automatically appends 'tail -f /dev/null' unless
+          explicit command is provided in extra_args
+        - This ensures ALL detached containers can be attached to via docker exec
+        - Prevents "container is not running" errors during attachment
+
+    Historical Context:
+        - Before this fix: Each tool manually added keep-alive commands inconsistently
+        - This centralized approach ensures no tool can forget the keep-alive requirement
+        - See CONTAINER_LIFECYCLE.md for full architectural documentation
     """
     image = d.pop("image", None)
     segments = []
@@ -308,6 +361,10 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     # separator + image
     if image:
         cmd_str += f" -- {image}"
+
+        # Add keep-alive command for detached containers only
+        if "--detach" in cmd_str and not _has_explicit_command_in_args(extra_args):
+            cmd_str += " tail -f /dev/null"
 
     return cmd_str
 
