@@ -637,6 +637,7 @@ packages:
   constrains:
   - binutils_impl_linux-64 2.44
   license: GPL-3.0-only
+  license_family: GPL
   purls: []
   size: 742501
   timestamp: 1761335175964
