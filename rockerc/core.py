@@ -333,7 +333,9 @@ def ensure_volume_binding(
     Skip if user already provided a --volume referencing the target.
     """
     target = mount_target or f"/workspaces/{container_name}"
-    if target in base_args:
+    # Check if volume mount already exists for this target (more specific than just checking if target in base_args)
+    volume_pattern = f"--volume {path}:{target}"
+    if volume_pattern in base_args or f"-v {path}:{target}" in base_args:
         return base_args
     return f"{base_args} --volume {path}:{target}:Z".strip()
 

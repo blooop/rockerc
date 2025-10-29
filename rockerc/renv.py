@@ -1138,9 +1138,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     mount_target=mount_target,
                 )
 
-                # Add keep-alive command so container stays running until shell attaches
+                # Launch rocker command (keep-alive is automatically added by yaml_dict_to_args for detached containers)
                 if plan.rocker_cmd:
-                    plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
                     ret = launch_rocker(plan.rocker_cmd)
                     if ret != 0:
                         return ret
@@ -1270,11 +1269,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             mount_target=mount_target,
         )
 
-        # Add keep-alive command to rocker_cmd so detached container stays running
-        if plan.rocker_cmd:
-            plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
-
-        # If we need to launch a new container, do it
+        # Launch rocker command if needed (keep-alive is automatically added by yaml_dict_to_args for detached containers)
         if plan.rocker_cmd:
             ret = launch_rocker(plan.rocker_cmd)
             if ret != 0:
@@ -1329,7 +1324,6 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 )
 
                 if plan.rocker_cmd:
-                    plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
                     ret = launch_rocker(plan.rocker_cmd)
                     if ret != 0:
                         with _restore_cwd_context():
