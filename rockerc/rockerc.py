@@ -4,7 +4,7 @@ import pathlib
 import yaml
 import os
 import logging
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Dict, Any, Optional
 
 # Unified detached execution & VS Code attach flow helpers
 from rockerc.core import (
@@ -13,6 +13,7 @@ from rockerc.core import (
     execute_plan,
 )
 from .completion import install_all_completions
+from .cli_args import FlagSpec, consume_flags, parse_cli_extensions_and_image
 
 
 #############################################
@@ -675,74 +676,6 @@ def save_rocker_cmd(split_cmd: List[str]) -> str | None:
     return None
 
 
-def _parse_extra_flags(argv: List[str]) -> Tuple[bool, bool, bool, bool, List[str]]:
-    """Parse ad-hoc flags for --vsc, --force, --verbose and --show-dockerfile.
-
-    Returns: (vsc, force, verbose, show_dockerfile, remaining_args)
-    """
-    vsc = False
-    force = False
-    verbose = False
-    show_dockerfile = False
-    remaining: List[str] = []
-    for a in argv:
-        if a == "--vsc":
-            vsc = True
-            continue
-        if a in ("--force", "-f"):
-            force = True
-            continue
-        if a in ("--verbose", "-v"):
-            verbose = True
-            continue
-        if a == "--show-dockerfile":
-            show_dockerfile = True
-            continue
-        remaining.append(a)
-    return vsc, force, verbose, show_dockerfile, remaining
-
-
-def parse_cli_extensions_and_image(
-    args: List[str],
-) -> Tuple[List[str], Optional[str], List[str]]:
-    """Parse CLI arguments into extensions, image, and command.
-
-    Args:
-        args: List of command-line arguments (after removing --vsc, --force, --verbose)
-
-    Returns:
-        Tuple of (extensions, image, command)
-        - extensions: List of extension names (without -- prefix)
-        - image: Docker image name (first non-flag argument) or None
-        - command: Command arguments (all args after image)
-
-    Examples:
-        ['--claude', 'ubuntu:22.04'] -> (['claude'], 'ubuntu:22.04', [])
-        ['--user', '--git', 'ubuntu:22.04', 'bash'] -> (['user', 'git'], 'ubuntu:22.04', ['bash'])
-        ['ubuntu:22.04'] -> ([], 'ubuntu:22.04', [])
-        ['--user'] -> (['user'], None, [])
-    """
-    extensions: List[str] = []
-    image: Optional[str] = None
-    command: List[str] = []
-
-    image_found = False
-    for arg in args:
-        if arg.startswith("--"):
-            # Extension flag
-            ext_name = arg[2:]  # Remove '--' prefix
-            extensions.append(ext_name)
-        elif not image_found:
-            # First non-flag argument is the image
-            image = arg
-            image_found = True
-        else:
-            # Remaining arguments are command
-            command.append(arg)
-
-    return extensions, image, command
-
-
 def _configure_logging(verbose: bool):  # pragma: no cover - formatting only
     # Remove any existing handlers (avoid duplicate logs when called multiple times)
     root = logging.getLogger()
@@ -830,7 +763,17 @@ def run_rockerc(path: str = "."):
         sys.exit(install_all_completions(rc_path))
 
     # --- Begin fix for auto extension workspace path handling ---
-    vsc, force, verbose, show_dockerfile, filtered_cli = _parse_extra_flags(cli_args)
+    flag_specs = [
+        FlagSpec("--vsc", key="vsc"),
+        FlagSpec("--force", aliases=("-f",), key="force"),
+        FlagSpec("--verbose", aliases=("-v",), key="verbose"),
+        FlagSpec("--show-dockerfile", key="show_dockerfile"),
+    ]
+    flag_values, filtered_cli = consume_flags(cli_args, flag_specs)
+    vsc = bool(flag_values["vsc"])
+    force = bool(flag_values["force"])
+    verbose = bool(flag_values["verbose"])
+    show_dockerfile = bool(flag_values["show_dockerfile"])
     _configure_logging(verbose)
 
     # Detect --auto and workspace path
