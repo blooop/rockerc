@@ -25,12 +25,17 @@ import time
 import logging
 import binascii
 import os
+import re
 from typing import List, Sequence, Tuple
 
 # NOTE: Avoid importing from rockerc at module import time to prevent circular imports.
 # We will lazily import yaml_dict_to_args inside functions that need it.
 
 LOGGER = logging.getLogger(__name__)
+
+# Compiled regex for extension name validation - allows alphanumeric, dash, underscore,
+# equals, tilde, dot, slash, comma but prohibits spaces and exclamation marks
+VALID_EXT = re.compile(r"^(?!.*[!\s])[A-Za-z0-9_=~/\.,-]+$")
 
 
 DEFAULT_WAIT_TIMEOUT = float(os.getenv("ROCKERC_WAIT_TIMEOUT", "20"))  # seconds
@@ -144,9 +149,9 @@ def get_container_extensions(container_name: str) -> list[str] | None:
         # Parse environment variables to find ROCKERC_EXTENSIONS
         for line in result.stdout.splitlines():
             if line.startswith("ROCKERC_EXTENSIONS="):
-                if ext_value := line.split("=", 1)[1]:
-                    # Split and sort to match how we store them
-                    return sorted(ext_value.split(","))
+                if ext_value := line.split("=", 1)[1].strip():
+                    # Split and sort to match how we store them, remove empty entries
+                    return sorted(ext.strip() for ext in ext_value.split(",") if ext.strip())
         return None
     except subprocess.CalledProcessError:
         return None
@@ -301,13 +306,11 @@ def add_extension_env(base_args: str, extensions: list[str]) -> str:
     if not extensions:
         return base_args
 
-    # Validate extension names for safety (alphanumeric, dash, underscore only)
-    import re
-
+    # Validate extension names for safety
     for ext in extensions:
-        if not re.match(r"^[a-zA-Z0-9_-]+$", ext):
+        if not VALID_EXT.fullmatch(ext):
             LOGGER.warning(
-                "Extension name '%s' contains invalid characters. Skipping environment storage.",
+                "Extension name %r contains invalid characters. Skipping environment storage.",
                 ext,
             )
             return base_args
@@ -332,36 +335,50 @@ def ensure_volume_binding(
     Skip if user already provided a --volume referencing the target.
     """
     target = mount_target or f"/workspaces/{container_name}"
-    if target in base_args:
-        return base_args
+    # Use shlex to split arguments and check for existing volume mounts
+    tokens = shlex.split(base_args)
+
+    # Check for existing volume mounts matching the path or target
+    existing_paths = set()
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        # Look for volume/mount flags
+        if token in ("-v", "--volume") and i + 1 < len(tokens):
+            volume_spec = tokens[i + 1]
+            parts = volume_spec.split(":")
+            if len(parts) >= 2:
+                existing_paths.add(parts[0].strip("'\""))
+            i += 2
+        elif token.startswith(("-v=", "--volume=", "-v", "--volume")):
+            # For tokens like -v=/path/or -v=
+            volume_spec = token.split("=", 1)[-1]
+            parts = volume_spec.split(":")
+            if len(parts) >= 2:
+                existing_paths.add(parts[0].strip("'\""))
+            i += 1
+        else:
+            i += 1
+
+    # Convert path to absolute path to catch different representations
+    abs_path = str(pathlib.Path(path).resolve(strict=False))
+
+    # Check if path or any of the existing paths would map to the same volume
+    for existing in existing_paths:
+        if str(pathlib.Path(existing).resolve(strict=False)) == abs_path:
+            return base_args
+
     return f"{base_args} --volume {path}:{target}:Z".strip()
 
 
 def append_volume_binding(base_args: str, host_path: pathlib.Path, target: str) -> str:
     """Append an additional volume mount if it's not already present."""
-    # shlex is already imported at the module level
-
-    volume_arg = f"--volume {host_path}:{target}:Z"
-
-    # Parse base_args into tokens
-    tokens = shlex.split(base_args)
-    # Find all --volume arguments and extract their targets
-    existing_targets = set()
-    for i, token in enumerate(tokens):
-        if token == "--volume" and i + 1 < len(tokens):
-            volume_spec = tokens[i + 1]
-            parts = volume_spec.split(":")
-            if len(parts) >= 2:
-                existing_targets.add(parts[1])
-        elif token.startswith("--volume="):
-            volume_spec = token[len("--volume=") :]
-            parts = volume_spec.split(":")
-            if len(parts) >= 2:
-                existing_targets.add(parts[1])
-
-    if target in existing_targets:
+    abs_src = str(host_path.resolve(strict=False))
+    # match "-v /abs/src:"  or "--volume=/abs/src:" or "--volume /abs/src:"
+    pattern = re.compile(rf"(?:-v|--volume)(?:=|\s+){re.escape(abs_src)}(?::|$)")
+    if pattern.search(base_args):
         return base_args
-    return f"{base_args} {volume_arg}".strip()
+    return f"{base_args} --volume {host_path}:{target}:Z".strip()
 
 
 def build_rocker_arg_injections(

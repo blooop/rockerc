@@ -720,7 +720,10 @@ def build_rocker_config(
         config["args"].remove("cwd")
 
     # Ensure 'auto' is always present and set to correct path
-    auto_path = f"~/renv/{repo_spec.owner}/{repo_spec.repo}/{repo_spec.branch}/{repo_spec.repo}"
+    renv_root = get_renv_root()
+    auto_path = (
+        f"{renv_root}/{repo_spec.owner}/{repo_spec.repo}/{repo_spec.branch}/{repo_spec.repo}"
+    )
     found_auto = False
     for i, arg in enumerate(config["args"]):
         if arg == "auto" or (isinstance(arg, str) and arg.strip() == "auto"):
@@ -1138,9 +1141,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     mount_target=mount_target,
                 )
 
-                # Add keep-alive command so container stays running until shell attaches
+                # Launch rocker command (keep-alive is automatically added by yaml_dict_to_args for detached containers)
                 if plan.rocker_cmd:
-                    plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
                     ret = launch_rocker(plan.rocker_cmd)
                     if ret != 0:
                         return ret
@@ -1270,11 +1272,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             mount_target=mount_target,
         )
 
-        # Add keep-alive command to rocker_cmd so detached container stays running
-        if plan.rocker_cmd:
-            plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
-
-        # If we need to launch a new container, do it
+        # Launch rocker command if needed (keep-alive is automatically added by yaml_dict_to_args for detached containers)
         if plan.rocker_cmd:
             ret = launch_rocker(plan.rocker_cmd)
             if ret != 0:
@@ -1329,7 +1327,6 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 )
 
                 if plan.rocker_cmd:
-                    plan.rocker_cmd.extend(["tail", "-f", "/dev/null"])
                     ret = launch_rocker(plan.rocker_cmd)
                     if ret != 0:
                         with _restore_cwd_context():
