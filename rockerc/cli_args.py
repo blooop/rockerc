@@ -22,9 +22,7 @@ class FlagSpec:
 
     @property
     def resolved_key(self) -> str:
-        if self.key:
-            return self.key
-        return self.name.lstrip("-").replace("-", "_")
+        return self.key if self.key else self.name.lstrip("-").replace("-", "_")
 
 
 def consume_flags(
