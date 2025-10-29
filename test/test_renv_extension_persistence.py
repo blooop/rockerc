@@ -49,7 +49,7 @@ class TestRenvExtensionPersistence:
             mock_global_config.return_value = {"args": expected_extensions}
 
             # Call build_rocker_config
-            config, meta = build_rocker_config(repo_spec)
+            config, _ = build_rocker_config(repo_spec)
 
             # Verify extensions are processed correctly
             processed_extensions = config.get("args", [])
@@ -131,7 +131,7 @@ class TestRenvExtensionPersistence:
 
             # Call prepare_launch_plan
             args_dict = {"image": "ubuntu:20.04"}
-            plan = prepare_launch_plan(
+            _ = prepare_launch_plan(
                 args_dict=args_dict,
                 extra_cli="",
                 container_name=container_name,
@@ -283,7 +283,7 @@ class TestRenvExtensionPersistence:
 
             # Call prepare_launch_plan - this should trigger a rebuild
             args_dict = {"image": "ubuntu:20.04"}
-            plan = prepare_launch_plan(
+            _ = prepare_launch_plan(
                 args_dict=args_dict,
                 extra_cli="",
                 container_name="bencher.main",
@@ -330,7 +330,7 @@ class TestRenvExtensionPersistence:
 
             # Call prepare_launch_plan again - this should NOT trigger a rebuild
             args_dict = {"image": "ubuntu:20.04"}
-            plan = prepare_launch_plan(
+            _ = prepare_launch_plan(
                 args_dict=args_dict,
                 extra_cli="",
                 container_name="bencher.main",
