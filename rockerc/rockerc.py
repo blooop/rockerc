@@ -363,8 +363,10 @@ def yaml_dict_to_args(d: dict, extra_args: str = "") -> str:
     if image:
         cmd_str += f" -- {image}"
 
-        # Add keep-alive command for detached containers only
-        if "--detach" in cmd_str and not _has_explicit_command_in_args(extra_args):
+        # Add keep-alive command for detached containers
+        if (
+            "detach" in d or "--detach" in (extra_args or "")
+        ) and not _has_explicit_command_in_args(extra_args):
             cmd_str += " tail -f /dev/null"
 
     return cmd_str

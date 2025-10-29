@@ -25,6 +25,7 @@ import time
 import logging
 import binascii
 import os
+import re
 from typing import List, Sequence, Tuple
 
 # NOTE: Avoid importing from rockerc at module import time to prevent circular imports.
@@ -144,9 +145,9 @@ def get_container_extensions(container_name: str) -> list[str] | None:
         # Parse environment variables to find ROCKERC_EXTENSIONS
         for line in result.stdout.splitlines():
             if line.startswith("ROCKERC_EXTENSIONS="):
-                if ext_value := line.split("=", 1)[1]:
-                    # Split and sort to match how we store them
-                    return sorted(ext_value.split(","))
+                if ext_value := line.split("=", 1)[1].strip():
+                    # Split and sort to match how we store them, remove empty entries
+                    return sorted(ext.strip() for ext in ext_value.split(",") if ext.strip())
         return None
     except subprocess.CalledProcessError:
         return None
@@ -302,11 +303,14 @@ def add_extension_env(base_args: str, extensions: list[str]) -> str:
         return base_args
 
     # Validate extension names for safety (allow alphanumeric, dash, underscore, equals, tilde, dot, slash, comma for extension args)
-    import re
 
     for ext in extensions:
-        # Allow alphanumeric, dash, underscore, equals, tilde, dot, slash for extension args like auto=~/path
-        if not re.match(r"^[a-zA-Z0-9_=~/.,-]+$", ext):
+        # Check for invalid extension names
+        if (
+            "," in ext  # Comma in extension name
+            or any(invalid in ext for invalid in ["!", " "])  # Spaces or exclamation marks
+            or not re.match(r"^[a-zA-Z0-9_=~/.,-]+$", ext)  # Broader character check
+        ):
             LOGGER.warning(
                 "Extension name '%s' contains invalid characters. Skipping environment storage.",
                 ext,
@@ -333,10 +337,39 @@ def ensure_volume_binding(
     Skip if user already provided a --volume referencing the target.
     """
     target = mount_target or f"/workspaces/{container_name}"
-    # Check if volume mount already exists for this target (more specific than just checking if target in base_args)
-    volume_pattern = f"--volume {path}:{target}"
-    if volume_pattern in base_args or f"-v {path}:{target}" in base_args:
-        return base_args
+    # Use shlex to split arguments and check for existing volume mounts
+    tokens = shlex.split(base_args)
+
+    # Check for existing volume mounts matching the path or target
+    existing_paths = set()
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        # Look for volume/mount flags
+        if token in ("-v", "--volume") and i + 1 < len(tokens):
+            volume_spec = tokens[i + 1]
+            parts = volume_spec.split(":")
+            if len(parts) >= 2:
+                existing_paths.add(parts[0].strip("'\""))
+            i += 2
+        elif token.startswith(("-v=", "--volume=", "-v", "--volume")):
+            # For tokens like -v=/path/or -v=
+            volume_spec = token.split("=", 1)[-1]
+            parts = volume_spec.split(":")
+            if len(parts) >= 2:
+                existing_paths.add(parts[0].strip("'\""))
+            i += 1
+        else:
+            i += 1
+
+    # Convert path to absolute path to catch different representations
+    abs_path = str(pathlib.Path(path).resolve())
+
+    # Check if path or any of the existing paths would map to the same volume
+    for existing in existing_paths:
+        if str(pathlib.Path(existing).resolve()) == abs_path:
+            return base_args
+
     return f"{base_args} --volume {path}:{target}:Z".strip()
 
 
@@ -348,6 +381,7 @@ def append_volume_binding(base_args: str, host_path: pathlib.Path, target: str) 
 
     # Parse base_args into tokens
     tokens = shlex.split(base_args)
+
     # Find all --volume arguments and extract their targets
     existing_targets = set()
     for i, token in enumerate(tokens):

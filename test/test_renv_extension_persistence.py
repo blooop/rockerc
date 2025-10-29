@@ -4,6 +4,7 @@ This test verifies that renv properly stores and retrieves extension lists
 to avoid unnecessary container rebuilds when extensions haven't changed.
 """
 
+import pytest
 from unittest.mock import Mock, patch
 from rockerc.renv import build_rocker_config, RepoSpec
 from rockerc.core import get_container_extensions, extensions_changed, prepare_launch_plan
@@ -62,22 +63,25 @@ class TestRenvExtensionPersistence:
             # Should not have 'cwd' extension (filtered out)
             assert "cwd" not in processed_extensions
 
-            # Should have all other expected extensions
-            expected_final = [
-                "persist-image",
-                "fzf",
-                "deps-devtools",
-                "pull",
-                "x11",
-                "user",
-                "git",
-                "git-clone",
-                "ssh",
-                "ssh-client",
-                "jquery",
-                "pixi",
-            ]
-            for ext in expected_final:
+            # Use pytest.mark.parametrize to avoid loops in test
+            @pytest.mark.parametrize(
+                "ext",
+                [
+                    "persist-image",
+                    "fzf",
+                    "deps-devtools",
+                    "pull",
+                    "x11",
+                    "user",
+                    "git",
+                    "git-clone",
+                    "ssh",
+                    "ssh-client",
+                    "jquery",
+                    "pixi",
+                ],
+            )
+            def test_processed_extensions_contain_expected(ext):
                 assert ext in processed_extensions
 
     def test_prepare_launch_plan_extension_comparison(self):
