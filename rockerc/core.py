@@ -33,6 +33,10 @@ from typing import List, Sequence, Tuple
 
 LOGGER = logging.getLogger(__name__)
 
+# Compiled regex for extension name validation - allows alphanumeric, dash, underscore,
+# equals, tilde, dot, slash, comma but prohibits spaces and exclamation marks
+VALID_EXT = re.compile(r"^(?!.*[!\s])[A-Za-z0-9_=~/\.,-]+$")
+
 
 DEFAULT_WAIT_TIMEOUT = float(os.getenv("ROCKERC_WAIT_TIMEOUT", "20"))  # seconds
 DEFAULT_WAIT_INTERVAL = float(os.getenv("ROCKERC_WAIT_INTERVAL", "0.25"))  # seconds
@@ -302,17 +306,11 @@ def add_extension_env(base_args: str, extensions: list[str]) -> str:
     if not extensions:
         return base_args
 
-    # Validate extension names for safety (allow alphanumeric, dash, underscore, equals, tilde, dot, slash, comma for extension args)
-
+    # Validate extension names for safety
     for ext in extensions:
-        # Check for invalid extension names
-        if (
-            "," in ext  # Comma in extension name
-            or any(invalid in ext for invalid in ["!", " "])  # Spaces or exclamation marks
-            or not re.match(r"^[a-zA-Z0-9_=~/.,-]+$", ext)  # Broader character check
-        ):
+        if not VALID_EXT.fullmatch(ext):
             LOGGER.warning(
-                "Extension name '%s' contains invalid characters. Skipping environment storage.",
+                "Extension name %r contains invalid characters. Skipping environment storage.",
                 ext,
             )
             return base_args
@@ -363,11 +361,11 @@ def ensure_volume_binding(
             i += 1
 
     # Convert path to absolute path to catch different representations
-    abs_path = str(pathlib.Path(path).resolve())
+    abs_path = str(pathlib.Path(path).resolve(strict=False))
 
     # Check if path or any of the existing paths would map to the same volume
     for existing in existing_paths:
-        if str(pathlib.Path(existing).resolve()) == abs_path:
+        if str(pathlib.Path(existing).resolve(strict=False)) == abs_path:
             return base_args
 
     return f"{base_args} --volume {path}:{target}:Z".strip()
@@ -375,30 +373,12 @@ def ensure_volume_binding(
 
 def append_volume_binding(base_args: str, host_path: pathlib.Path, target: str) -> str:
     """Append an additional volume mount if it's not already present."""
-    # shlex is already imported at the module level
-
-    volume_arg = f"--volume {host_path}:{target}:Z"
-
-    # Parse base_args into tokens
-    tokens = shlex.split(base_args)
-
-    # Find all --volume arguments and extract their targets
-    existing_targets = set()
-    for i, token in enumerate(tokens):
-        if token == "--volume" and i + 1 < len(tokens):
-            volume_spec = tokens[i + 1]
-            parts = volume_spec.split(":")
-            if len(parts) >= 2:
-                existing_targets.add(parts[1])
-        elif token.startswith("--volume="):
-            volume_spec = token[len("--volume=") :]
-            parts = volume_spec.split(":")
-            if len(parts) >= 2:
-                existing_targets.add(parts[1])
-
-    if target in existing_targets:
+    abs_src = str(host_path.resolve(strict=False))
+    # match "-v /abs/src:"  or "--volume=/abs/src:" or "--volume /abs/src:"
+    pattern = re.compile(rf"(?:-v|--volume)(?:=|\s+){re.escape(abs_src)}(?::|$)")
+    if pattern.search(base_args):
         return base_args
-    return f"{base_args} {volume_arg}".strip()
+    return f"{base_args} --volume {host_path}:{target}:Z".strip()
 
 
 def build_rocker_arg_injections(

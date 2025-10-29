@@ -373,3 +373,61 @@ class TestRenvExtensionPersistence:
         simple_extensions = ["git", "user", "x11"]
         result_simple = add_extension_env(base_args, simple_extensions)
         assert "ROCKERC_EXTENSIONS=git,user,x11" in result_simple
+
+    def test_extensions_ordering_does_not_trigger_rebuild(self):
+        """Test that extensions in a different order do not trigger a rebuild (order-insensitive comparison)."""
+        original_extensions = [
+            "auto=/tmp/renv/blooop/bencher/main/bencher",
+            "deps-devtools",
+            "fzf",
+            "git",
+            "git-clone",
+            "jquery",
+            "persist-image",
+            "pixi",
+            "pull",
+            "ssh",
+        ]
+        reordered_extensions = [
+            "ssh",
+            "pull",
+            "pixi",
+            "persist-image",
+            "jquery",
+            "git-clone",
+            "git",
+            "fzf",
+            "deps-devtools",
+            "auto=/tmp/renv/blooop/bencher/main/bencher",
+        ]
+
+        # Setup: simulate container with stored extensions
+        with (
+            patch("rockerc.core.container_exists") as mock_exists,
+            patch("rockerc.core.get_container_extensions") as mock_get_ext,
+            patch("rockerc.core.container_is_running") as mock_running,
+            patch("rockerc.core.stop_and_remove_container") as mock_remove,
+        ):
+            mock_exists.return_value = True
+            mock_get_ext.return_value = original_extensions.copy()
+            mock_running.return_value = True
+
+            # Call prepare_launch_plan with reordered extensions
+            args_dict = {"image": "ubuntu:20.04"}
+            _ = prepare_launch_plan(
+                args_dict=args_dict,
+                extra_cli="",
+                container_name="bencher.main",
+                vscode=False,
+                force=False,
+                path="/fake/path",
+                extensions=reordered_extensions,
+                extra_volumes=[],
+                mount_target="/workspace",
+            )
+
+            # Should NOT detect changes, so remove should NOT be called
+            mock_remove.assert_not_called()
+
+            # Verify that extensions_changed returns False for different orders
+            assert not extensions_changed(reordered_extensions, original_extensions)
