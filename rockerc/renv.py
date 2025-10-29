@@ -38,6 +38,7 @@ from contextlib import contextmanager
 
 from .completion_loader import load_completion_script
 from .rockerc import deduplicate_extensions
+from .cli_args import FlagSpec, consume_flags, parse_cli_extensions_and_positional
 
 
 # Shared utility for git subprocess.run
@@ -1008,6 +1009,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
     nocache: bool = False,
     no_container: bool = False,
     vsc: bool = False,
+    cli_extensions: Optional[List[str]] = None,
 ) -> int:
     """Manage container lifecycle and execution using core.py's unified flow"""
     if no_container:
@@ -1037,6 +1039,21 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
     # Build rocker configuration and get metadata
     config, meta = build_rocker_config(repo_spec, force=force, nocache=nocache)
+
+    cli_extension_list = deduplicate_extensions(cli_extensions or [])
+    if cli_extension_list:
+        config["args"] = deduplicate_extensions(config.get("args", []) + cli_extension_list)
+        filtered_args, removed_args = _filter_unavailable_extensions(config.get("args", []))
+        if removed_args:
+            logging.warning(
+                "Removing unavailable rocker extensions from CLI: %s",
+                ", ".join(sorted(removed_args)),
+            )
+        config["args"] = filtered_args
+        existing_project_args = meta.get("original_project_args") or []
+        meta["original_project_args"] = deduplicate_extensions(
+            existing_project_args + cli_extension_list
+        )
 
     # Print extension table using rockerc's logic
     from rockerc.rockerc import render_extension_table
@@ -1392,28 +1409,43 @@ def run_renv(args: Optional[List[str]] = None) -> int:
 
     parser.add_argument("--vsc", action="store_true", help="Launch with VS Code integration")
 
-    parsed_args = parser.parse_args(args)
+    if any(flag in args for flag in ("-h", "--help")):
+        parser.print_help()
+        return 0
+
+    flag_specs = [
+        FlagSpec("--no-container", key="no_container"),
+        FlagSpec("--force", aliases=("-f",), key="force"),
+        FlagSpec("--nocache", key="nocache"),
+        FlagSpec("--vsc", key="vsc"),
+    ]
+    flag_values, remaining = consume_flags(args, flag_specs)
+
+    cli_extensions, repo_token, command = parse_cli_extensions_and_positional(remaining)
+
+    repo_spec_str = repo_token
 
     # Interactive fuzzy finder if no repo_spec provided
-    if not parsed_args.repo_spec:
+    if not repo_spec_str:
         selected = fuzzy_select_repo()
         if not selected:
             logging.error("No repository selected. Usage: renv owner/repo[@branch]")
             parser.print_help()
             return 1
-        parsed_args.repo_spec = selected
+        repo_spec_str = selected
 
     try:
-        repo_spec = RepoSpec.parse(parsed_args.repo_spec)
+        repo_spec = RepoSpec.parse(repo_spec_str)
         logging.info(f"Working with: {repo_spec}")
 
         return manage_container(
             repo_spec=repo_spec,
-            command=parsed_args.command if parsed_args.command else None,
-            force=parsed_args.force,
-            nocache=parsed_args.nocache,
-            no_container=parsed_args.no_container,
-            vsc=parsed_args.vsc,
+            command=command or None,
+            force=bool(flag_values["force"]),
+            nocache=bool(flag_values["nocache"]),
+            no_container=bool(flag_values["no_container"]),
+            vsc=bool(flag_values["vsc"]),
+            cli_extensions=cli_extensions or None,
         )
 
     except ValueError as e:

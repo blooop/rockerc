@@ -51,7 +51,7 @@ class TestRenvvscThinWrapper:
     def test_main_preserves_all_arguments(self, mock_run_renv):
         """Test that main() preserves all arguments while adding --vsc"""
         # Setup
-        sys.argv = ["renvvsc", "--force", "owner/repo@branch", "pytest"]
+        sys.argv = ["renvvsc", "--force", "--git", "owner/repo@branch", "pytest"]
         mock_run_renv.return_value = 0
 
         # Execute and catch sys.exit
@@ -62,6 +62,7 @@ class TestRenvvscThinWrapper:
 
         # Verify all arguments are preserved
         assert "--force" in sys.argv
+        assert "--git" in sys.argv
         assert "owner/repo@branch" in sys.argv
         assert "pytest" in sys.argv
         assert "--vsc" in sys.argv
