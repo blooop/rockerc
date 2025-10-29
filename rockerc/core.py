@@ -301,11 +301,12 @@ def add_extension_env(base_args: str, extensions: list[str]) -> str:
     if not extensions:
         return base_args
 
-    # Validate extension names for safety (alphanumeric, dash, underscore only)
+    # Validate extension names for safety (allow alphanumeric, dash, underscore, equals, tilde, dot, slash, comma for extension args)
     import re
 
     for ext in extensions:
-        if not re.match(r"^[a-zA-Z0-9_-]+$", ext):
+        # Allow alphanumeric, dash, underscore, equals, tilde, dot, slash for extension args like auto=~/path
+        if not re.match(r"^[a-zA-Z0-9_=~/.,-]+$", ext):
             LOGGER.warning(
                 "Extension name '%s' contains invalid characters. Skipping environment storage.",
                 ext,
