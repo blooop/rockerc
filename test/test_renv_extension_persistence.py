@@ -58,7 +58,7 @@ class TestRenvExtensionPersistence:
             # Should have 'auto' converted to proper path
             auto_extensions = [ext for ext in processed_extensions if ext.startswith("auto=")]
             assert len(auto_extensions) == 1
-            assert "~/renv/blooop/bencher/main/bencher" in auto_extensions[0]
+            assert "/tmp/renv/blooop/bencher/main/bencher" in auto_extensions[0]
 
             # Should not have 'cwd' extension (filtered out)
             assert "cwd" not in processed_extensions
@@ -90,7 +90,7 @@ class TestRenvExtensionPersistence:
 
         # Current extensions (what we want to use)
         current_extensions = [
-            "auto=~/renv/blooop/bencher/main/bencher",
+            "auto=/tmp/renv/blooop/bencher/main/bencher",
             "deps-devtools",
             "fzf",
             "git",
@@ -107,7 +107,7 @@ class TestRenvExtensionPersistence:
 
         # Stored extensions (what's in the container) - missing jquery and pixi
         stored_extensions = [
-            "auto=~/renv/blooop/bencher/main/bencher",
+            "auto=/tmp/renv/blooop/bencher/main/bencher",
             "deps-devtools",
             "fzf",
             "git",
@@ -159,7 +159,7 @@ class TestRenvExtensionPersistence:
 
         # Current extensions as processed by renv (what the user sees in "Current" column)
         current_extensions = [
-            "auto=~/renv/blooop/bencher/main/bencher",
+            "auto=/tmp/renv/blooop/bencher/main/bencher",
             "deps-devtools",
             "fzf",
             "git",
@@ -192,7 +192,7 @@ class TestRenvExtensionPersistence:
             "x11",
         ]
 
-        # This should detect as changed because "auto" != "auto=~/renv/blooop/bencher/main/bencher"
+        # This should detect as changed because "auto" != "auto=/tmp/renv/blooop/bencher/main/bencher"
         assert extensions_changed(current_extensions, stored_extensions)
 
         # This demonstrates the core issue: auto extension path handling
@@ -200,7 +200,7 @@ class TestRenvExtensionPersistence:
         current_auto = [ext for ext in current_extensions if ext.startswith("auto")]
         stored_auto = [ext for ext in stored_extensions if ext.startswith("auto")]
 
-        assert current_auto == ["auto=~/renv/blooop/bencher/main/bencher"]
+        assert current_auto == ["auto=/tmp/renv/blooop/bencher/main/bencher"]
         assert stored_auto == ["auto"]
 
         # When sorted for comparison, these are different
@@ -249,7 +249,7 @@ class TestRenvExtensionPersistence:
         """Test the exact scenario from user's output: container exists but has no stored extensions."""
         # This reproduces the exact user output where "Stored" column is empty for all extensions
         current_extensions = [
-            "auto=~/renv/blooop/bencher/main/bencher",
+            "auto=/tmp/renv/blooop/bencher/main/bencher",
             "deps-devtools",
             "fzf",
             "git",
@@ -305,7 +305,7 @@ class TestRenvExtensionPersistence:
     def test_extensions_stored_correctly_after_rebuild(self):
         """Test that after a rebuild, extensions are stored and no further rebuilds occur."""
         current_extensions = [
-            "auto=~/renv/blooop/bencher/main/bencher",
+            "auto=/tmp/renv/blooop/bencher/main/bencher",
             "deps-devtools",
             "fzf",
             "git",
@@ -357,7 +357,7 @@ class TestRenvExtensionPersistence:
         from rockerc.core import add_extension_env
 
         # This reproduces the user's scenario
-        extensions_with_auto_path = ["auto=~/renv/blooop/bencher/main/bencher", "git", "user"]
+        extensions_with_auto_path = ["auto=/tmp/renv/blooop/bencher/main/bencher", "git", "user"]
         base_args = "--name test"
 
         # After the fix, this should add the environment variable correctly
@@ -366,7 +366,7 @@ class TestRenvExtensionPersistence:
         # Should now contain ROCKERC_EXTENSIONS with all extensions
         assert "ROCKERC_EXTENSIONS" in result
         # Should have all extensions sorted
-        expected_extensions = "auto=~/renv/blooop/bencher/main/bencher,git,user"
+        expected_extensions = "auto=/tmp/renv/blooop/bencher/main/bencher,git,user"
         assert f"ROCKERC_EXTENSIONS={expected_extensions}" in result
 
         # Test that simple extensions still work fine
