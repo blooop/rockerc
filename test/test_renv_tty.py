@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from rockerc.renv import manage_container, RepoSpec
+from rockerc.renv import manage_container, RepoSpec, get_container_home_path
 from rockerc.core import LaunchPlan
 
 
@@ -60,12 +60,13 @@ def test_docker_exec_interactive_flags(
     result = manage_container(spec)
     assert result == 0
 
+    expected_workdir = get_container_home_path(spec)
     expected_command = (
         ["docker", "exec"]
         + expected_flags
         + [
             "-w",
-            "/test_renv",
+            expected_workdir,
             "test_renv.main",
             "/bin/bash",
         ]
