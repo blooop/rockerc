@@ -16,6 +16,7 @@ from rockerc.renv import (
     _verify_sparse_checkout_path,
     get_container_name,
     get_hostname,
+    get_container_home_path,
 )
 
 
@@ -592,12 +593,13 @@ class TestManageContainer:
         # Verify docker exec was called with git status and working directory
         mock_subprocess.assert_called_once()
         call_args = mock_subprocess.call_args[0][0]
-        # Workdir should be /{repo} at root
+        # Workdir should be /home/{username}/{repo}
+        expected_workdir = get_container_home_path(spec)
         assert call_args == [
             "docker",
             "exec",
             "-w",
-            "/test_renv",
+            expected_workdir,
             "test_renv.main",
             "git",
             "status",
@@ -649,8 +651,9 @@ class TestManageContainer:
         assert mock_prepare_plan.call_count == 1
         _args, kwargs = mock_prepare_plan.call_args
         assert kwargs["path"] == pathlib.Path("/test/branch/src")
-        # Git volume should be at /{repo}/.git at root, not /workspaces/
-        assert kwargs["extra_volumes"] == [(pathlib.Path("/test/branch/.git"), "/test_renv/.git")]
+        # Git volume should be at /home/{username}/{repo}/.git
+        expected_git_path = f"{get_container_home_path(spec)}/.git"
+        assert kwargs["extra_volumes"] == [(pathlib.Path("/test/branch/.git"), expected_git_path)]
 
 
 class TestRockerCommandWorkingDirectory:

@@ -31,6 +31,7 @@ import yaml
 import shutil
 import shlex
 import os
+import pwd
 import re
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Tuple
@@ -435,6 +436,19 @@ def get_hostname(repo_spec: RepoSpec) -> str:
     # repo_spec.repo is already lowercase from RepoSpec.parse()
     # Sanitize to allow only alphanumeric, dash, underscore
     return re.sub(r"[^a-zA-Z0-9_-]", "_", repo_spec.repo)
+
+
+def get_container_home_path(repo_spec: RepoSpec) -> str:
+    """Get the container home directory path for mounting.
+
+    Returns the path where the repository should be mounted in the container,
+    using the host user's home directory structure which will be replicated
+    by the rocker 'user' extension.
+
+    Returns: /home/{username}/{repo}
+    """
+    username = pwd.getpwuid(os.getuid()).pw_name
+    return f"/home/{username}/{repo_spec.repo}"
 
 
 def setup_cache_repo(repo_spec: RepoSpec) -> pathlib.Path:
@@ -1027,14 +1041,14 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
     # Determine workspace mount path and any additional volumes
     # For subfolders: mount only that directory and provide a .git bind mount
-    # For full repo: mount branch directory to /{repo}
+    # For full repo: mount branch directory to /home/{username}/{repo}
     extra_volumes = []
     if repo_spec.subfolder:
         mount_path = branch_dir / repo_spec.subfolder
         extra_volumes.append(
             (
                 branch_dir / ".git",
-                f"/{repo_spec.repo}/.git",
+                f"{get_container_home_path(repo_spec)}/.git",
             )
         )
     else:
@@ -1127,8 +1141,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
         with _restore_cwd_context():
             # Handle VSCode mode using unified backend (same as rockervsc)
             if vsc:
-                # For renv, mount to /{repo} at root, not /workspaces/{container_name}
-                mount_target = f"/{repo_spec.repo}"
+                # For renv, mount to /home/{username}/{repo}
+                mount_target = get_container_home_path(repo_spec)
                 plan = prepare_launch_plan(
                     args_dict=config,
                     extra_cli="",
@@ -1208,15 +1222,15 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                             return 1
 
                 if plan.vscode:
-                    # For non-subfolder: open /{repo} at root
-                    # For subfolder: open /{repo} (subfolder is mounted directly)
-                    vsc_folder = f"/{repo_spec.repo}"
+                    # For non-subfolder: open /home/{username}/{repo}
+                    # For subfolder: open /home/{username}/{repo} (subfolder is mounted directly)
+                    vsc_folder = get_container_home_path(repo_spec)
                     launch_vscode(plan.container_name, plan.container_hex, vsc_folder)
 
                 # Open interactive shell with correct working directory
                 # Since core.py's interactive_shell doesn't support -w flag, we use our own exec
                 # but follow the same pattern as core.py for better compatibility
-                workdir = f"/{repo_spec.repo}"
+                workdir = get_container_home_path(repo_spec)
 
                 # Get shell from environment, validate it's safe and exists in container
                 requested_shell = os.environ.get("SHELL", "/bin/bash")
@@ -1258,8 +1272,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                 return subprocess.call(exec_cmd)
 
             # Terminal mode: use detached workflow (same as rockerc)
-        # For renv, mount to /{repo} at root, not /workspaces/{container_name}
-        mount_target = f"/{repo_spec.repo}"
+        # For renv, mount to /home/{username}/{repo}
+        mount_target = get_container_home_path(repo_spec)
         plan = prepare_launch_plan(
             args_dict=config,
             extra_cli="",
@@ -1290,8 +1304,8 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
 
         # Test for container breakout (if directory was deleted while container running)
         # Only test if we're reusing an existing container
-        # Working directory is always /{repo} at root
-        workdir = f"/{repo_spec.repo}"
+        # Working directory is always /home/{username}/{repo}
+        workdir = get_container_home_path(repo_spec)
 
         if not plan.created:
             # Test if we can actually access the working directory
