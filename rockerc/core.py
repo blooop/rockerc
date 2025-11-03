@@ -390,6 +390,7 @@ def build_rocker_arg_injections(
     always_mount: bool = True,
     extra_volumes: Sequence[Tuple[pathlib.Path, str]] | None = None,
     mount_target: str | None = None,
+    nocache: bool = False,
 ) -> str:
     """Inject required arguments into the user-specified (or config) rocker args string.
 
@@ -404,9 +405,12 @@ def build_rocker_arg_injections(
         always_mount: Whether to add volume mount (default: True)
         extra_volumes: Additional volume bindings (host_path, target)
         mount_target: Optional custom mount target (default: /workspaces/{container_name})
+        nocache: Whether to disable Docker build cache (default: False)
     """
     argline = extra_cli or ""
     argline = ensure_detached_args(argline)
+    if nocache:
+        argline = f"{argline} --nocache".strip()
     argline = ensure_name_args(argline, container_name)
     argline = add_extension_env(argline, extensions)
     if always_mount:
@@ -498,6 +502,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
     extensions: list[str] | None = None,
     extra_volumes: Sequence[Tuple[pathlib.Path, str]] | None = None,
     mount_target: str | None = None,
+    nocache: bool = False,
 ) -> LaunchPlan:
     """Prepare rocker command & stop/remove existing container if forced.
 
@@ -511,6 +516,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         extensions: Optional explicit extension list; if None, extracted from args_dict["args"]
         extra_volumes: Additional host→container volume bindings (host path, target path)
         mount_target: Optional custom mount target (default: /workspaces/{container_name})
+        nocache: Whether to disable Docker build cache (default: False)
 
     Returns:
         LaunchPlan with container configuration and rocker command
@@ -566,6 +572,7 @@ def prepare_launch_plan(  # pylint: disable=too-many-positional-arguments
         current_extensions,
         extra_volumes=extra_volumes,
         mount_target=mount_target,
+        nocache=nocache,
     )
     # Build base rocker args from config dictionary (copy because yaml_dict_to_args mutates)
     from .rockerc import yaml_dict_to_args  # type: ignore

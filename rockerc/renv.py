@@ -1153,6 +1153,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     extensions=config.get("args", []),
                     extra_volumes=extra_volumes,
                     mount_target=mount_target,
+                    nocache=nocache,
                 )
 
                 # Launch rocker command (keep-alive is automatically added by yaml_dict_to_args for detached containers)
@@ -1284,6 +1285,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
             extensions=config["args"],
             extra_volumes=extra_volumes,
             mount_target=mount_target,
+            nocache=nocache,
         )
 
         # Launch rocker command if needed (keep-alive is automatically added by yaml_dict_to_args for detached containers)
@@ -1338,6 +1340,7 @@ def manage_container(  # pylint: disable=too-many-positional-arguments,too-many-
                     extensions=config["args"],
                     extra_volumes=extra_volumes,
                     mount_target=mount_target,
+                    nocache=nocache,
                 )
 
                 if plan.rocker_cmd:
