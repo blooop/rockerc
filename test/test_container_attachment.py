@@ -178,7 +178,8 @@ def test_scenario_reproducing_user_bug():
                 # But docker exec fails because container is not running
                 mock_call = MagicMock(return_value=125)  # Docker error code
                 with patch("subprocess.call", mock_call):
-                    exit_code = interactive_shell(container_name)
+                    with patch.dict("os.environ", {"SHELL": "/bin/bash"}):
+                        exit_code = interactive_shell(container_name)
 
     # This should return the error code from failed docker exec
     assert exit_code == 125
