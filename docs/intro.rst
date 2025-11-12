@@ -6,8 +6,7 @@ A template repo for python projects
 This has basic setup for
 
 * pylint
-* ruff
-* black
+* ruff (formatting and linting)
 * pytest
 * codecov
 * git-lfs
@@ -22,8 +21,8 @@ This has basic setup for
 [![GitHub issues](https://img.shields.io/github/issues/blooop/python_template.svg)](https://GitHub.com/blooop/python_template/issues/)
 [![GitHub pull-requests merged](https://badgen.net/github/merged-prs/blooop/python_template)](https://github.com/blooop/python_template/pulls?q=is%3Amerged)
 [![GitHub release](https://img.shields.io/github/release/blooop/python_template.svg)](https://GitHub.com/blooop/python_template/releases/)
-[![License](https://img.shields.io/pypi/l/bencher)](https://opensource.org/license/mit/)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue)](https://www.python.org/downloads/release/python-310/)
+[![License](https://img.shields.io/github/license/blooop/python_template)](https://opensource.org/license/mit/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
 
 
 To set up your project run the vscode task "pull updates from template repo" and then task "rename project template name"

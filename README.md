@@ -4,8 +4,7 @@ A template repo for python projects that is set up using [pixi](https://pixi.sh)
 This has basic setup for
 
 * pylint
-* ruff
-* black
+* ruff (formatting and linting)
 * pytest
 * git-lfs
 * basic github actions ci
@@ -77,7 +76,7 @@ pixi run ci
 
 ## Legacy
 
-If you don't want to install rocker on your system but want to use vscode, you can run the `scripts/launch_vscode.sh` script to build and connect to a docker container. It will install rocker in a venv.  The docker container is dynamically generated using [rocker](https://github.com/osrf/rocker) and [deps rocker](https://github.com/blooop/deps_rocker).  [deps rocker](https://github.com/blooop/deps_rocker) looks at the python_template.deps.yaml file to install any required apt, pip or shell scripts and launches a container that vscode attaches to. 
+If you don't want to install rocker on your system but want to use vscode, you can run the `scripts/launch_vscode.sh` script to build and connect to a docker container. It will install rocker in a venv.  The docker container is dynamically generated using [rocker](https://github.com/osrf/rocker) and the configuration in `rockerc.yaml`. 
 
 ## Troubleshooting
 
