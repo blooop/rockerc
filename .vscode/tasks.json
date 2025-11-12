@@ -23,9 +23,9 @@
 		},
 		{
 			"label": "autoformat",
-			"detail": "Use ruff and black to automatically fix and format the code",
+			"detail": "Use ruff to automatically fix and format the code",
 			"type": "shell",
-			"command": "pixi run fmt"
+			"command": "pixi run format"
 		},		
 		{
 			"label": "lint",

@@ -6,8 +6,7 @@ A template repo for python projects
 This has basic setup for
 
 * pylint
-* ruff
-* black
+* ruff (formatting and linting)
 * pytest
 * codecov
 * git-lfs
