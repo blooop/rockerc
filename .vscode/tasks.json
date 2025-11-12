@@ -103,17 +103,7 @@
 			"detail": "Replaces all instances of the template project name with a new name. ",
 			"type": "shell",
 			"command": "scripts/rename_project.sh '${input:new_project_name}' '${input:new_author_name}'  '${input:new_author_email}'  '${input:github_username}'"
-		},		
-		{
-			"label": "flit install",
-			"type": "shell",
-			"command": "flit install --symlink"
 		},
-		{
-			"label": "flit publish",
-			"type": "shell",
-			"command": "flit publish"
-		},				
 		{
 			"label": "setup: host",
 			"detail": "Sets up docker, nvidia docker git-lfs and rocker which are used to clone and setup docker containers",
