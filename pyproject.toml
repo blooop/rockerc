@@ -12,7 +12,7 @@ dependencies = []
 Source = "https://github.com/blooop/python_template"
 Home = "https://github.com/blooop/python_template"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 

@@ -898,15 +898,15 @@ packages:
 - pypi: ./
   name: python-template
   version: 0.2.0
-  sha256: 2933876afd87154c87e8c341122913de5e8c17c5e97c13eae6178a8403a446a6
+  sha256: 9c72c30935ab8725c75e502df76dcabf72e423860b0ae20c865937cb527505ea
   requires_dist:
-  - pylint>=3.2.5,<=3.3.7 ; extra == 'test'
-  - pytest-cov>=4.1,<=6.2.1 ; extra == 'test'
-  - pytest>=7.4,<=8.4.1 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.135.20 ; extra == 'test'
-  - ruff>=0.5.0,<=0.12.1 ; extra == 'test'
-  - coverage>=7.5.4,<=7.9.1 ; extra == 'test'
-  - pre-commit<=4.2.0 ; extra == 'test'
+  - pylint>=3.2.5,<=4.0.2 ; extra == 'test'
+  - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
+  - pytest>=7.4,<=9.0.0 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.147.0 ; extra == 'test'
+  - ruff>=0.5.0,<=0.14.4 ; extra == 'test'
+  - coverage>=7.5.4,<=7.11.3 ; extra == 'test'
+  - pre-commit<=4.4.0 ; extra == 'test'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/noarch/python_abi-3.13-8_cp313.conda
   build_number: 8
