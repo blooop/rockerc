@@ -36,6 +36,27 @@ If you want to use docker you may want to run the `scripts/setup_host.sh` script
 
 If you are using pixi, look at the available tasks in pyproject.toml  If you are new to pixi follow the instructions on the pixi [website](https://prefix.dev/)
 
+# Claude Code Online Support
+
+This template includes built-in support for [Claude Code](https://docs.claude.com/claude-code) online environment! The `.claude/hooks/SessionStart` script automatically:
+
+- Installs pixi package manager
+- Sets up all project dependencies
+- Configures pre-commit hooks
+- Prepares the development environment
+
+**Quick Start with Claude Code:**
+1. Open this repository in Claude Code online
+2. The environment sets up automatically via the SessionStart hook
+3. Claude can immediately run commands like `pixi run test`, `pixi run lint`, etc.
+
+**Manual activation (if needed):**
+```bash
+source .claude/activate.sh
+```
+
+See [.claude/README.md](.claude/README.md) for detailed information about the Claude Code configuration.
+
 # Github setup
 
 There are github workflows for CI, codecov and automated pypi publishing in `ci.yml` and `publish.yml`.
