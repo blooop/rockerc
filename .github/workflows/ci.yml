@@ -17,7 +17,7 @@ jobs:
         environment: [py310, py311, py312, py313]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup SSH Agent
         uses: webfactory/ssh-agent@v0.9.1
         with:
