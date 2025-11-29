@@ -20,7 +20,7 @@ rockerc = { path = ".", editable = true }
 Source = "https://github.com/blooop/rockerc"
 Home = "https://github.com/blooop/rockerc"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
