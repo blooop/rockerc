@@ -1,23 +1,24 @@
 {
-	"name": "rockerc",
-	"build": {
-		"dockerfile": "Dockerfile",
-		"context": ".."
-	},
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"ms-python.python",
-				"ms-python.vscode-pylance",
-				"ms-python.pylint",
-				"charliermarsh.ruff",
-				"mhutchie.git-graph",
-				"tamasfe.even-better-toml",
-				"ms-azuretools.vscode-docker",
-			]
-		}
-	},
-	// docker in docker is included in the pixi devcontainer example, but disabling for the moment due to security issues
+    "name": "python_template",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": "..",
+        "args": {
+            "PIXI_VERSION": "v0.48.2"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {},
+            "extensions": [
+                "jjjermiah.pixi-vscode",
+                "ms-python.python",
+                "charliermarsh.ruff",
+                "tamasfe.even-better-toml",
+                "mhutchie.git-graph",
+              ]
+        }
+    },
 	"features": {
       "ghcr.io/devcontainers/features/docker-in-docker:2": {}
     },

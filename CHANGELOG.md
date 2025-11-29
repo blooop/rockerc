@@ -27,4 +27,4 @@
 ## [0.12.0]
 Historical releases prior to 0.13.0 not fully enumerated here.
 
-## [0.0.0]
+## [0.2.0]
