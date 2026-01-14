@@ -8,8 +8,8 @@ Usage:
     dp                           # fzf selector for existing workspaces
     dp <workspace>               # open/create workspace, attach shell
     dp <workspace> <command>     # run command in workspace
-    dp github.com/owner/repo     # create from git repo
-    dp github.com/owner/repo@br  # specific branch
+    dp owner/repo                # create from git repo (github.com)
+    dp owner/repo@branch         # specific branch
     dp ./path                    # create from local path
     dp --ls                      # list workspaces
     dp --stop <workspace>        # stop workspace
@@ -23,12 +23,32 @@ import subprocess
 import json
 import logging
 import pathlib
+import re
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 
 from .completion import install_all_completions
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+# Regex to match owner/repo[@branch] format (not a path, not already a URL)
+
+OWNER_REPO_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(@[a-zA-Z0-9_./%-]+)?$")
+
+
+def expand_workspace_spec(spec: str) -> str:
+    """Expand owner/repo[@branch] to github.com/owner/repo[@branch] for devpod."""
+    # Don't expand if it's a path
+    if spec.startswith("./") or spec.startswith("/") or spec.startswith("~"):
+        return spec
+    # Don't expand if it already looks like a URL
+    if "://" in spec or spec.startswith("github.com/") or spec.startswith("gitlab.com/"):
+        return spec
+    # Check if it matches owner/repo[@branch] pattern
+    if OWNER_REPO_PATTERN.match(spec):
+        return f"github.com/{spec}"
+    # Otherwise return as-is (existing workspace name)
+    return spec
 
 
 @dataclass
@@ -129,7 +149,7 @@ def fuzzy_select_workspace() -> Optional[str]:
 
     workspaces = list_workspaces()
     if not workspaces:
-        logging.info("No workspaces found. Create one with: dp github.com/owner/repo or dp ./path")
+        logging.info("No workspaces found. Create one with: dp owner/repo or dp ./path")
         return None
 
     # Format options for display: "id | type | source"
@@ -196,8 +216,8 @@ Usage:
     dp                           Interactive workspace selector (fzf)
     dp <workspace>               Start workspace and attach shell
     dp <workspace> <command>     Run command in workspace
-    dp github.com/owner/repo     Create workspace from git repo
-    dp github.com/owner/repo@br  Create workspace from specific branch
+    dp owner/repo                Create workspace from GitHub repo
+    dp owner/repo@branch         Create workspace from specific branch
     dp ./path                    Create workspace from local path
 
 Commands:
@@ -214,7 +234,8 @@ Commands:
 Examples:
     dp                           # Select workspace with fzf
     dp myproject                 # Open existing workspace
-    dp github.com/loft-sh/devpod # Create from GitHub
+    dp loft-sh/devpod            # Create from GitHub
+    dp blooop/rockerc@main       # Create from specific branch
     dp ./my-project              # Create from local folder
     dp --code myproject          # Open in VS Code
     dp myproject 'make test'     # Run command in workspace
@@ -318,7 +339,7 @@ def main() -> int:
         return workspace_ssh(workspace)
 
     # Default: workspace name and optional command
-    workspace = args[0]
+    workspace = expand_workspace_spec(args[0])
     command = " ".join(args[1:]) if len(args) > 1 else None
 
     # Start the workspace

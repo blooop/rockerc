@@ -11,8 +11,8 @@ dp [workspace[@branch]] [command]
 dp                           # fzf selector for existing workspaces
 dp <workspace>               # open/create workspace, attach shell
 dp <workspace> <command>     # run command in workspace
-dp github.com/owner/repo     # create from git repo
-dp github.com/owner/repo@br  # specific branch
+dp owner/repo                # create from git repo (github.com)
+dp owner/repo@branch         # specific branch
 dp ./path                    # create from local path
 dp --ls                      # list workspaces
 dp --stop <workspace>        # stop workspace
@@ -38,7 +38,7 @@ dp --install                 # install completions
 
 Tab completion provides:
 - Existing workspace names
-- Git URLs with owner/repo format after `github.com/`
+- Owner/repo format for git repos (auto-expands to github.com URL)
 - Branch completion after `@`
 - Flag completion
 
