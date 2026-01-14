@@ -8,6 +8,9 @@ from rockerc.dp import (
     is_path_spec,
     is_git_spec,
     validate_workspace_spec,
+    parse_owner_repo_from_url,
+    discover_repos_from_workspaces,
+    get_known_repos,
     Workspace,
     list_workspaces,
     get_workspace_ids,
@@ -346,3 +349,112 @@ class TestGetWorkspaceIds:
 
         ids = get_workspace_ids()
         assert ids == []
+
+
+class TestParseOwnerRepoFromUrl:
+    """Tests for parse_owner_repo_from_url function."""
+
+    def test_parse_ssh_url(self):
+        """Test parsing git@github.com:owner/repo.git URL."""
+        result = parse_owner_repo_from_url("git@github.com:blooop/python_template.git")
+        assert result == ("blooop", "python_template")
+
+    def test_parse_ssh_url_no_git_suffix(self):
+        """Test parsing git@github.com:owner/repo URL without .git."""
+        result = parse_owner_repo_from_url("git@github.com:blooop/rockerc")
+        assert result == ("blooop", "rockerc")
+
+    def test_parse_https_url(self):
+        """Test parsing https://github.com/owner/repo.git URL."""
+        result = parse_owner_repo_from_url("https://github.com/loft-sh/devpod.git")
+        assert result == ("loft-sh", "devpod")
+
+    def test_parse_https_url_no_git_suffix(self):
+        """Test parsing https://github.com/owner/repo URL."""
+        result = parse_owner_repo_from_url("https://github.com/owner/repo")
+        assert result == ("owner", "repo")
+
+    def test_parse_github_com_url(self):
+        """Test parsing github.com/owner/repo URL."""
+        result = parse_owner_repo_from_url("github.com/blooop/test")
+        assert result == ("blooop", "test")
+
+    def test_parse_invalid_url(self):
+        """Test parsing non-GitHub URL returns None."""
+        result = parse_owner_repo_from_url("https://gitlab.com/owner/repo")
+        assert result is None
+
+    def test_parse_random_string(self):
+        """Test parsing random string returns None."""
+        result = parse_owner_repo_from_url("not a url")
+        assert result is None
+
+
+class TestDiscoverReposFromWorkspaces:
+    """Tests for discover_repos_from_workspaces function."""
+
+    def test_discover_from_git_workspace(self):
+        """Test discovering repo from git workspace."""
+        workspaces = [
+            Workspace("ws1", "git", "github.com/owner/repo", "", "docker", "vscode"),
+        ]
+        repos = discover_repos_from_workspaces(workspaces)
+        assert repos == {"owner": ["repo"]}
+
+    @patch("rockerc.dp.get_git_remote_url")
+    def test_discover_from_local_workspace(self, mock_remote):
+        """Test discovering repo from local workspace with git remote."""
+        mock_remote.return_value = "git@github.com:blooop/python_template.git"
+        workspaces = [
+            Workspace("ws1", "local", "/home/user/project", "", "docker", "vscode"),
+        ]
+        repos = discover_repos_from_workspaces(workspaces)
+        assert repos == {"blooop": ["python_template"]}
+
+    @patch("rockerc.dp.get_git_remote_url")
+    def test_discover_multiple_repos(self, mock_remote):
+        """Test discovering multiple repos from different owners."""
+        mock_remote.side_effect = [
+            "git@github.com:owner1/repo1.git",
+            "git@github.com:owner2/repo2.git",
+            "git@github.com:owner1/repo3.git",
+        ]
+        workspaces = [
+            Workspace("ws1", "local", "/path1", "", "docker", "vscode"),
+            Workspace("ws2", "local", "/path2", "", "docker", "vscode"),
+            Workspace("ws3", "local", "/path3", "", "docker", "vscode"),
+        ]
+        repos = discover_repos_from_workspaces(workspaces)
+        assert repos == {"owner1": ["repo1", "repo3"], "owner2": ["repo2"]}
+
+    @patch("rockerc.dp.get_git_remote_url")
+    def test_discover_no_remote(self, mock_remote):
+        """Test workspace without git remote is skipped."""
+        mock_remote.return_value = None
+        workspaces = [
+            Workspace("ws1", "local", "/path", "", "docker", "vscode"),
+        ]
+        repos = discover_repos_from_workspaces(workspaces)
+        assert repos == {}
+
+
+class TestGetKnownRepos:
+    """Tests for get_known_repos function."""
+
+    @patch("rockerc.dp.list_workspaces")
+    @patch("rockerc.dp.get_git_remote_url")
+    def test_get_known_repos(self, mock_remote, mock_list):
+        """Test getting known repos as sorted list."""
+        mock_list.return_value = [
+            Workspace("ws1", "git", "github.com/zowner/zrepo", "", "docker", "vscode"),
+            Workspace("ws2", "git", "github.com/aowner/arepo", "", "docker", "vscode"),
+        ]
+        repos = get_known_repos()
+        assert repos == ["aowner/arepo", "zowner/zrepo"]
+
+    @patch("rockerc.dp.list_workspaces")
+    def test_get_known_repos_empty(self, mock_list):
+        """Test getting known repos when no workspaces."""
+        mock_list.return_value = []
+        repos = get_known_repos()
+        assert repos == []

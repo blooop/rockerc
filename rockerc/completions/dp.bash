@@ -6,7 +6,7 @@ _dp_completion() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Command options
-    opts="--ls --stop --rm --code --status --recreate --reset --install --help"
+    opts="--ls --repos --stop --rm --code --status --recreate --reset --install --help"
 
     # Flag completion
     if [[ ${cur} == -* ]]; then
@@ -16,7 +16,8 @@ _dp_completion() {
 
     # Commands that need workspace completion
     if [[ "$prev" == "--stop" || "$prev" == "--rm" || "$prev" == "--code" || "$prev" == "--status" || "$prev" == "--recreate" || "$prev" == "--reset" ]]; then
-        local workspaces=$(devpod list --output json 2>/dev/null | jq -r '.[].id' 2>/dev/null)
+        local workspaces
+        workspaces=$(devpod list --output json 2>/dev/null | jq -r '.[].id' 2>/dev/null)
         if [[ -n "$workspaces" ]]; then
             COMPREPLY=( $(compgen -W "${workspaces}" -- ${cur}) )
         fi
@@ -29,7 +30,8 @@ _dp_completion() {
         compopt -o nospace
 
         # Get existing workspace names
-        local workspaces=$(devpod list --output json 2>/dev/null | jq -r '.[].id' 2>/dev/null)
+        local workspaces
+        workspaces=$(devpod list --output json 2>/dev/null | jq -r '.[].id' 2>/dev/null)
 
         # If typing a path, complete files/directories
         if [[ "$cur" == ./* || "$cur" == /* || "$cur" == ~/* ]]; then
@@ -38,24 +40,28 @@ _dp_completion() {
             return 0
         fi
 
+        # Get known repos from dp
+        local known_repos
+        known_repos=$(dp --repos 2>/dev/null)
+
         # Check if completing owner/repo format (contains /)
         if [[ "$cur" == */* ]]; then
-            # Extract owner/repo from existing git workspaces
-            local git_repos=$(devpod list --output json 2>/dev/null | jq -r '.[].source.gitRepository // empty' 2>/dev/null | grep -v "^$" | sed 's|^github.com/||' | sed 's|^https://github.com/||')
-            if [[ -n "$git_repos" ]]; then
-                COMPREPLY=( $(compgen -W "${git_repos}" -- ${cur}) )
+            # Complete from known repos
+            if [[ -n "$known_repos" ]]; then
+                COMPREPLY=( $(compgen -W "${known_repos}" -- ${cur}) )
             fi
             return 0
         fi
 
-        # Default: complete workspace names and offer owner completion
+        # Default: complete workspace names and offer owner/ completion
         local completions="$workspaces"
 
-        # Add unique owners from git repos for owner/ completion
-        local owners=$(devpod list --output json 2>/dev/null | jq -r '.[].source.gitRepository // empty' 2>/dev/null | grep -v "^$" | sed 's|^github.com/||' | sed 's|^https://github.com/||' | cut -d'/' -f1 | sort -u)
-        if [[ -n "$owners" ]]; then
+        # Add unique owners from known repos for owner/ completion
+        if [[ -n "$known_repos" ]]; then
+            local owners
+            owners=$(echo "$known_repos" | cut -d'/' -f1 | sort -u)
             for owner in $owners; do
-                completions="$completions $owner/"
+                completions="$completions ${owner}/"
             done
         fi
 

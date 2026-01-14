@@ -36,11 +36,26 @@ dp --install                 # install completions
 
 ## Autocomplete
 
-Tab completion provides:
-- Existing workspace names
-- Owner/repo format for git repos (auto-expands to github.com URL)
-- Branch completion after `@`
-- Flag completion
+Tab completion provides intelligent owner/repo discovery:
+
+- **Owner completion**: Type partial owner and TAB completes
+  ```bash
+  dp blo<TAB>    # Completes to blooop/
+  ```
+- **Repo completion**: After owner/, TAB completes repo names
+  ```bash
+  dp blooop/<TAB>    # Completes to blooop/python_template
+  ```
+- **Branch completion**: After @, TAB completes branch names
+  ```bash
+  dp blooop/rockerc@<TAB>    # Completes available branches
+  ```
+- **Workspace completion**: Existing workspace names
+- **Flag completion**: All --flags
+
+Owner/repo data is discovered by:
+1. Parsing git remotes from local workspace directories
+2. Extracting owner/repo from GitHub URLs (git@ or https://)
 
 ## FZF Selection
 

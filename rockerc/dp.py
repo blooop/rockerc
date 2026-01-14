@@ -118,6 +118,105 @@ class Workspace:
         )
 
 
+# Regex patterns for parsing git URLs
+GIT_URL_PATTERNS = [
+    # git@github.com:owner/repo.git
+    re.compile(r"git@github\.com:([^/]+)/([^/]+?)(?:\.git)?$"),
+    # https://github.com/owner/repo.git or https://github.com/owner/repo
+    re.compile(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?$"),
+    # github.com/owner/repo
+    re.compile(r"^github\.com/([^/]+)/([^/]+?)(?:\.git)?$"),
+]
+
+
+def parse_owner_repo_from_url(url: str) -> Optional[tuple]:
+    """Extract (owner, repo) from a git URL."""
+    for pattern in GIT_URL_PATTERNS:
+        match = pattern.match(url)
+        if match:
+            return (match.group(1), match.group(2))
+    return None
+
+
+def get_git_remote_url(path: str) -> Optional[str]:
+    """Get the origin remote URL from a git repository."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", path, "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def get_git_branches(path: str) -> List[str]:
+    """Get list of branches from a git repository."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", path, "branch", "-r"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            branches = []
+            for line in result.stdout.strip().split("\n"):
+                line = line.strip()
+                if line and "origin/" in line and "HEAD" not in line:
+                    branch = line.replace("origin/", "")
+                    branches.append(branch)
+            return branches
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return []
+
+
+def discover_repos_from_workspaces(workspaces: List[Workspace]) -> Dict[str, List[str]]:
+    """Discover owner/repo from workspace git remotes.
+
+    Returns dict mapping owner -> list of repos.
+    """
+    repos: Dict[str, List[str]] = {}
+
+    for ws in workspaces:
+        owner_repo = None
+
+        # For git workspaces, parse the source URL directly
+        if ws.source_type == "git":
+            owner_repo = parse_owner_repo_from_url(ws.source)
+
+        # For local workspaces, try to get git remote
+        elif ws.source_type == "local" and ws.source:
+            remote_url = get_git_remote_url(ws.source)
+            if remote_url:
+                owner_repo = parse_owner_repo_from_url(remote_url)
+
+        if owner_repo:
+            owner, repo = owner_repo
+            if owner not in repos:
+                repos[owner] = []
+            if repo not in repos[owner]:
+                repos[owner].append(repo)
+
+    return repos
+
+
+def get_known_repos() -> List[str]:
+    """Get list of known owner/repo strings from workspaces."""
+    workspaces = list_workspaces()
+    repos = discover_repos_from_workspaces(workspaces)
+    result = []
+    for owner, repo_list in sorted(repos.items()):
+        for repo in sorted(repo_list):
+            result.append(f"{owner}/{repo}")
+    return result
+
+
 def run_devpod(args: List[str], capture: bool = False) -> subprocess.CompletedProcess:
     """Run a devpod command."""
     cmd = ["devpod"] + args
@@ -298,6 +397,12 @@ def main() -> int:
     # Handle flags
     if args[0] == "--ls":
         print_workspaces()
+        return 0
+
+    if args[0] == "--repos":
+        # Output known repos for bash completion
+        for repo in get_known_repos():
+            print(repo)
         return 0
 
     if args[0] == "--install":
