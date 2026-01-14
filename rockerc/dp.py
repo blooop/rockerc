@@ -31,6 +31,76 @@ from .completion import install_all_completions
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
+# Cache configuration
+CACHE_DIR = pathlib.Path.home() / ".cache" / "dp"
+CACHE_FILE = CACHE_DIR / "completions.json"
+
+
+def get_cache_path() -> pathlib.Path:
+    """Get the path to the completion cache file."""
+    return CACHE_FILE
+
+
+def read_completion_cache() -> Optional[Dict[str, Any]]:
+    """Read completion data from cache file."""
+    cache_path = get_cache_path()
+    if not cache_path.exists():
+        return None
+    try:
+        with open(cache_path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def write_completion_cache(data: Dict[str, Any]) -> None:
+    """Write completion data to cache file."""
+    cache_path = get_cache_path()
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except OSError:
+        pass
+
+
+def update_completion_cache() -> Dict[str, Any]:
+    """Update the completion cache with current data."""
+    workspaces = list_workspaces()
+    workspace_ids = [ws.id for ws in workspaces]
+    repos = discover_repos_from_workspaces(workspaces)
+
+    # Flatten repos to list of owner/repo strings
+    known_repos = []
+    for owner, repo_list in sorted(repos.items()):
+        for repo in sorted(repo_list):
+            known_repos.append(f"{owner}/{repo}")
+
+    # Extract unique owners
+    owners = sorted(repos.keys())
+
+    data = {
+        "workspaces": workspace_ids,
+        "repos": known_repos,
+        "owners": owners,
+    }
+    write_completion_cache(data)
+    return data
+
+
+def update_cache_background() -> None:
+    """Update completion cache in background."""
+    try:
+        subprocess.Popen(
+            [sys.executable, "-m", "rockerc.dp", "--update-cache"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError:
+        pass
+
+
 # Regex to match owner/repo[@branch] format (not a path, not already a URL)
 
 OWNER_REPO_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(@[a-zA-Z0-9_./%-]+)?$")
@@ -400,9 +470,30 @@ def main() -> int:
         return 0
 
     if args[0] == "--repos":
-        # Output known repos for bash completion
-        for repo in get_known_repos():
-            print(repo)
+        # Output known repos for bash completion (uses cache if available)
+        cache = read_completion_cache()
+        if cache and "repos" in cache:
+            for repo in cache["repos"]:
+                print(repo)
+        else:
+            for repo in get_known_repos():
+                print(repo)
+        return 0
+
+    if args[0] == "--update-cache":
+        # Update completion cache (called in background)
+        update_completion_cache()
+        return 0
+
+    if args[0] == "--completion-data":
+        # Output all completion data as JSON (fast, from cache)
+        cache = read_completion_cache()
+        if cache:
+            print(json.dumps(cache))
+        else:
+            # No cache, generate and cache it
+            data = update_completion_cache()
+            print(json.dumps(data))
         return 0
 
     if args[0] == "--install":
@@ -497,7 +588,12 @@ def main() -> int:
         return result.returncode
 
     # Attach to workspace
-    return workspace_ssh(workspace, command)
+    ret = workspace_ssh(workspace, command)
+
+    # Update cache in background after workspace operations
+    update_cache_background()
+
+    return ret
 
 
 if __name__ == "__main__":
