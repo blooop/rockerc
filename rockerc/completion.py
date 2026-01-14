@@ -52,6 +52,7 @@ def install_all_completions(rc_path: Optional[pathlib.Path] = None) -> int:
             _rockerc_bash_completion_script().rstrip(),
             load_completion_script("renv").rstrip(),
             load_completion_script("aid").rstrip(),
+            load_completion_script("dp").rstrip(),
         ]
         combined_script = "\n\n".join(combined_script_parts) + "\n"
         completion_path.write_text(combined_script, encoding="utf-8")
