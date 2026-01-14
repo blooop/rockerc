@@ -36,10 +36,27 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 OWNER_REPO_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(@[a-zA-Z0-9_./%-]+)?$")
 
 
+def is_path_spec(spec: str) -> bool:
+    """Check if spec looks like a filesystem path."""
+    return spec.startswith("./") or spec.startswith("/") or spec.startswith("~")
+
+
+def is_git_spec(spec: str) -> bool:
+    """Check if spec looks like a git repo (owner/repo or URL)."""
+    # Paths are not git specs
+    if is_path_spec(spec):
+        return False
+    if "://" in spec:
+        return True
+    if spec.startswith("github.com/") or spec.startswith("gitlab.com/"):
+        return True
+    return bool(OWNER_REPO_PATTERN.match(spec))
+
+
 def expand_workspace_spec(spec: str) -> str:
     """Expand owner/repo[@branch] to github.com/owner/repo[@branch] for devpod."""
     # Don't expand if it's a path
-    if spec.startswith("./") or spec.startswith("/") or spec.startswith("~"):
+    if is_path_spec(spec):
         return spec
     # Don't expand if it already looks like a URL
     if "://" in spec or spec.startswith("github.com/") or spec.startswith("gitlab.com/"):
@@ -49,6 +66,21 @@ def expand_workspace_spec(spec: str) -> str:
         return f"github.com/{spec}"
     # Otherwise return as-is (existing workspace name)
     return spec
+
+
+def validate_workspace_spec(spec: str, existing_ids: List[str]) -> Optional[str]:
+    """Validate workspace spec and return error message if invalid."""
+    # Valid if it's an existing workspace
+    if spec in existing_ids:
+        return None
+    # Valid if it's a path
+    if is_path_spec(spec):
+        return None
+    # Valid if it's a git spec (owner/repo or URL)
+    if is_git_spec(spec):
+        return None
+    # Invalid - provide helpful error
+    return f"Unknown workspace '{spec}'. Use 'dp --ls' to list workspaces, or specify owner/repo or ./path"
 
 
 @dataclass
@@ -161,7 +193,10 @@ def fuzzy_select_workspace() -> Optional[str]:
         ws_map[label] = ws.id
 
     print("Select workspace (type to filter):")
-    selected = iterfzf(options, multi=False)
+    try:
+        selected = iterfzf(options, multi=False)
+    except KeyboardInterrupt:
+        return None
     if selected:
         return ws_map.get(selected)
     return None
@@ -339,8 +374,17 @@ def main() -> int:
         return workspace_ssh(workspace)
 
     # Default: workspace name and optional command
-    workspace = expand_workspace_spec(args[0])
+    raw_spec = args[0]
     command = " ".join(args[1:]) if len(args) > 1 else None
+
+    # Validate the workspace spec
+    existing_ids = get_workspace_ids()
+    error = validate_workspace_spec(raw_spec, existing_ids)
+    if error:
+        logging.error(error)
+        return 1
+
+    workspace = expand_workspace_spec(raw_spec)
 
     # Start the workspace
     result = workspace_up(workspace)
@@ -352,4 +396,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(130)

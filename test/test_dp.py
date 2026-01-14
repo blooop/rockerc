@@ -5,11 +5,105 @@ from unittest.mock import patch, MagicMock
 
 from rockerc.dp import (
     expand_workspace_spec,
+    is_path_spec,
+    is_git_spec,
+    validate_workspace_spec,
     Workspace,
     list_workspaces,
     get_workspace_ids,
     OWNER_REPO_PATTERN,
 )
+
+
+class TestIsPathSpec:
+    """Tests for is_path_spec function."""
+
+    def test_dot_slash_is_path(self):
+        """Test ./path is recognized as path."""
+        assert is_path_spec("./my-project")
+
+    def test_absolute_is_path(self):
+        """Test /path is recognized as path."""
+        assert is_path_spec("/home/user/project")
+
+    def test_tilde_is_path(self):
+        """Test ~/path is recognized as path."""
+        assert is_path_spec("~/projects/test")
+
+    def test_simple_name_not_path(self):
+        """Test simple name is not a path."""
+        assert not is_path_spec("myworkspace")
+
+    def test_owner_repo_not_path(self):
+        """Test owner/repo is not a path."""
+        assert not is_path_spec("owner/repo")
+
+
+class TestIsGitSpec:
+    """Tests for is_git_spec function."""
+
+    def test_owner_repo_is_git(self):
+        """Test owner/repo is recognized as git."""
+        assert is_git_spec("owner/repo")
+
+    def test_owner_repo_with_branch_is_git(self):
+        """Test owner/repo@branch is recognized as git."""
+        assert is_git_spec("blooop/rockerc@main")
+
+    def test_github_url_is_git(self):
+        """Test github.com URL is recognized as git."""
+        assert is_git_spec("github.com/owner/repo")
+
+    def test_gitlab_url_is_git(self):
+        """Test gitlab.com URL is recognized as git."""
+        assert is_git_spec("gitlab.com/owner/repo")
+
+    def test_https_url_is_git(self):
+        """Test https URL is recognized as git."""
+        assert is_git_spec("https://github.com/owner/repo")
+
+    def test_simple_name_not_git(self):
+        """Test simple name is not git."""
+        assert not is_git_spec("myworkspace")
+
+    def test_path_not_git(self):
+        """Test path is not git."""
+        assert not is_git_spec("./my-project")
+
+
+class TestValidateWorkspaceSpec:
+    """Tests for validate_workspace_spec function."""
+
+    def test_existing_workspace_valid(self):
+        """Test existing workspace name is valid."""
+        error = validate_workspace_spec("myws", ["myws", "other"])
+        assert error is None
+
+    def test_owner_repo_valid(self):
+        """Test owner/repo is valid even if not existing."""
+        error = validate_workspace_spec("owner/repo", [])
+        assert error is None
+
+    def test_owner_repo_with_branch_valid(self):
+        """Test owner/repo@branch is valid."""
+        error = validate_workspace_spec("blooop/rockerc@main", [])
+        assert error is None
+
+    def test_path_valid(self):
+        """Test path is valid even if not existing."""
+        error = validate_workspace_spec("./my-project", [])
+        assert error is None
+
+    def test_unknown_name_invalid(self):
+        """Test unknown simple name returns error."""
+        error = validate_workspace_spec("blo", ["myws", "other"])
+        assert error is not None
+        assert "Unknown workspace 'blo'" in error
+
+    def test_partial_name_invalid(self):
+        """Test partial match is not valid."""
+        error = validate_workspace_spec("my", ["myws", "myother"])
+        assert error is not None
 
 
 class TestExpandWorkspaceSpec:
