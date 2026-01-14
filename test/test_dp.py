@@ -442,8 +442,7 @@ class TestGetKnownRepos:
     """Tests for get_known_repos function."""
 
     @patch("rockerc.dp.list_workspaces")
-    @patch("rockerc.dp.get_git_remote_url")
-    def test_get_known_repos(self, mock_remote, mock_list):
+    def test_get_known_repos(self, mock_list):
         """Test getting known repos as sorted list."""
         mock_list.return_value = [
             Workspace("ws1", "git", "github.com/zowner/zrepo", "", "docker", "vscode"),

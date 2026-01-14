@@ -91,6 +91,7 @@ def update_completion_cache() -> Dict[str, Any]:
 def update_cache_background() -> None:
     """Update completion cache in background."""
     try:
+        # pylint: disable=consider-using-with
         subprocess.Popen(
             [sys.executable, "-m", "rockerc.dp", "--update-cache"],
             stdout=subprocess.DEVNULL,
