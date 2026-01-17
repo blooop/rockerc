@@ -68,7 +68,7 @@ renv = "rockerc.renv:main"
 renvvsc = "rockerc.renvsc:main"
 rockervsc = "rockerc.rockervsc:main"
 aid = "rockerc.aid:main"
-dp = "rockerc.dp:main"
+dl = "rockerc.dl:main"
 
 # Environments
 [tool.pixi.environments]

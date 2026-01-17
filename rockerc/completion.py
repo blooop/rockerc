@@ -16,6 +16,7 @@ _LEGACY_BLOCKS = {
     "# rockerc completion": "# end rockerc completion",
     "# renv completion": "# end renv completion",
     "# aid completion": "# end aid completion",
+    "# dp completion": "# end dp completion",
     _RC_BLOCK_START: _RC_BLOCK_END,
 }
 
@@ -24,6 +25,7 @@ _LEGACY_SINGLE_LINES = {
     "complete -F _renv_completion renv",
     "complete -F _renv_completion renvvsc",
     "complete -F _aid_completion aid",
+    "complete -F _dp_completion dp",
 }
 
 
@@ -52,7 +54,7 @@ def install_all_completions(rc_path: Optional[pathlib.Path] = None) -> int:
             _rockerc_bash_completion_script().rstrip(),
             load_completion_script("renv").rstrip(),
             load_completion_script("aid").rstrip(),
-            load_completion_script("dp").rstrip(),
+            load_completion_script("dl").rstrip(),
         ]
         combined_script = "\n\n".join(combined_script_parts) + "\n"
         completion_path.write_text(combined_script, encoding="utf-8")

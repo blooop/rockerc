@@ -1,5 +1,5 @@
-# dp completion
-_dp_completion() {
+# dl completion
+_dl_completion() {
     local cur prev opts
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
@@ -15,7 +15,7 @@ _dp_completion() {
     fi
 
     # Cache file location
-    local cache_file="$HOME/.cache/dp/completions.json"
+    local cache_file="$HOME/.cache/dl/completions.json"
 
     # Read from cache (fast path)
     local workspaces=""
@@ -74,5 +74,5 @@ _dp_completion() {
     return 0
 }
 
-complete -F _dp_completion dp
-# end dp completion
+complete -F _dl_completion dl
+# end dl completion

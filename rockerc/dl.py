@@ -1,21 +1,21 @@
 """
-dp - DevPod CLI Wrapper
+dl - DevLaunch CLI
 
 A streamlined CLI for devpod with intuitive autocomplete and fzf fuzzy selection.
 Provides an renv-like UX for managing devcontainer workspaces.
 
 Usage:
-    dp                           # fzf selector for existing workspaces
-    dp <workspace>               # open/create workspace, attach shell
-    dp <workspace> <command>     # run command in workspace
-    dp owner/repo                # create from git repo (github.com)
-    dp owner/repo@branch         # specific branch
-    dp ./path                    # create from local path
-    dp --ls                      # list workspaces
-    dp --stop <workspace>        # stop workspace
-    dp --rm <workspace>          # delete workspace
-    dp --code <workspace>        # open in VS Code
-    dp --install                 # install completions
+    dl                           # fzf selector for existing workspaces
+    dl <workspace>               # open/create workspace, attach shell
+    dl <workspace> <command>     # run command in workspace
+    dl owner/repo                # create from git repo (github.com)
+    dl owner/repo@branch         # specific branch
+    dl ./path                    # create from local path
+    dl --ls                      # list workspaces
+    dl --stop <workspace>        # stop workspace
+    dl --rm <workspace>          # delete workspace
+    dl --code <workspace>        # open in VS Code
+    dl --install                 # install completions
 """
 
 import sys
@@ -32,7 +32,7 @@ from .completion import install_all_completions
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # Cache configuration
-CACHE_DIR = pathlib.Path.home() / ".cache" / "dp"
+CACHE_DIR = pathlib.Path.home() / ".cache" / "dl"
 CACHE_FILE = CACHE_DIR / "completions.json"
 
 
@@ -93,7 +93,7 @@ def update_cache_background() -> None:
     try:
         # pylint: disable=consider-using-with
         subprocess.Popen(
-            [sys.executable, "-m", "rockerc.dp", "--update-cache"],
+            [sys.executable, "-m", "rockerc.dl", "--update-cache"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
@@ -151,7 +151,7 @@ def validate_workspace_spec(spec: str, existing_ids: List[str]) -> Optional[str]
     if is_git_spec(spec):
         return None
     # Invalid - provide helpful error
-    return f"Unknown workspace '{spec}'. Use 'dp --ls' to list workspaces, or specify owner/repo or ./path"
+    return f"Unknown workspace '{spec}'. Use 'dl --ls' to list workspaces, or specify owner/repo or ./path"
 
 
 @dataclass
@@ -351,7 +351,7 @@ def fuzzy_select_workspace() -> Optional[str]:
 
     workspaces = list_workspaces()
     if not workspaces:
-        logging.info("No workspaces found. Create one with: dp owner/repo or dp ./path")
+        logging.info("No workspaces found. Create one with: dl owner/repo or dl ./path")
         return None
 
     # Format options for display: "id | type | source"
@@ -415,15 +415,15 @@ def workspace_status(workspace: str) -> int:
 
 def print_help():
     """Print usage help."""
-    help_text = """dp - DevPod CLI Wrapper
+    help_text = """dl - DevLaunch CLI
 
 Usage:
-    dp                           Interactive workspace selector (fzf)
-    dp <workspace>               Start workspace and attach shell
-    dp <workspace> <command>     Run command in workspace
-    dp owner/repo                Create workspace from GitHub repo
-    dp owner/repo@branch         Create workspace from specific branch
-    dp ./path                    Create workspace from local path
+    dl                           Interactive workspace selector (fzf)
+    dl <workspace>               Start workspace and attach shell
+    dl <workspace> <command>     Run command in workspace
+    dl owner/repo                Create workspace from GitHub repo
+    dl owner/repo@branch         Create workspace from specific branch
+    dl ./path                    Create workspace from local path
 
 Commands:
     --ls                         List all workspaces
@@ -437,19 +437,19 @@ Commands:
     --help, -h                   Show this help
 
 Examples:
-    dp                           # Select workspace with fzf
-    dp myproject                 # Open existing workspace
-    dp loft-sh/devpod            # Create from GitHub
-    dp blooop/rockerc@main       # Create from specific branch
-    dp ./my-project              # Create from local folder
-    dp --code myproject          # Open in VS Code
-    dp myproject 'make test'     # Run command in workspace
+    dl                           # Select workspace with fzf
+    dl myproject                 # Open existing workspace
+    dl loft-sh/devpod            # Create from GitHub
+    dl blooop/rockerc@main       # Create from specific branch
+    dl ./my-project              # Create from local folder
+    dl --code myproject          # Open in VS Code
+    dl myproject 'make test'     # Run command in workspace
 """
     print(help_text)
 
 
 def main() -> int:
-    """Main entry point for dp CLI."""
+    """Main entry point for dl CLI."""
     args = sys.argv[1:]
 
     # Handle help
@@ -507,7 +507,7 @@ def main() -> int:
         if len(args) < 2:
             workspace = fuzzy_select_workspace()
             if not workspace:
-                logging.error("Usage: dp --stop <workspace>")
+                logging.error("Usage: dl --stop <workspace>")
                 return 1
         else:
             workspace = args[1]
@@ -517,7 +517,7 @@ def main() -> int:
         if len(args) < 2:
             workspace = fuzzy_select_workspace()
             if not workspace:
-                logging.error("Usage: dp --rm <workspace>")
+                logging.error("Usage: dl --rm <workspace>")
                 return 1
         else:
             workspace = args[1]
@@ -527,7 +527,7 @@ def main() -> int:
         if len(args) < 2:
             workspace = fuzzy_select_workspace()
             if not workspace:
-                logging.error("Usage: dp --status <workspace>")
+                logging.error("Usage: dl --status <workspace>")
                 return 1
         else:
             workspace = args[1]
@@ -537,7 +537,7 @@ def main() -> int:
         if len(args) < 2:
             workspace = fuzzy_select_workspace()
             if not workspace:
-                logging.error("Usage: dp --code <workspace>")
+                logging.error("Usage: dl --code <workspace>")
                 return 1
         else:
             workspace = args[1]
@@ -548,7 +548,7 @@ def main() -> int:
         if len(args) < 2:
             workspace = fuzzy_select_workspace()
             if not workspace:
-                logging.error("Usage: dp --recreate <workspace>")
+                logging.error("Usage: dl --recreate <workspace>")
                 return 1
         else:
             workspace = args[1]
@@ -561,7 +561,7 @@ def main() -> int:
         if len(args) < 2:
             workspace = fuzzy_select_workspace()
             if not workspace:
-                logging.error("Usage: dp --reset <workspace>")
+                logging.error("Usage: dl --reset <workspace>")
                 return 1
         else:
             workspace = args[1]

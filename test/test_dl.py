@@ -1,9 +1,9 @@
-"""Tests for dp (DevPod CLI Wrapper) functionality."""
+"""Tests for dl (DevLaunch CLI) functionality."""
 
 import json
 from unittest.mock import patch, MagicMock
 
-from rockerc.dp import (
+from rockerc.dl import (
     expand_workspace_spec,
     is_path_spec,
     is_git_spec,
@@ -263,7 +263,7 @@ class TestWorkspace:
 class TestListWorkspaces:
     """Tests for list_workspaces function."""
 
-    @patch("rockerc.dp.run_devpod")
+    @patch("rockerc.dl.run_devpod")
     def test_list_workspaces_success(self, mock_run):
         """Test successful workspace listing."""
         mock_result = MagicMock()
@@ -294,7 +294,7 @@ class TestListWorkspaces:
         assert workspaces[0].id == "ws1"
         assert workspaces[1].id == "ws2"
 
-    @patch("rockerc.dp.run_devpod")
+    @patch("rockerc.dl.run_devpod")
     def test_list_workspaces_empty(self, mock_run):
         """Test empty workspace list."""
         mock_result = MagicMock()
@@ -305,7 +305,7 @@ class TestListWorkspaces:
         workspaces = list_workspaces()
         assert workspaces == []
 
-    @patch("rockerc.dp.run_devpod")
+    @patch("rockerc.dl.run_devpod")
     def test_list_workspaces_error(self, mock_run):
         """Test handling of devpod error."""
         mock_result = MagicMock()
@@ -316,7 +316,7 @@ class TestListWorkspaces:
         workspaces = list_workspaces()
         assert workspaces == []
 
-    @patch("rockerc.dp.run_devpod")
+    @patch("rockerc.dl.run_devpod")
     def test_list_workspaces_invalid_json(self, mock_run):
         """Test handling of invalid JSON output."""
         mock_result = MagicMock()
@@ -331,7 +331,7 @@ class TestListWorkspaces:
 class TestGetWorkspaceIds:
     """Tests for get_workspace_ids function."""
 
-    @patch("rockerc.dp.list_workspaces")
+    @patch("rockerc.dl.list_workspaces")
     def test_get_workspace_ids(self, mock_list):
         """Test getting workspace IDs."""
         mock_list.return_value = [
@@ -342,7 +342,7 @@ class TestGetWorkspaceIds:
         ids = get_workspace_ids()
         assert ids == ["ws1", "ws2"]
 
-    @patch("rockerc.dp.list_workspaces")
+    @patch("rockerc.dl.list_workspaces")
     def test_get_workspace_ids_empty(self, mock_list):
         """Test getting workspace IDs when empty."""
         mock_list.return_value = []
@@ -401,7 +401,7 @@ class TestDiscoverReposFromWorkspaces:
         repos = discover_repos_from_workspaces(workspaces)
         assert repos == {"owner": ["repo"]}
 
-    @patch("rockerc.dp.get_git_remote_url")
+    @patch("rockerc.dl.get_git_remote_url")
     def test_discover_from_local_workspace(self, mock_remote):
         """Test discovering repo from local workspace with git remote."""
         mock_remote.return_value = "git@github.com:blooop/python_template.git"
@@ -411,7 +411,7 @@ class TestDiscoverReposFromWorkspaces:
         repos = discover_repos_from_workspaces(workspaces)
         assert repos == {"blooop": ["python_template"]}
 
-    @patch("rockerc.dp.get_git_remote_url")
+    @patch("rockerc.dl.get_git_remote_url")
     def test_discover_multiple_repos(self, mock_remote):
         """Test discovering multiple repos from different owners."""
         mock_remote.side_effect = [
@@ -427,7 +427,7 @@ class TestDiscoverReposFromWorkspaces:
         repos = discover_repos_from_workspaces(workspaces)
         assert repos == {"owner1": ["repo1", "repo3"], "owner2": ["repo2"]}
 
-    @patch("rockerc.dp.get_git_remote_url")
+    @patch("rockerc.dl.get_git_remote_url")
     def test_discover_no_remote(self, mock_remote):
         """Test workspace without git remote is skipped."""
         mock_remote.return_value = None
@@ -441,7 +441,7 @@ class TestDiscoverReposFromWorkspaces:
 class TestGetKnownRepos:
     """Tests for get_known_repos function."""
 
-    @patch("rockerc.dp.list_workspaces")
+    @patch("rockerc.dl.list_workspaces")
     def test_get_known_repos(self, mock_list):
         """Test getting known repos as sorted list."""
         mock_list.return_value = [
@@ -451,7 +451,7 @@ class TestGetKnownRepos:
         repos = get_known_repos()
         assert repos == ["aowner/arepo", "zowner/zrepo"]
 
-    @patch("rockerc.dp.list_workspaces")
+    @patch("rockerc.dl.list_workspaces")
     def test_get_known_repos_empty(self, mock_list):
         """Test getting known repos when no workspaces."""
         mock_list.return_value = []
