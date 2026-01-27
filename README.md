@@ -153,19 +153,13 @@ will look for the dockerfile relative to the rockerc.yaml file
 
 ## Configuration Examples
 
-For comprehensive examples and detailed documentation of all configuration options, see the [examples/](examples/) directory:
+See the [examples/](examples/) directory for comprehensive configuration examples:
 
-- **[examples/basic.yaml](examples/basic.yaml)** - Simple starter configuration
+- **[examples/basic.yaml](examples/basic.yaml)** - Simple starter configuration with core extensions
 - **[examples/advanced.yaml](examples/advanced.yaml)** - Feature-rich development setup
 - **[examples/dockerfile.yaml](examples/dockerfile.yaml)** - Using a custom Dockerfile
 - **[examples/global-config.yaml](examples/global-config.yaml)** - System-wide defaults
 - **[examples/intel-gpu.yaml](examples/intel-gpu.yaml)** - Mounting Intel GPU for hardware acceleration
 - **[examples/blacklist.yaml](examples/blacklist.yaml)** - Excluding extensions
-- **[examples/README.md](examples/README.md)** - Complete configuration reference
 
-These examples demonstrate:
-- Available rocker extensions and how to use them
-- Configuration field syntax and options
-- How global and project configs merge
-- CLI integration and override behavior
-- Common development patterns and use cases
+Each example includes detailed inline comments explaining the configuration options and their purposes.
