@@ -19,7 +19,7 @@ args:
   - x11             # Enable X11 forwarding for GUI applications
   - user            # Create a user inside the container matching your host user
   - cwd             # Mount current working directory into the container
-  - git             # Install and configure git with your host credentials
-  - git-clone       # Clone git repositories with proper credentials
-  - ssh             # SSH server integration
-  - ssh-client      # SSH client with host key forwarding
+  - git             # Use the global Git settings from the host
+  - git-clone       # Install git, git-lfs, and ca-certificates for cloning
+  - ssh             # Forward SSH agent into the container
+  - ssh-client      # Install openssh-client and mount ~/.ssh directory

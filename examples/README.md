@@ -157,8 +157,10 @@ Common rocker extensions you can use in `args`:
 - `privileged` - Run container in privileged mode (use with caution)
 
 ### Development Tools
-- `git` - Install and configure git with host credentials
-- `ssh` - SSH integration
+- `git` - Use the global Git settings from the host (/etc/gitconfig and ~/.gitconfig)
+- `git-clone` - Install git, git-lfs, and ca-certificates for repository cloning
+- `ssh` - Forward SSH agent into the container
+- `ssh-client` - Install openssh-client and mount ~/.ssh directory
 - `dev-helpers` - Development tools (emacs, byobu)
 - `deps` - Common system dependencies
 - `deps-devtools` - Developer productivity tools (ripgrep, fd-find, fzf)

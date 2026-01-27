@@ -20,10 +20,10 @@ args:
   - x11             # X11 forwarding
   - user            # User matching
   - cwd             # Mount working directory
-  - git             # Git integration
-  - git-clone       # Clone repositories with proper credentials
-  - ssh             # SSH server integration
-  - ssh-client      # SSH client with host key forwarding
+  - git             # Use the global Git settings from the host
+  - git-clone       # Install git, git-lfs, and ca-certificates for cloning
+  - ssh             # Forward SSH agent into the container
+  - ssh-client      # Install openssh-client and mount ~/.ssh directory
 
   # Additional extensions
   - nvidia          # GPU support (if your Dockerfile supports it)
