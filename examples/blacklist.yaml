@@ -1,0 +1,37 @@
+# Extension Blacklist Example
+#
+# Use extension-blacklist to exclude unwanted extensions, particularly
+# useful when you have global extensions in ~/.rockerc.yaml but want to
+# disable specific ones for a project.
+#
+# This is useful for:
+# - Disabling GPU support for CPU-only projects
+# - Skipping X11 for headless containers
+# - Removing conflicting or unnecessary extensions
+
+image: ubuntu:24.04
+
+args:
+  - user
+  - pull
+  - git
+  - cwd
+  - pixi
+
+# Exclude specific extensions
+# These will be filtered out even if present in global config or args above
+extension-blacklist:
+  - nvidia          # No GPU needed for this project
+  - x11             # Headless container - no GUI
+  - cuda            # No CUDA support needed
+
+# How blacklist works:
+# 1. Global config (~/.rockerc.yaml) might have: [user, pull, git, x11, nvidia]
+# 2. Project config (this file) has args: [user, pull, git, cwd, pixi]
+# 3. Merged args before blacklist: [user, pull, git, x11, nvidia, cwd, pixi]
+# 4. After applying blacklist: [user, pull, git, cwd, pixi]
+#
+# Result: x11 and nvidia from global config are excluded
+
+# You can also have blacklist in global config to system-wide exclude extensions
+# and override it per-project by adding them back to args

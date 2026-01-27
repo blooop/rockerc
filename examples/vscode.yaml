@@ -1,0 +1,37 @@
+# VS Code Dev Container Example
+#
+# This configuration is optimized for use with VS Code's Remote - Containers
+# extension via the rockervsc command or 'rockerc --vsc'.
+#
+# Usage:
+#   rockerc --vsc        # Launch container and attach VS Code
+#   rockervsc            # Alias for the above command
+#
+# The container is always run in detached mode with a standardized workspace
+# mount at /workspaces/<container-name>. VS Code attaches to this running
+# container for a seamless development experience.
+
+image: ubuntu:24.04
+
+# Extensions for VS Code development
+args:
+  - x11             # X11 support (for GUI debugging tools)
+  - user            # User matching for correct file permissions
+  - pull            # Ensure latest image
+  - git             # Git integration
+  - pixi            # Modern package management
+  - uv              # Fast Python package installer
+  - deps            # System dependencies
+  - dev-helpers     # Development utilities
+
+# Optional: Pre-configure container name for consistency
+# name: my-vscode-project
+
+# The --vsc flag automatically:
+# 1. Ensures container runs detached with proper workspace mount
+# 2. Launches VS Code attached to the container
+# 3. Opens an interactive shell in the container
+# 4. Reuses existing container if it's already running
+#
+# Use --force to recreate the container:
+#   rockerc --vsc --force

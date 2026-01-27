@@ -150,3 +150,22 @@ dockerfile: Dockerfile
 ```
 
 will look for the dockerfile relative to the rockerc.yaml file
+
+## Configuration Examples
+
+For comprehensive examples and detailed documentation of all configuration options, see the [examples/](examples/) directory:
+
+- **[examples/basic.yaml](examples/basic.yaml)** - Simple starter configuration
+- **[examples/advanced.yaml](examples/advanced.yaml)** - Feature-rich development setup
+- **[examples/dockerfile.yaml](examples/dockerfile.yaml)** - Using a custom Dockerfile
+- **[examples/global-config.yaml](examples/global-config.yaml)** - System-wide defaults
+- **[examples/vscode.yaml](examples/vscode.yaml)** - VS Code optimized setup
+- **[examples/blacklist.yaml](examples/blacklist.yaml)** - Excluding extensions
+- **[examples/README.md](examples/README.md)** - Complete configuration reference
+
+These examples demonstrate:
+- Available rocker extensions and how to use them
+- Configuration field syntax and options
+- How global and project configs merge
+- CLI integration and override behavior
+- Common development patterns and use cases

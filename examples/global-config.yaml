@@ -1,0 +1,30 @@
+# Global rockerc Configuration Example
+#
+# Save this as ~/.rockerc.yaml to set system-wide defaults
+# that apply to all projects unless overridden.
+#
+# Project-specific rockerc.yaml files will:
+# - Merge their 'args' list with these global args (duplicates removed)
+# - Override other fields like 'image', 'name', 'volume', etc.
+# - Can blacklist global extensions using 'extension-blacklist'
+#
+# This is useful for:
+# - Setting up common development tools across all projects
+# - Configuring user preferences (git, ssh, etc.)
+# - Defining standard GPU or display settings
+
+# No image specified here - projects will provide their own
+# Or you can set a default:
+# image: ubuntu:24.04
+
+# Global extensions applied to all containers
+args:
+  - x11             # Always enable X11 for GUI apps
+  - user            # Always match host user
+  - pull            # Always pull latest images
+  - git             # Git integration everywhere
+  - dev-helpers     # Development tools in all containers
+  - cuda            # GPU support (if you have NVIDIA GPU)
+
+# You can also set global volumes
+# volume: ~/.config:/home/user/.config:ro

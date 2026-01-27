@@ -1,0 +1,18 @@
+# Basic rockerc.yaml Example
+#
+# This is the simplest configuration for rockerc. It specifies a base Docker
+# image and a list of rocker extensions to enable.
+#
+# Equivalent rocker command:
+#   rocker --x11 --user --pull --git -- ubuntu:24.04
+
+# The base Docker image to use
+image: ubuntu:24.04
+
+# List of rocker extensions to enable
+# Extensions are features that rocker adds to the base image
+args:
+  - x11       # Enable X11 forwarding for GUI applications
+  - user      # Create a user inside the container matching your host user
+  - pull      # Pull the latest version of the image before running
+  - git       # Install and configure git with your host credentials

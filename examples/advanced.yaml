@@ -1,0 +1,35 @@
+# Advanced rockerc.yaml Example
+#
+# This example demonstrates a more complex configuration with multiple
+# extensions and custom options commonly used in development workflows.
+#
+# Equivalent rocker command:
+#   rocker --nvidia --x11 --user --pull --git --cwd --pixi --uv \
+#     --deps --dev-helpers --volume ~/.ssh:/root/.ssh:ro \
+#     --name my-dev-container -- ubuntu:24.04
+
+# Base Docker image
+image: ubuntu:24.04
+
+# Container name (optional)
+# If not specified, rockerc generates a name based on the project directory
+name: my-dev-container
+
+# Custom volume mounts (optional)
+# Format: HOST_PATH:CONTAINER_PATH[:OPTIONS]
+volume: ~/.ssh:/root/.ssh:ro
+
+# Comprehensive list of development extensions
+args:
+  - nvidia          # Enable NVIDIA GPU support
+  - x11             # X11 forwarding for GUI applications
+  - user            # Match host user inside container
+  - pull            # Pull latest image version
+  - git             # Git integration with host config
+  - cwd             # Mount current working directory
+  - pixi            # Install pixi package manager
+  - uv              # Install uv Python package manager
+  - deps            # Install common system dependencies
+  - dev-helpers     # Add development tools (emacs, byobu)
+  - curl            # Install curl
+  - ssh             # SSH integration

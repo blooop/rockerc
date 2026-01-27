@@ -1,0 +1,30 @@
+# Dockerfile-based rockerc.yaml Example
+#
+# Instead of using a pre-built image, you can specify a Dockerfile to build.
+# rockerc will build the image and tag it automatically based on your
+# project directory name.
+#
+# Note: When using dockerfile, the 'pull' extension is automatically removed
+# since you're building locally.
+#
+# The dockerfile path is relative to the location of rockerc.yaml
+
+# Path to Dockerfile (relative to this rockerc.yaml)
+dockerfile: ./Dockerfile
+
+# Extensions to apply to the built image
+args:
+  - x11             # X11 forwarding
+  - user            # User matching
+  - git             # Git integration
+  - cwd             # Mount working directory
+  - nvidia          # GPU support (if your Dockerfile supports it)
+
+# Example Dockerfile content you might use:
+# ---
+# FROM ubuntu:24.04
+# RUN apt-get update && apt-get install -y \
+#     python3 \
+#     python3-pip \
+#     build-essential
+# ---
