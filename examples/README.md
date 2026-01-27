@@ -91,18 +91,20 @@ image-name: my-custom-image
 Additional volume mounts in Docker format: `HOST_PATH:CONTAINER_PATH[:OPTIONS]`
 
 ```yaml
-volume: ~/.ssh:/root/.ssh:ro
-volume: /data:/workspace/data
+volume: /data:/workspace/data              # Mount data directory
+volume: ~/.vimrc:/home/user/.vimrc:ro      # Mount config files (read-only)
 ```
 
 For multiple volumes, you can use YAML multi-line:
 ```yaml
 volume: |
-  ~/.ssh:/root/.ssh:ro
   /data:/workspace/data
+  ~/.vimrc:/home/user/.vimrc:ro
 ```
 
-Or pass via CLI: `rockerc --volume ~/.ssh:/root/.ssh:ro --volume /data:/workspace/data`
+Or pass via CLI: `rockerc --volume /data:/workspace/data --volume ~/.vimrc:/home/user/.vimrc:ro`
+
+**Note:** SSH keys are automatically handled by the `ssh` and `ssh-client` extensions, so you don't need to manually mount `~/.ssh`.
 
 #### `devices` (string, optional)
 Device paths to mount into the container for hardware access (e.g., GPU, cameras).
@@ -118,6 +120,19 @@ Common use cases:
 - `/dev/video*` - Webcams and video capture devices
 - `/dev/snd` - Audio devices
 - `/dev/ttyUSB*` - Serial devices
+
+#### `shm-size` (string, optional)
+Size of `/dev/shm` (shared memory) in the container. Useful for applications that use shared memory extensively.
+
+```yaml
+shm-size: 2g              # 2 gigabytes
+shm-size: 512m            # 512 megabytes
+```
+
+Common use cases:
+- PyTorch DataLoader with multiple workers
+- Chrome/Firefox in containers
+- Applications using multiprocessing with shared memory
 
 #### `extension-blacklist` (list, optional)
 List of extensions to exclude, even if they appear in global config or merged args.

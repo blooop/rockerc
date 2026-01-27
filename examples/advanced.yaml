@@ -7,7 +7,8 @@
 # Equivalent rocker command:
 #   rocker --pull --persist-image --x11 --user --cwd --git --git-clone \
 #     --ssh --ssh-client --nvidia --pixi --uv --deps --dev-helpers --curl \
-#     --volume ~/.ssh:/root/.ssh:ro --name my-dev-container -- ubuntu:24.04
+#     --volume /data:/workspace/data --shm-size 2g \
+#     --name my-dev-container -- ubuntu:24.04
 
 # Base Docker image
 image: ubuntu:24.04
@@ -16,9 +17,14 @@ image: ubuntu:24.04
 # If not specified, rockerc generates a name based on the project directory
 name: my-dev-container
 
-# Custom volume mounts (optional)
+# Custom volume mount (optional)
+# Useful for mounting external data directories or shared storage
 # Format: HOST_PATH:CONTAINER_PATH[:OPTIONS]
-volume: ~/.ssh:/root/.ssh:ro
+volume: /data:/workspace/data
+
+# Increase shared memory size for applications that need it
+# (e.g., PyTorch DataLoader with multiple workers, Chrome/Firefox)
+shm-size: 2g
 
 # Comprehensive list of development extensions
 args:
