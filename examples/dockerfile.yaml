@@ -14,10 +14,18 @@ dockerfile: ./Dockerfile
 
 # Extensions to apply to the built image
 args:
+  # Core extensions (pull will be auto-removed when using dockerfile)
+  - pull            # Will be automatically removed for local builds
+  - persist-image   # Keep the image after container stops
   - x11             # X11 forwarding
   - user            # User matching
-  - git             # Git integration
   - cwd             # Mount working directory
+  - git             # Git integration
+  - git-clone       # Clone repositories with proper credentials
+  - ssh             # SSH server integration
+  - ssh-client      # SSH client with host key forwarding
+
+  # Additional extensions
   - nvidia          # GPU support (if your Dockerfile supports it)
 
 # Example Dockerfile content you might use:

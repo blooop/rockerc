@@ -7,13 +7,19 @@
 
 image: ubuntu:24.04
 args:
-  - jquery
-  - x11 
-  - user 
-  - pull 
-  - deps
-  - git 
+  # Core extensions
+  - pull
+  - persist-image
+  - x11
+  - user
   - cwd
+  - git
+  - git-clone
+  - ssh
+  - ssh-client
+
+  # Project-specific extensions
+  - deps
   - pixi
   - uv
   - jquery

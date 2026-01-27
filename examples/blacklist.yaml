@@ -12,10 +12,15 @@
 image: ubuntu:24.04
 
 args:
-  - user
+  # Core extensions (excluding x11 and ssh for headless use)
   - pull
-  - git
+  - persist-image
+  - user
   - cwd
+  - git
+  - git-clone
+
+  # Project-specific extensions
   - pixi
 
 # Exclude specific extensions
@@ -24,14 +29,16 @@ extension-blacklist:
   - nvidia          # No GPU needed for this project
   - x11             # Headless container - no GUI
   - cuda            # No CUDA support needed
+  - ssh             # No SSH server needed
+  - ssh-client      # No SSH client needed
 
 # How blacklist works:
-# 1. Global config (~/.rockerc.yaml) might have: [user, pull, git, x11, nvidia]
-# 2. Project config (this file) has args: [user, pull, git, cwd, pixi]
-# 3. Merged args before blacklist: [user, pull, git, x11, nvidia, cwd, pixi]
-# 4. After applying blacklist: [user, pull, git, cwd, pixi]
+# 1. Global config (~/.rockerc.yaml) might have: [pull, persist-image, x11, user, cwd, git, git-clone, ssh, ssh-client, cuda]
+# 2. Project config (this file) has args: [pull, persist-image, user, cwd, git, git-clone, pixi]
+# 3. Merged args before blacklist: [pull, persist-image, x11, user, cwd, git, git-clone, ssh, ssh-client, cuda, pixi]
+# 4. After applying blacklist: [pull, persist-image, user, cwd, git, git-clone, pixi]
 #
-# Result: x11 and nvidia from global config are excluded
+# Result: x11, ssh, ssh-client, cuda from global config are excluded
 
 # You can also have blacklist in global config to system-wide exclude extensions
 # and override it per-project by adding them back to args

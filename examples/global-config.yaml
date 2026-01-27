@@ -19,10 +19,18 @@
 
 # Global extensions applied to all containers
 args:
+  # Core extensions - applied to all projects
+  - pull            # Always pull latest images
+  - persist-image   # Keep images after container stops
   - x11             # Always enable X11 for GUI apps
   - user            # Always match host user
-  - pull            # Always pull latest images
+  - cwd             # Mount working directory
   - git             # Git integration everywhere
+  - git-clone       # Clone repositories with proper credentials
+  - ssh             # SSH server integration
+  - ssh-client      # SSH client with host key forwarding
+
+  # Additional global extensions (customize as needed)
   - dev-helpers     # Development tools in all containers
   - cuda            # GPU support (if you have NVIDIA GPU)
 

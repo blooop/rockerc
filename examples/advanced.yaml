@@ -1,12 +1,13 @@
 # Advanced rockerc.yaml Example
 #
-# This example demonstrates a more complex configuration with multiple
-# extensions and custom options commonly used in development workflows.
+# This example demonstrates a more complex configuration building on top
+# of the basic core extensions with additional features commonly used in
+# development workflows.
 #
 # Equivalent rocker command:
-#   rocker --nvidia --x11 --user --pull --git --cwd --pixi --uv \
-#     --deps --dev-helpers --volume ~/.ssh:/root/.ssh:ro \
-#     --name my-dev-container -- ubuntu:24.04
+#   rocker --pull --persist-image --x11 --user --cwd --git --git-clone \
+#     --ssh --ssh-client --nvidia --pixi --uv --deps --dev-helpers --curl \
+#     --volume ~/.ssh:/root/.ssh:ro --name my-dev-container -- ubuntu:24.04
 
 # Base Docker image
 image: ubuntu:24.04
@@ -21,15 +22,21 @@ volume: ~/.ssh:/root/.ssh:ro
 
 # Comprehensive list of development extensions
 args:
-  - nvidia          # Enable NVIDIA GPU support
+  # Core extensions (from basic.yaml)
+  - pull            # Pull latest image version
+  - persist-image   # Keep the image after container stops
   - x11             # X11 forwarding for GUI applications
   - user            # Match host user inside container
-  - pull            # Pull latest image version
-  - git             # Git integration with host config
   - cwd             # Mount current working directory
+  - git             # Git integration with host config
+  - git-clone       # Clone repositories with proper credentials
+  - ssh             # SSH server integration
+  - ssh-client      # SSH client with host key forwarding
+
+  # Additional advanced features
+  - nvidia          # Enable NVIDIA GPU support
   - pixi            # Install pixi package manager
   - uv              # Install uv Python package manager
   - deps            # Install common system dependencies
   - dev-helpers     # Add development tools (emacs, byobu)
   - curl            # Install curl
-  - ssh             # SSH integration

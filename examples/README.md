@@ -203,9 +203,15 @@ rockerc supports two configuration locations that are merged:
 **~/.rockerc.yaml** (global):
 ```yaml
 args:
+  - pull
+  - persist-image
   - x11
   - user
+  - cwd
   - git
+  - git-clone
+  - ssh
+  - ssh-client
   - dev-helpers
 ```
 
@@ -218,16 +224,22 @@ args:
   - pixi
 ```
 
-**Result**: Final args are `[x11, user, git, dev-helpers, nvidia, cuda, pixi]`
+**Result**: Final args are `[pull, persist-image, x11, user, cwd, git, git-clone, ssh, ssh-client, dev-helpers, nvidia, cuda, pixi]`
 
 ### Using Blacklist
 
 **~/.rockerc.yaml** (global):
 ```yaml
 args:
+  - pull
+  - persist-image
   - x11
   - user
+  - cwd
   - git
+  - git-clone
+  - ssh
+  - ssh-client
   - nvidia
 ```
 
@@ -237,11 +249,13 @@ image: ubuntu:24.04
 args:
   - pixi
 extension-blacklist:
-  - nvidia  # Don't need GPU for this project
-  - x11     # Headless container
+  - nvidia      # Don't need GPU for this project
+  - x11         # Headless container
+  - ssh         # No SSH server needed
+  - ssh-client  # No SSH client needed
 ```
 
-**Result**: Final args are `[user, git, pixi]`
+**Result**: Final args are `[pull, persist-image, user, cwd, git, git-clone, pixi]`
 
 ## CLI Integration
 
@@ -285,24 +299,36 @@ rockerc --vsc --force
 
 ## Common Patterns
 
-### Minimal Dev Container
+### Minimal Dev Container (Basic)
 ```yaml
 image: ubuntu:24.04
 args:
-  - user
   - pull
-  - git
+  - persist-image
+  - x11
+  - user
   - cwd
+  - git
+  - git-clone
+  - ssh
+  - ssh-client
 ```
 
 ### Python Development
 ```yaml
 image: python:3.12
 args:
-  - user
+  # Core extensions
   - pull
-  - git
+  - persist-image
+  - x11
+  - user
   - cwd
+  - git
+  - git-clone
+  - ssh
+  - ssh-client
+  # Python-specific
   - uv
   - pixi
 ```
@@ -311,24 +337,36 @@ args:
 ```yaml
 image: nvidia/cuda:12.0.0-base-ubuntu22.04
 args:
-  - nvidia
+  # Core extensions
+  - pull
+  - persist-image
   - x11
   - user
-  - pull
-  - git
   - cwd
+  - git
+  - git-clone
+  - ssh
+  - ssh-client
+  # GPU support
+  - nvidia
 ```
 
 ### ROS Development
 ```yaml
 image: ros:jazzy
 args:
-  - nvidia
+  # Core extensions
+  - pull
+  - persist-image
   - x11
   - user
-  - pull
-  - git
   - cwd
+  - git
+  - git-clone
+  - ssh
+  - ssh-client
+  # ROS-specific
+  - nvidia
   - dev-helpers
 ```
 
@@ -336,12 +374,19 @@ args:
 ```yaml
 image: ubuntu:24.04
 args:
+  # Core extensions
+  - pull
+  - persist-image
+  - x11
+  - user
+  - cwd
+  - git
+  - git-clone
+  - ssh
+  - ssh-client
+  # AI/ML tools
   - nvidia
   - cuda
-  - user
-  - pull
-  - git
-  - cwd
   - claude
   - pixi
   - uv

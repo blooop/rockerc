@@ -1,18 +1,25 @@
 # Basic rockerc.yaml Example
 #
-# This is the simplest configuration for rockerc. It specifies a base Docker
-# image and a list of rocker extensions to enable.
+# This is a comprehensive baseline configuration with core extensions
+# that are useful for most development workflows.
 #
 # Equivalent rocker command:
-#   rocker --x11 --user --pull --git -- ubuntu:24.04
+#   rocker --pull --persist-image --x11 --user --cwd --git \
+#     --git-clone --ssh --ssh-client -- ubuntu:24.04
 
 # The base Docker image to use
 image: ubuntu:24.04
 
 # List of rocker extensions to enable
-# Extensions are features that rocker adds to the base image
+# These are considered "core" extensions for most development workflows
 args:
-  - x11       # Enable X11 forwarding for GUI applications
-  - user      # Create a user inside the container matching your host user
-  - pull      # Pull the latest version of the image before running
-  - git       # Install and configure git with your host credentials
+  # Core extensions
+  - pull            # Pull the latest version of the image before running
+  - persist-image   # Keep the image after container stops
+  - x11             # Enable X11 forwarding for GUI applications
+  - user            # Create a user inside the container matching your host user
+  - cwd             # Mount current working directory into the container
+  - git             # Install and configure git with your host credentials
+  - git-clone       # Clone git repositories with proper credentials
+  - ssh             # SSH server integration
+  - ssh-client      # SSH client with host key forwarding

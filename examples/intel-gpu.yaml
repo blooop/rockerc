@@ -10,11 +10,16 @@
 image: ubuntu:24.04
 
 args:
+  # Core extensions
+  - pull            # Pull latest image version
+  - persist-image   # Keep the image after container stops
   - x11             # X11 forwarding for GUI applications
-  - user            # Match host user
-  - pull            # Pull latest image
-  - git             # Git integration
-  - cwd             # Mount working directory
+  - user            # Match host user inside container
+  - cwd             # Mount current working directory
+  - git             # Git integration with host config
+  - git-clone       # Clone repositories with proper credentials
+  - ssh             # SSH server integration
+  - ssh-client      # SSH client with host key forwarding
 
 # Mount Intel GPU devices
 # /dev/dri contains the renderD128 and card0 nodes for GPU access
