@@ -22,7 +22,7 @@ rockerc
 - **[advanced.yaml](advanced.yaml)** - Complex setup with multiple features
 - **[dockerfile.yaml](dockerfile.yaml)** - Using a custom Dockerfile instead of an image
 - **[global-config.yaml](global-config.yaml)** - System-wide defaults for `~/.rockerc.yaml`
-- **[vscode.yaml](vscode.yaml)** - VS Code dev container optimized configuration
+- **[intel-gpu.yaml](intel-gpu.yaml)** - Mounting Intel GPU for hardware acceleration
 - **[blacklist.yaml](blacklist.yaml)** - Excluding unwanted extensions
 
 ## Configuration Syntax
@@ -103,6 +103,21 @@ volume: |
 ```
 
 Or pass via CLI: `rockerc --volume ~/.ssh:/root/.ssh:ro --volume /data:/workspace/data`
+
+#### `devices` (string, optional)
+Device paths to mount into the container for hardware access (e.g., GPU, cameras).
+
+```yaml
+devices: /dev/dri              # Intel GPU
+devices: /dev/video0           # Webcam
+devices: /dev/snd              # Audio devices
+```
+
+Common use cases:
+- `/dev/dri` - Intel integrated GPU for hardware acceleration
+- `/dev/video*` - Webcams and video capture devices
+- `/dev/snd` - Audio devices
+- `/dev/ttyUSB*` - Serial devices
 
 #### `extension-blacklist` (list, optional)
 List of extensions to exclude, even if they appear in global config or merged args.

@@ -159,7 +159,7 @@ For comprehensive examples and detailed documentation of all configuration optio
 - **[examples/advanced.yaml](examples/advanced.yaml)** - Feature-rich development setup
 - **[examples/dockerfile.yaml](examples/dockerfile.yaml)** - Using a custom Dockerfile
 - **[examples/global-config.yaml](examples/global-config.yaml)** - System-wide defaults
-- **[examples/vscode.yaml](examples/vscode.yaml)** - VS Code optimized setup
+- **[examples/intel-gpu.yaml](examples/intel-gpu.yaml)** - Mounting Intel GPU for hardware acceleration
 - **[examples/blacklist.yaml](examples/blacklist.yaml)** - Excluding extensions
 - **[examples/README.md](examples/README.md)** - Complete configuration reference
 

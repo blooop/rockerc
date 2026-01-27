@@ -1,0 +1,31 @@
+# Intel GPU Example
+#
+# This example demonstrates how to mount Intel GPU devices for hardware
+# acceleration in the container. This is useful for graphics rendering,
+# video encoding/decoding, and compute workloads on Intel integrated GPUs.
+#
+# The key is using the 'devices' field to mount /dev/dri, which provides
+# access to Intel GPU Direct Rendering Infrastructure.
+
+image: ubuntu:24.04
+
+args:
+  - x11             # X11 forwarding for GUI applications
+  - user            # Match host user
+  - pull            # Pull latest image
+  - git             # Git integration
+  - cwd             # Mount working directory
+
+# Mount Intel GPU devices
+# /dev/dri contains the renderD128 and card0 nodes for GPU access
+devices: /dev/dri
+
+# This configuration enables:
+# - OpenGL rendering on Intel integrated graphics
+# - Hardware video encoding/decoding (VAAPI, QSV)
+# - OpenCL compute on Intel GPUs
+#
+# Verify GPU access inside the container with:
+#   ls -la /dev/dri
+#   vainfo  # For video acceleration info (install vainfo package)
+#   glxinfo | grep "OpenGL renderer"  # For OpenGL info
