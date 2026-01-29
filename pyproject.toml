@@ -1,6 +1,6 @@
 [project]
 name = "rockerc"
-version = "0.16.0"
+version = "0.18.0"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
@@ -68,6 +68,7 @@ renv = "rockerc.renv:main"
 renvvsc = "rockerc.renvsc:main"
 rockervsc = "rockerc.rockervsc:main"
 aid = "rockerc.aid:main"
+dp = "rockerc.dp:main"
 
 # Environments
 [tool.pixi.environments]
@@ -114,7 +115,7 @@ extension-pkg-whitelist = ["numpy"]
 jobs = 16                           #detect number of cores
 
 [tool.pylint.'MESSAGES CONTROL']
-disable = "C,logging-fstring-interpolation,line-too-long,fixme,broad-exception-caught,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,cyclic-import,duplicate-code,too-many-public-methods"
+disable = "C,logging-fstring-interpolation,line-too-long,fixme,broad-exception-caught,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,too-many-return-statements,use-dict-literal,cyclic-import,duplicate-code,too-many-public-methods"
 enable = "no-else-return,consider-using-in"
 
 [tool.coverage.run]
