@@ -7,13 +7,19 @@
 
 image: ubuntu:24.04
 args:
-  - jquery
-  - x11 
-  - user 
-  - pull 
+  # Core extensions
+  - pull            # Pull latest image version
+  - persist-image   # Keep the image after container stops
+  - x11             # X11 forwarding for GUI applications
+  - user            # Match host user inside container
+  - cwd             # Mount current working directory
+  - git             # Use the global Git settings from the host
+  - git-clone       # Install git, git-lfs, and ca-certificates for cloning
+  - ssh             # Forward SSH agent into the container
+  - ssh-client      # Install openssh-client and mount ~/.ssh directory
+
+  # Project-specific extensions
   - deps
-  - git 
-  - cwd
   - pixi
   - uv
   - jquery

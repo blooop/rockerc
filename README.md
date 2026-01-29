@@ -150,3 +150,16 @@ dockerfile: Dockerfile
 ```
 
 will look for the dockerfile relative to the rockerc.yaml file
+
+## Configuration Examples
+
+See the [examples/](examples/) directory for comprehensive configuration examples:
+
+- **[examples/basic.yaml](examples/basic.yaml)** - Simple starter configuration with core extensions
+- **[examples/advanced.yaml](examples/advanced.yaml)** - Feature-rich development setup
+- **[examples/dockerfile.yaml](examples/dockerfile.yaml)** - Using a custom Dockerfile
+- **[examples/global-config.yaml](examples/global-config.yaml)** - System-wide defaults
+- **[examples/intel-gpu.yaml](examples/intel-gpu.yaml)** - Mounting Intel GPU for hardware acceleration
+- **[examples/blacklist.yaml](examples/blacklist.yaml)** - Excluding extensions
+
+Each example includes detailed inline comments explaining the configuration options and their purposes.

@@ -1,0 +1,48 @@
+# Advanced rockerc.yaml Example
+#
+# This example demonstrates a more complex configuration building on top
+# of the basic core extensions with additional features commonly used in
+# development workflows.
+#
+# Equivalent rocker command:
+#   rocker --pull --persist-image --x11 --user --cwd --git --git-clone \
+#     --ssh --ssh-client --nvidia --pixi --uv --deps --dev-helpers --curl \
+#     --volume /data:/workspace/data --shm-size 2g \
+#     --name my-dev-container -- ubuntu:24.04
+
+# Base Docker image
+image: ubuntu:24.04
+
+# Container name (optional)
+# If not specified, rockerc generates a name based on the project directory
+name: my-dev-container
+
+# Custom volume mount (optional)
+# Useful for mounting external data directories or shared storage
+# Format: HOST_PATH:CONTAINER_PATH[:OPTIONS]
+volume: /data:/workspace/data
+
+# Increase shared memory size for applications that need it
+# (e.g., PyTorch DataLoader with multiple workers, Chrome/Firefox)
+shm-size: 2g
+
+# Comprehensive list of development extensions
+args:
+  # Core extensions (from basic.yaml)
+  - pull            # Pull latest image version
+  - persist-image   # Keep the image after container stops
+  - x11             # X11 forwarding for GUI applications
+  - user            # Match host user inside container
+  - cwd             # Mount current working directory
+  - git             # Use the global Git settings from the host
+  - git-clone       # Install git, git-lfs, and ca-certificates for cloning
+  - ssh             # Forward SSH agent into the container
+  - ssh-client      # Install openssh-client and mount ~/.ssh directory
+
+  # Additional advanced features
+  - nvidia          # Enable NVIDIA GPU support
+  - pixi            # Install pixi package manager
+  - uv              # Install uv Python package manager
+  - deps            # Install common system dependencies
+  - dev-helpers     # Add development tools (emacs, byobu)
+  - curl            # Install curl
