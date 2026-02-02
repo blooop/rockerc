@@ -1,5 +1,22 @@
+"""Workflow integration tests for renv.
+
+These tests clone real repositories via SSH and run renv commands.
+They require SSH access to GitHub (via ssh-agent with appropriate keys).
+
+For Dependabot PRs, these tests are skipped because Dependabot doesn't
+have access to repository secrets (including SSH keys). Unit tests still
+run to verify core functionality. Set SKIP_SSH_TESTS=true to skip these
+tests in other environments without SSH access.
+"""
+
 import subprocess
 import os
+import pytest
+
+# Skip all workflow tests when SSH is not available (e.g., Dependabot PRs)
+pytestmark = pytest.mark.skipif(
+    os.environ.get("SKIP_SSH_TESTS") == "true", reason="SSH not available (Dependabot PR)"
+)
 
 
 def run_workflow_script(script_filename):
