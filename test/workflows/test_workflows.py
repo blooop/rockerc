@@ -15,7 +15,8 @@ import pytest
 
 # Skip all workflow tests when SSH is not available (e.g., Dependabot PRs)
 pytestmark = pytest.mark.skipif(
-    os.environ.get("SKIP_SSH_TESTS") == "true", reason="SSH not available (Dependabot PR)"
+    os.environ.get("SKIP_SSH_TESTS") == "true",
+    reason="SSH-dependent workflow tests disabled via SKIP_SSH_TESTS",
 )
 
 
