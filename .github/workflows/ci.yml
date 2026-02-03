@@ -18,6 +18,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      # SSH agent is required for workflow tests that clone repos via SSH.
+      # Dependabot PRs don't have access to secrets, so we skip SSH setup
+      # and set SKIP_SSH_TESTS=true to skip workflow tests for those PRs.
       - name: Setup SSH Agent
         if: github.actor != 'dependabot[bot]'
         uses: webfactory/ssh-agent@v0.9.1
@@ -29,8 +32,10 @@ jobs:
           frozen: true
           environments: ${{ matrix.environment }}
       - name: CI
+        env:
+          SKIP_SSH_TESTS: ${{ github.actor == 'dependabot[bot]' && 'true' || 'false' }}
         run: |
-          pixi run -e ${{ matrix.environment }} ci 
+          pixi run -e ${{ matrix.environment }} ci
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         env:
