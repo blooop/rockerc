@@ -40,13 +40,13 @@ python = "3.13.*"
 
 [project.optional-dependencies]
 test = [
-  "pylint>=3.2.5,<=4.0.3",
+  "pylint>=3.2.5,<=4.0.4",
   "pytest-cov>=4.1,<=7.0.0",
-  "pytest>=7.4,<=9.0.1",
-  "hypothesis>=6.104.2,<=6.148.3",
-  "ruff>=0.5.0,<=0.14.7",
-  "coverage>=7.5.4,<=7.12.0",
-  "pre-commit<=4.5.0",
+  "pytest>=7.4,<=9.0.2",
+  "hypothesis>=6.104.2,<=6.151.4",
+  "ruff>=0.5.0,<=0.14.14",
+  "coverage>=7.5.4,<=7.13.2",
+  "pre-commit<=4.5.1",
 ]
 #These are a list of externally maintained rocker extensions. use pip install rockerc[extensions] to install all of them
 extensions = [
