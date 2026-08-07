@@ -12,6 +12,9 @@ from .completion_loader import load_completion_script
 _RC_BLOCK_START = "# >>> rockerc completions >>>"
 _RC_BLOCK_END = "# <<< rockerc completions <<<"
 
+# Blocks an earlier rockerc wrote straight into the user's rc file, stripped on
+# every install. The aid entries stay after aid's removal: they are how an rc
+# file that still carries aid's completion gets cleaned up.
 _LEGACY_BLOCKS = {
     "# rockerc completion": "# end rockerc completion",
     "# renv completion": "# end renv completion",
@@ -41,7 +44,7 @@ def _completion_file_path() -> pathlib.Path:
 
 
 def install_all_completions(rc_path: Optional[pathlib.Path] = None) -> int:
-    """Install or refresh completion scripts for rockerc, renv/renvvsc, and aid."""
+    """Install or refresh completion scripts for rockerc, renv/renvvsc, and dp."""
     completion_path = _completion_file_path().expanduser()
     rc_target = (rc_path if rc_path is not None else pathlib.Path.home() / ".bashrc").expanduser()
 
@@ -51,7 +54,6 @@ def install_all_completions(rc_path: Optional[pathlib.Path] = None) -> int:
         combined_script_parts = [
             _rockerc_bash_completion_script().rstrip(),
             load_completion_script("renv").rstrip(),
-            load_completion_script("aid").rstrip(),
             load_completion_script("dp").rstrip(),
         ]
         combined_script = "\n\n".join(combined_script_parts) + "\n"
