@@ -1180,20 +1180,20 @@ packages:
   requires_python: '>=3.0'
 - pypi: ./
   name: rockerc
-  version: 0.18.0
-  sha256: 95e535867f0039f15cabf1cd73b8eef6ac5f546c9a64885017d4f10af459a0b5
+  version: 0.19.0
+  sha256: e06cc51d7d930da31388ff5c9b60bff99a6aaa5afcfc2c16e882c580fea4848a
   requires_dist:
   - rocker>=0.2.19
   - deps-rocker>=0.23.1
   - pyyaml>=5
   - iterfzf>=1.0.0
-  - pylint>=3.2.5,<=4.0.3 ; extra == 'test'
-  - pytest-cov>=4.1,<=7.0.0 ; extra == 'test'
-  - pytest>=7.4,<=9.0.1 ; extra == 'test'
-  - hypothesis>=6.104.2,<=6.148.3 ; extra == 'test'
-  - ruff>=0.5.0,<=0.14.7 ; extra == 'test'
-  - coverage>=7.5.4,<=7.12.0 ; extra == 'test'
-  - pre-commit<=4.5.0 ; extra == 'test'
+  - pylint>=3.2.5,<=4.0.5 ; extra == 'test'
+  - pytest-cov>=4.1,<=7.1.0 ; extra == 'test'
+  - pytest>=7.4,<=9.0.3 ; extra == 'test'
+  - hypothesis>=6.104.2,<=6.152.4 ; extra == 'test'
+  - ruff>=0.5.0,<=0.15.12 ; extra == 'test'
+  - coverage>=7.5.4,<=7.13.5 ; extra == 'test'
+  - pre-commit<=4.6.0 ; extra == 'test'
   - ghrocker==0.0.10 ; extra == 'extensions'
   - groot-rocker==0.4.1 ; extra == 'extensions'
 - pypi: https://files.pythonhosted.org/packages/92/05/434ddd86becd64629c25fb6b4ce7637dd52a45cc4a4415a3008fe61c27b9/ruff-0.14.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl

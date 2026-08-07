@@ -27,9 +27,33 @@ def test_install_shell_completion_refreshes(tmp_path, monkeypatch):
     assert "outdated" not in completions_content
     assert completions_content.count("# renv completion") == 1
     assert completions_content.count("# rockerc completion") == 1
-    assert completions_content.count("# aid completion") == 1
+    assert completions_content.count("# dp completion") == 1
     assert "-exec basename {} \\;" in completions_content
     assert "\\\\;" not in completions_content
+
+
+def test_install_removes_a_leftover_aid_completion(tmp_path, monkeypatch):
+    """aid is gone, so installing has to take its completion out of the rc file.
+
+    Anyone upgrading past aid's removal still has aid's block and its `complete`
+    line in ~/.bashrc, completing a command that no longer exists.
+    """
+    completion_file = tmp_path / "completions.sh"
+    monkeypatch.setenv("ROCKERC_COMPLETION_FILE", str(completion_file))
+
+    rc_file = tmp_path / "bashrc"
+    rc_file.write_text(
+        "# aid completion\n_aid_completion() { :; }\n# end aid completion\n"
+        "complete -F _aid_completion aid\n",
+        encoding="utf-8",
+    )
+
+    assert install_all_completions(rc_file) == 0
+
+    rc_content = rc_file.read_text(encoding="utf-8")
+    assert "aid" not in rc_content
+    assert "# >>> rockerc completions >>>" in rc_content
+    assert "aid" not in completion_file.read_text(encoding="utf-8")
 
 
 def test_install_all_completions_idempotent(tmp_path, monkeypatch):
@@ -46,7 +70,7 @@ def test_install_all_completions_idempotent(tmp_path, monkeypatch):
     assert f'source "{completion_file}"' in first_rc
     assert first_completion.count("# rockerc completion") == 1
     assert first_completion.count("# renv completion") == 1
-    assert first_completion.count("# aid completion") == 1
+    assert first_completion.count("# dp completion") == 1
 
     # Overwrite with stale content to confirm reinstall replaces it.
     completion_file.write_text("stale\n", encoding="utf-8")
@@ -60,6 +84,6 @@ def test_install_all_completions_idempotent(tmp_path, monkeypatch):
     assert second_completion != "stale\n"
     assert second_completion.count("# rockerc completion") == 1
     assert second_completion.count("# renv completion") == 1
-    assert second_completion.count("# aid completion") == 1
+    assert second_completion.count("# dp completion") == 1
     assert "-exec basename {} \\;" in second_completion
     assert "\\\\;" not in second_completion

@@ -1,6 +1,6 @@
 [project]
 name = "rockerc"
-version = "0.18.0"
+version = "0.19.0"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
@@ -67,7 +67,6 @@ rockerc = "rockerc.rockerc:run_rockerc"
 renv = "rockerc.renv:main"
 renvvsc = "rockerc.renvsc:main"
 rockervsc = "rockerc.rockervsc:main"
-aid = "rockerc.aid:main"
 dp = "rockerc.dp:main"
 
 # Environments
