@@ -17,7 +17,7 @@ jobs:
         environment: [py310, py311, py312, py313]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       # SSH agent is required for workflow tests that clone repos via SSH.
       # Dependabot PRs don't have access to secrets, so we skip SSH setup
       # and set SKIP_SSH_TESTS=true to skip workflow tests for those PRs.
