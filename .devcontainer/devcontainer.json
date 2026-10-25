@@ -4,7 +4,7 @@
         "dockerfile": "Dockerfile",
         "context": "..",
         "args": {
-            "PIXI_VERSION": "v0.48.2"
+            "PIXI_VERSION": "v0.83.0"
         }
     },
     "customizations": {
